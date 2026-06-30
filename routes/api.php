@@ -32,6 +32,8 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     // Dashboard
     Route::get('/dashboard', [AdminApiController::class, 'dashboard'])
         ->middleware('permission:view dashboard');
+    Route::get('/notifications', [AdminApiController::class, 'notifications']);
+    Route::post('/notifications/mark-read', [AdminApiController::class, 'markNotificationsRead']);
 
     // Payment Methods (read-only lookup, view products is sufficient)
     Route::get('/payment-methods', [AdminApiController::class, 'paymentMethods'])

@@ -47,6 +47,11 @@ class AdminApiController extends Controller
         
         $recentSales = Sale::with('customer')->orderBy('id', 'desc')->take(5)->get();
         $recentLogs = ActivityLog::with('user')->orderBy('id', 'desc')->take(5)->get();
+        
+        $unreadCount = 0;
+        if ($request->user()) {
+            $unreadCount = $request->user()->unreadNotifications()->count();
+        }
 
         // 7-day revenue/expense chart data
         $chartData = [];
@@ -84,6 +89,7 @@ class AdminApiController extends Controller
             'recent_logs' => $recentLogs,
             'chart_data' => $chartData,
             'low_stock' => $lowStock,
+            'unread_notifications' => $unreadCount,
         ]);
     }
 
@@ -634,6 +640,24 @@ class AdminApiController extends Controller
                     if (round($remainingToConsume, 4) > 0) {
                         throw new \Exception("Insufficient stock for variant ID: {$variantId}. Shortfall: " . $remainingToConsume);
                     }
+                    
+                    // Check Low Stock
+                    $currentStock = \App\Models\WarehouseStock::where('product_variant_id', $variantId)
+                        ->where('warehouse_id', $warehouseId)
+                        ->value('stock');
+                    
+                    if ($currentStock !== null && $currentStock < 10) {
+                        try {
+                            $admins = \App\Models\User::all();
+                            $varName = $variant ? $variant->name : 'Item';
+                            \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\AdminAlertNotification(
+                                'Low Stock Alert',
+                                "Product {$varName} is low on stock ({$currentStock} remaining).",
+                                'stock',
+                                ['product_variant_id' => $variantId]
+                            ));
+                        } catch (\Exception $e) {}
+                    }
                 } else {
                     \App\Models\SaleItem::create([
                         'sale_id' => $sale->id,
@@ -683,6 +707,30 @@ class AdminApiController extends Controller
 
             \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cogsAcc->id, 'type' => 'debit', 'amount' => $totalCogs]);
             \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $inventoryFinAcc->id, 'type' => 'credit', 'amount' => $totalCogs]);
+
+            if ($oldDeliveryStatus !== 'shipped' && $newDeliveryStatus === 'shipped') {
+                try {
+                    $admins = \App\Models\User::all();
+                    \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\AdminAlertNotification(
+                        'Order Dispatched',
+                        "Order #{$sale->invoice_no} has been dispatched.",
+                        'dispatch',
+                        ['sale_id' => $sale->id]
+                    ));
+                } catch (\Exception $e) {}
+            }
+
+            if ($oldDeliveryStatus !== 'delivered' && $newDeliveryStatus === 'delivered') {
+                try {
+                    $admins = \App\Models\User::all();
+                    \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\AdminAlertNotification(
+                        'Order Delivered',
+                        "Order #{$sale->invoice_no} has been delivered.",
+                        'deliver',
+                        ['sale_id' => $sale->id]
+                    ));
+                } catch (\Exception $e) {}
+            }
 
             DB::commit();
 
@@ -2553,5 +2601,36 @@ class AdminApiController extends Controller
             JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $equityAcc->id, 'type' => 'debit', 'amount' => $investment->amount]);
             JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'credit', 'amount' => $investment->amount]);
         }
+    }
+
+    /**
+     * Get Admin Notifications
+     */
+    public function notifications(Request $request)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
+
+        $notifications = $user->notifications()->take(50)->get();
+        $unreadCount = $user->unreadNotifications()->count();
+
+        return response()->json([
+            'notifications' => $notifications,
+            'unread_count' => $unreadCount
+        ]);
+    }
+
+    /**
+     * Mark all notifications as read
+     */
+    public function markNotificationsRead(Request $request)
+    {
+        $user = $request->user();
+        if ($user) {
+            $user->unreadNotifications->markAsRead();
+        }
+        return response()->json(['success' => true]);
     }
 }
