@@ -98,12 +98,7 @@
                     </div>
                     <!-- end card -->
 
-                    <div class="row mt-3">
-                        <div class="col-12 text-center">
-                            <p class="text-white-50">Don't have an account? <a href="{{ route('second', ['auth', 'register']) }}" class="text-white ms-1 link-offset-3 text-decoration-underline"><b>Sign Up</b></a></p>
-                        </div> <!-- end col -->
-                    </div>
-                    <!-- end row -->
+
 
                 </div> <!-- end col -->
             </div>

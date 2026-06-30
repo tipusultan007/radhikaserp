@@ -181,6 +181,13 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::delete('/repackaging/{id}', [AdminApiController::class, 'destroyRepackaging'])
         ->middleware('permission:delete repackaging');
 
+    // ── Investments ───────────────────────────────────────────────────────────
+    Route::get('/investment-form-data', [AdminApiController::class, 'investmentFormData']);
+    Route::get('/investments', [AdminApiController::class, 'investments']);
+    Route::post('/investments', [AdminApiController::class, 'storeInvestment']);
+    Route::put('/investments/{id}', [AdminApiController::class, 'updateInvestment']);
+    Route::delete('/investments/{id}', [AdminApiController::class, 'destroyInvestment']);
+
     // ── Journals ──────────────────────────────────────────────────────────────
     Route::get('/journals', [AdminApiController::class, 'journals'])
         ->middleware('permission:view journals');

@@ -88,8 +88,11 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::get('coa/{coa}', [App\Http\Controllers\CoaController::class, 'show'])->name('coa.show');
     });
 
+    Route::resource('investments', \App\Http\Controllers\InvestmentController::class);
+
     // ─── Customers ──────────────────────────────────────────────────────────────
     Route::group(['middleware' => ['permission:create customers']], function () {
+        Route::get('/customers/ajax/search', [CustomerController::class, 'searchAjax'])->name('customers.ajax.search');
         Route::get('customers/create', [CustomerController::class, 'create'])->name('customers.create');
         Route::post('customers', [CustomerController::class, 'store'])->name('customers.store');
         Route::post('/customers/ajax-store', [CustomerController::class, 'ajaxStore'])->name('customers.ajaxStore');

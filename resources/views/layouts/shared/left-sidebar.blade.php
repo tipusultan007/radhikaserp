@@ -222,6 +222,13 @@
             </li>
             @endcan
 
+            <li class="side-nav-item">
+                <a href="{{ route('investments.index') }}" class="side-nav-link">
+                    <i class="ri-funds-box-fill"></i>
+                    <span> Investments </span>
+                </a>
+            </li>
+
             @can('view journals')
             <li class="side-nav-item">
                 <a href="{{ route('journals.index') }}" class="side-nav-link">

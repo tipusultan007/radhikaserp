@@ -29,6 +29,23 @@ class CustomerController extends Controller
         return view('customers.index', compact('customers'));
     }
 
+    public function searchAjax(Request $request)
+    {
+        $search = $request->query('q');
+        
+        if (empty($search)) {
+            return response()->json([]);
+        }
+
+        $customers = Customer::where('name', 'like', "%{$search}%")
+            ->orWhere('phone', 'like', "%{$search}%")
+            ->orWhere('email', 'like', "%{$search}%")
+            ->limit(10)
+            ->get(['id', 'name', 'phone', 'total_due']);
+            
+        return response()->json($customers);
+    }
+
     public function export(Request $request)
     {
         $query = Customer::query();

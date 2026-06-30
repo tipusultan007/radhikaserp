@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'phone', 'address', 'credit_limit', 'total_due', 'opening_balance', 'wallet_balance'])]
+#[Fillable(['name', 'customer_type', 'email', 'password', 'phone', 'address', 'credit_limit', 'total_due', 'opening_balance', 'wallet_balance'])]
 class Customer extends Model
 {
     use HasApiTokens, HasFactory, Notifiable;

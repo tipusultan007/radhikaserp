@@ -21,6 +21,7 @@ use App\Models\SaleItem;
 use App\Models\SalePayment;
 use App\Models\Batch;
 use App\Models\InventoryTransaction;
+use App\Models\Investment;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Models\ChartOfAccount;
@@ -2376,16 +2377,141 @@ class AdminApiController extends Controller
         $sale = Sale::findOrFail($id);
         return app(\App\Http\Controllers\SaleController::class)->pdf($sale);
     }
+
+    // ── Investments ─────────────────────────────────────────────────────────
+
+    public function investmentFormData()
+    {
+        $accounts = ChartOfAccount::where('is_payment_method', true)->get();
+        return response()->json([
+            'accounts' => $accounts
+        ]);
+    }
+
+    public function investments(Request $request)
+    {
+        $query = Investment::with(['account', 'creator'])->latest();
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('date', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('date', '<=', $request->end_date);
+        }
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        $perPage = $request->input('per_page', 15);
+        $investments = $query->paginate($perPage);
+
+        return response()->json($investments);
+    }
+
+    public function storeInvestment(Request $request)
+    {
+        $validated = $request->validate([
+            'date' => 'required|date',
+            'type' => 'required|in:investment,withdraw',
+            'amount' => 'required|numeric|min:0.01',
+            'payment_method' => 'required|exists:chart_of_accounts,id',
+            'investor_name' => 'nullable|string|max:255',
+            'reference' => 'nullable|string|max:255',
+            'notes' => 'nullable|string',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $validated['created_by'] = $request->user()->id;
+            $investment = Investment::create($validated);
+
+            $this->createInvestmentJournals($investment, $request->user()->id);
+
+            DB::commit();
+            return response()->json(['message' => ucfirst($investment->type) . ' recorded successfully.', 'investment' => $investment], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Error recording transaction: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function updateInvestment(Request $request, $id)
+    {
+        $investment = Investment::findOrFail($id);
+
+        $validated = $request->validate([
+            'date' => 'required|date',
+            'type' => 'required|in:investment,withdraw',
+            'amount' => 'required|numeric|min:0.01',
+            'payment_method' => 'required|exists:chart_of_accounts,id',
+            'investor_name' => 'nullable|string|max:255',
+            'reference' => 'nullable|string|max:255',
+            'notes' => 'nullable|string',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            // Reverse old journals
+            if ($investment->journal) {
+                $investment->journal->entries()->delete();
+                $investment->journal()->delete();
+            }
+
+            $investment->update($validated);
+
+            // Create new journals
+            $this->createInvestmentJournals($investment, $request->user()->id);
+
+            DB::commit();
+            return response()->json(['message' => ucfirst($investment->type) . ' updated successfully.', 'investment' => $investment]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Error updating transaction: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function destroyInvestment($id)
+    {
+        $investment = Investment::findOrFail($id);
+        try {
+            DB::beginTransaction();
+            if ($investment->journal) {
+                $investment->journal->entries()->delete();
+                $investment->journal()->delete();
+            }
+            $investment->delete();
+            DB::commit();
+            return response()->json(['message' => 'Transaction deleted successfully.']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Error deleting transaction: ' . $e->getMessage()], 500);
+        }
+    }
+
+    private function createInvestmentJournals(Investment $investment, $userId)
+    {
+        $journal = Journal::create([
+            'journal_no' => 'JNL-' . strtoupper(Str::random(6)),
+            'date' => $investment->date,
+            'reference_type' => Investment::class,
+            'reference_id' => $investment->id,
+            'notes' => ucfirst($investment->type) . ' - ' . ($investment->reference ?? 'N/A'),
+            'created_by' => $userId ?? 1,
+        ]);
+
+        $equityAcc = ChartOfAccount::firstOrCreate(['name' => 'Owner\'s Equity / Capital', 'type' => 'equity', 'is_payment_method' => false]);
+        $cashAcc = ChartOfAccount::findOrFail($investment->payment_method);
+
+        if ($investment->type === 'investment') {
+            // Debit Cash, Credit Equity
+            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $investment->amount]);
+            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $equityAcc->id, 'type' => 'credit', 'amount' => $investment->amount]);
+        } else {
+            // Withdrawal: Debit Equity, Credit Cash
+            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $equityAcc->id, 'type' => 'debit', 'amount' => $investment->amount]);
+            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'credit', 'amount' => $investment->amount]);
+        }
+    }
 }
-
-
-
-
-
-
-
-
-
-
-
-

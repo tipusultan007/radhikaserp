@@ -50,13 +50,16 @@ class AuthController extends Controller
 
         $customer = Customer::where('phone', $request->phone)->first();
 
-        // Assuming customer table has a password field. If not, we might need to adjust.
-        // If customer doesn't have password, we can just login by email or phone.
-        // We'll check if they have password. Let's assume they do.
         if (!$customer || !Hash::check($request->password, $customer->password ?? '')) {
             return response()->json([
                 'message' => 'Invalid login credentials.'
             ], 401);
+        }
+
+        if (!in_array($customer->customer_type, ['dealer', 'special_dealer'])) {
+            return response()->json([
+                'message' => 'Only Dealers and Special Dealers are allowed to login.'
+            ], 403);
         }
 
         // Customers can also use Sanctum if we add HasApiTokens to Customer model
