@@ -41,11 +41,8 @@
                         <!-- Logo -->
                         <div class="card-header pt-4 text-center">
                             <div class="auth-brand mb-0">
-                                <a href="/" class="logo-dark">
-                                    <span><img src="/images/logo-dark.png" alt="dark logo" height="28"></span>
-                                </a>
-                                <a href="/" class="logo-light">
-                                    <span><img src="/images/logo.png" alt="logo" height="28"></span>
+                                <a href="/" class="text-decoration-none">
+                                    <h3 class="mb-0 text-dark">Radhikas Trade International</h3>
                                 </a>
                             </div>
                         </div>
@@ -71,14 +68,14 @@
                                 @csrf
                                 <div class="mb-3">
                                     <label for="emailaddress" class="form-label">Email address</label>
-                                    <input class="form-control" type="email" id="emailaddress" required="" placeholder="Enter your email" value="jidox@coderthemes.com" name="email">
+                                    <input class="form-control" type="email" id="emailaddress" required="" placeholder="Enter your email" name="email">
                                 </div>
 
                                 <div class="mb-3">
                                     <a href="{{ route('second', ['auth', 'recoverpw']) }}" class="text-muted float-end fs-12">Forgot your password?</a>
                                     <label for="password" class="form-label">Password</label>
                                     <div class="input-group input-group-merge">
-                                        <input type="password" id="password" class="form-control" placeholder="Enter your password" value="password" name="password">
+                                        <input type="password" id="password" class="form-control" placeholder="Enter your password" name="password">
                                         <div class="input-group-text" data-password="false">
                                             <span class="password-eye"></span>
                                         </div>
@@ -120,7 +117,7 @@
         <span class="text-white-50">
             <script>
                 document.write(new Date().getFullYear())
-            </script> © Jidox - Coderthemes.com
+            </script> © Radhikas Trade International
         </span>
     </footer>
 
