@@ -211,4 +211,64 @@ class CustomerApiController extends Controller
         }
         return response()->json(['success' => true]);
     }
+
+    /**
+     * Get Customer Ledger.
+     */
+    public function ledger(Request $request)
+    {
+        $customer = $request->user();
+        if (!$customer) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
+
+        $customer->load(['sales' => function ($query) {
+            $query->orderBy('date', 'asc');
+        }]);
+
+        $arAcc = \App\Models\ChartOfAccount::where('name', 'Accounts Receivable')->first();
+        
+        if ($arAcc) {
+            $customerJournalIds = \App\Models\Journal::where(function($q) use ($customer) {
+                $q->where('reference_type', \App\Models\Customer::class)->where('reference_id', $customer->id);
+            })->orWhere(function($q) use ($customer) {
+                $q->where('reference_type', \App\Models\Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
+            })->pluck('id');
+
+            $ledgerEntries = \App\Models\JournalEntry::with('journal')
+                ->whereIn('journal_id', $customerJournalIds)
+                ->where('account_id', $arAcc->id)
+                ->orderBy('id', 'asc') // Ensure chronological order for running balance
+                ->get();
+        } else {
+            $ledgerEntries = collect();
+        }
+
+        $formattedLedger = [];
+        $runningBalance = 0;
+
+        foreach ($ledgerEntries as $entry) {
+            $journal = $entry->journal;
+            $debit = $entry->type === 'debit' ? $entry->amount : 0;
+            $credit = $entry->type === 'credit' ? $entry->amount : 0;
+            $runningBalance = $runningBalance + $debit - $credit;
+
+            $formattedLedger[] = [
+                'id' => $entry->id,
+                'date' => $journal->date ?? $journal->created_at->toDateString(),
+                'description' => $journal->description ?? 'Transaction',
+                'debit' => $debit,
+                'credit' => $credit,
+                'balance' => $runningBalance
+            ];
+        }
+        
+        // Reverse so newest are at the top, or keep ascending. Let's return descending for the app.
+        $formattedLedger = array_reverse($formattedLedger);
+
+        return response()->json([
+            'ledger' => $formattedLedger,
+            'total_due' => $runningBalance // Should match $customer->total_due
+        ]);
+    }
 }

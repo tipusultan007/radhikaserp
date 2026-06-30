@@ -221,6 +221,7 @@ Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
     Route::get('/orders/{id}', [CustomerApiController::class, 'orderDetails']);
     Route::get('/payments', [CustomerApiController::class, 'payments']);
     Route::get('/dues', [CustomerApiController::class, 'dues']);
+    Route::get('/ledger', [CustomerApiController::class, 'ledger']);
     Route::post('/change-password', [CustomerApiController::class, 'changePassword']);
     Route::get('/notifications', [CustomerApiController::class, 'notifications']);
     Route::post('/notifications/mark-read', [CustomerApiController::class, 'markNotificationsRead']);
