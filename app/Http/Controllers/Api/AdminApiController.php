@@ -919,18 +919,30 @@ class AdminApiController extends Controller
 
     public function showCustomer($id)
     {
-        $customer = Customer::with(['sales' => function($q) {
-            $q->with('items.productVariant.product', 'warehouse')->orderBy('date', 'desc');
-        }])->findOrFail($id);
-
-        $payments = \App\Models\SalePayment::whereHas('sale', function($q) use ($id) {
-            $q->where('customer_id', $id);
-        })->with('sale')->orderBy('date', 'desc')->get();
+        $customer = Customer::findOrFail($id);
 
         return response()->json([
-            'customer' => $customer,
-            'payments' => $payments
+            'customer' => $customer
         ]);
+    }
+
+    public function customerSales($id)
+    {
+        $sales = \App\Models\Sale::with('items.productVariant.product', 'warehouse')
+            ->where('customer_id', $id)
+            ->orderBy('date', 'desc')
+            ->paginate(20);
+
+        return response()->json(['sales' => $sales]);
+    }
+
+    public function customerPayments($id)
+    {
+        $payments = \App\Models\SalePayment::whereHas('sale', function($q) use ($id) {
+            $q->where('customer_id', $id);
+        })->with('sale')->orderBy('date', 'desc')->paginate(20);
+
+        return response()->json(['payments' => $payments]);
     }
 
     public function updateCustomer(Request $request, $id)
