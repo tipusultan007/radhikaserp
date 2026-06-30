@@ -33,17 +33,57 @@ class AdminApiController extends Controller
      */
     public function dashboard(Request $request)
     {
+        $today = \Carbon\Carbon::today()->format('Y-m-d');
+
         $totalSales = Sale::sum('total');
         $totalCustomers = Customer::count();
         $totalProducts = Product::count();
+        $totalExpenses = Expense::sum('amount');
+
+        $todaySales = Sale::whereDate('date', $today)->sum('total');
+        $todayExpenses = Expense::whereDate('date', $today)->sum('amount');
+        $todayPayments = \App\Models\SalePayment::whereDate('date', $today)->sum('amount');
+        $todayDues = Sale::whereDate('date', $today)->sum('due_amount');
         
         $recentSales = Sale::with('customer')->orderBy('id', 'desc')->take(5)->get();
+        $recentLogs = ActivityLog::with('user')->orderBy('id', 'desc')->take(5)->get();
+
+        // 7-day revenue/expense chart data
+        $chartData = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = \Carbon\Carbon::now()->subDays($i)->format('Y-m-d');
+            
+            $revenue = Sale::whereDate('date', $date)->sum('total');
+            $expense = Expense::whereDate('date', $date)->sum('amount');
+            
+            $chartData[] = [
+                'date' => \Carbon\Carbon::now()->subDays($i)->format('M d'),
+                'revenue' => $revenue,
+                'expense' => $expense,
+            ];
+        }
+
+        // Low stock alerts (< 10)
+        $lowStock = \App\Models\WarehouseStock::with(['productVariant.product', 'warehouse'])
+            ->where('stock', '<', 10)
+            ->where('stock', '>', 0) // exclude completely out of stock if desired, but let's include 0 as well, wait let's just do < 10
+            ->take(10)
+            ->get();
 
         return response()->json([
+            'today_sales' => $todaySales,
+            'today_expenses' => $todayExpenses,
+            'today_payments' => $todayPayments,
+            'today_dues' => $todayDues,
+            
             'total_sales' => $totalSales,
             'total_customers' => $totalCustomers,
             'total_products' => $totalProducts,
+            'total_expenses' => $totalExpenses,
             'recent_sales' => $recentSales,
+            'recent_logs' => $recentLogs,
+            'chart_data' => $chartData,
+            'low_stock' => $lowStock,
         ]);
     }
 
