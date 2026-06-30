@@ -237,7 +237,7 @@ class AdminApiController extends Controller
             $query->where('date', '<=', $request->end_date . ' 23:59:59');
         }
 
-        $sales = $query->orderBy('id', 'desc')->get();
+        $sales = $query->orderBy('id', 'desc')->paginate(20);
         return response()->json(['sales' => $sales]);
     }
 
@@ -1331,7 +1331,7 @@ class AdminApiController extends Controller
 
     public function expenses(Request $request)
     {
-        $expenses = Expense::with(['category', 'paymentMethod'])->orderBy('date', 'desc')->get();
+        $expenses = Expense::with(['category', 'paymentMethod'])->orderBy('date', 'desc')->paginate(20);
         return response()->json(['expenses' => $expenses]);
     }
 
@@ -1479,12 +1479,14 @@ class AdminApiController extends Controller
      */
     public function settlements(Request $request)
     {
-        $customerDues = Customer::where('total_due', '>', 0)->get();
-        $supplierPayables = Supplier::where('total_payable', '>', 0)->get();
+        $customerDues = Customer::where('total_due', '>', 0)->paginate(20, ['*'], 'customer_page');
+        $supplierPayables = Supplier::where('total_payable', '>', 0)->paginate(20, ['*'], 'supplier_page');
+        $paymentMethods = ChartOfAccount::where('is_payment_method', true)->get();
 
         return response()->json([
             'customer_dues' => $customerDues,
             'supplier_payables' => $supplierPayables,
+            'payment_methods' => $paymentMethods,
         ]);
     }
 
@@ -1648,7 +1650,7 @@ class AdminApiController extends Controller
             $query->where('status', $request->status);
         }
 
-        $transfers = $query->get();
+        $transfers = $query->orderBy('id', 'desc')->paginate(20);
         return response()->json(['stock_transfers' => $transfers]);
     }
 
@@ -1871,8 +1873,8 @@ class AdminApiController extends Controller
             $query->where('status', $request->status);
         }
 
-        $adjustments = $query->get();
-        return response()->json(['stock_adjustments' => $adjustments]);
+        $adjustments = $query->orderBy('id', 'desc')->paginate(20);
+        return response()->json(['adjustments' => $adjustments]);
     }
 
     public function storeStockAdjustment(Request $request)
@@ -2026,7 +2028,7 @@ class AdminApiController extends Controller
             $query->where('ref_no', 'like', '%' . $request->ref_no . '%');
         }
 
-        $orders = $query->get();
+        $orders = $query->orderBy('id', 'desc')->paginate(20);
         return response()->json(['repackaging_orders' => $orders]);
     }
 
@@ -2481,7 +2483,7 @@ class AdminApiController extends Controller
      */
     public function journals(Request $request)
     {
-        $journals = Journal::with(['entries.account', 'creator'])->orderBy('id', 'desc')->get();
+        $journals = Journal::with(['entries.account', 'creator'])->orderBy('id', 'desc')->paginate(20);
         return response()->json(['journals' => $journals]);
     }
 
