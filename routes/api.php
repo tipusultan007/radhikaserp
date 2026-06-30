@@ -72,6 +72,8 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         ->middleware('permission:edit customers');
     Route::delete('/customers/{id}', [AdminApiController::class, 'destroyCustomer'])
         ->middleware('permission:delete customers');
+    Route::get('/customers/{id}/ledger', [AdminApiController::class, 'customerLedger'])
+        ->middleware('permission:view customers');
 
     // ── Suppliers ─────────────────────────────────────────────────────────────
     Route::get('/suppliers', [AdminApiController::class, 'suppliers'])

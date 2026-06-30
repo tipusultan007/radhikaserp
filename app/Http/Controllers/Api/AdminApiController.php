@@ -2685,4 +2685,88 @@ class AdminApiController extends Controller
         }
         return response()->json(['success' => true]);
     }
+
+    /**
+     * Get Customer Ledger with true pagination and running balance
+     */
+    public function customerLedger(Request $request, $id)
+    {
+        $customer = \App\Models\Customer::findOrFail($id);
+        
+        $customer->load(['sales' => function ($query) {
+            $query->orderBy('date', 'asc');
+        }]);
+
+        $arAcc = \App\Models\ChartOfAccount::where('name', 'Accounts Receivable')->first();
+        
+        if (!$arAcc) {
+            return response()->json(['ledger' => ['data' => []], 'total_due' => 0]);
+        }
+
+        $customerJournalIds = \App\Models\Journal::where(function($q) use ($customer) {
+            $q->where('reference_type', \App\Models\Customer::class)->where('reference_id', $customer->id);
+        })->orWhere(function($q) use ($customer) {
+            $q->where('reference_type', \App\Models\Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
+        })->pluck('id');
+
+        // Build the base query for ledger entries
+        $query = \App\Models\JournalEntry::with('journal')
+            ->whereIn('journal_id', $customerJournalIds)
+            ->where('account_id', $arAcc->id)
+            ->orderBy('id', 'asc'); // Must be chronological for running balance
+
+        // Execute pagination
+        $paginatedEntries = $query->paginate(20);
+
+        // If not on the first page, calculate the sum of all prior debits and credits
+        $initialBalance = 0;
+        if ($paginatedEntries->currentPage() > 1 && $paginatedEntries->first()) {
+            $firstEntryIdOnPage = $paginatedEntries->first()->id;
+            
+            $priorDebits = \App\Models\JournalEntry::whereIn('journal_id', $customerJournalIds)
+                ->where('account_id', $arAcc->id)
+                ->where('id', '<', $firstEntryIdOnPage)
+                ->where('type', 'debit')
+                ->sum('amount');
+                
+            $priorCredits = \App\Models\JournalEntry::whereIn('journal_id', $customerJournalIds)
+                ->where('account_id', $arAcc->id)
+                ->where('id', '<', $firstEntryIdOnPage)
+                ->where('type', 'credit')
+                ->sum('amount');
+                
+            $initialBalance = $priorDebits - $priorCredits;
+        }
+
+        $formattedLedger = [];
+        $runningBalance = $initialBalance;
+
+        foreach ($paginatedEntries as $entry) {
+            $journal = $entry->journal;
+            $debit = $entry->type === 'debit' ? $entry->amount : 0;
+            $credit = $entry->type === 'credit' ? $entry->amount : 0;
+            $runningBalance = $runningBalance + $debit - $credit;
+
+            $formattedLedger[] = [
+                'id' => $entry->id,
+                'date' => $journal->date ?? $journal->created_at->toDateString(),
+                'description' => $journal->description ?? 'Transaction',
+                'debit' => $debit,
+                'credit' => $credit,
+                'balance' => $runningBalance
+            ];
+        }
+
+        // Return a custom paginated structure
+        return response()->json([
+            'ledger' => [
+                'current_page' => $paginatedEntries->currentPage(),
+                'data' => array_reverse($formattedLedger), // Return newest first on this page for UI
+                'last_page' => $paginatedEntries->lastPage(),
+                'total' => $paginatedEntries->total()
+            ],
+            'total_due' => $customer->total_due, // Provide current overall due
+            'wallet_balance' => $customer->wallet_balance
+        ]);
+    }
 }
