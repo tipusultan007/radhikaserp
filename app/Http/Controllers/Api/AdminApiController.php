@@ -863,9 +863,19 @@ class AdminApiController extends Controller
     /**
      * Get all customers.
      */
-        public function customers(Request $request)
+    public function customers(Request $request)
     {
-        $customers = Customer::orderBy('id', 'desc')->get();
+        $query = Customer::orderBy('id', 'desc');
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('phone', 'LIKE', "%{$search}%");
+            });
+        }
+
+        $customers = $query->paginate(20);
         return response()->json(['customers' => $customers]);
     }
 
