@@ -181,5 +181,34 @@ class CustomerApiController extends Controller
 
         return response()->json(['message' => 'Password changed successfully.']);
     }
-}
+    /**
+     * Get Customer Notifications.
+     */
+    public function notifications(Request $request)
+    {
+        $customer = $request->user();
+        if (!$customer) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
 
+        $notifications = $customer->notifications()->take(50)->get();
+        $unreadCount = $customer->unreadNotifications()->count();
+
+        return response()->json([
+            'notifications' => $notifications,
+            'unread_count' => $unreadCount
+        ]);
+    }
+
+    /**
+     * Mark customer notifications as read.
+     */
+    public function markNotificationsRead(Request $request)
+    {
+        $customer = $request->user();
+        if ($customer) {
+            $customer->unreadNotifications->markAsRead();
+        }
+        return response()->json(['success' => true]);
+    }
+}

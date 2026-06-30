@@ -574,6 +574,16 @@ class AdminApiController extends Controller
                     'date' => $sale->date,
                     'reference' => 'POS Payment (Mobile Updated)',
                 ]);
+                
+                if ($customer) {
+                    \Illuminate\Support\Facades\Notification::send($customer, new \App\Notifications\CustomerAlertNotification(
+                        'Payment Received',
+                        "We have received a payment of BDT " . number_format($paidAmount, 2) . " for your order #{$sale->invoice_no}.",
+                        'payment',
+                        ['sale_id' => $sale->id],
+                        $customer->id
+                    ));
+                }
             }
 
             $totalCogs = 0;
@@ -708,6 +718,18 @@ class AdminApiController extends Controller
             \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cogsAcc->id, 'type' => 'debit', 'amount' => $totalCogs]);
             \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $inventoryFinAcc->id, 'type' => 'credit', 'amount' => $totalCogs]);
 
+            if ($oldDeliveryStatus !== 'processing' && $newDeliveryStatus === 'processing') {
+                if ($customer) {
+                    \Illuminate\Support\Facades\Notification::send($customer, new \App\Notifications\CustomerAlertNotification(
+                        'Order Accepted',
+                        "Your order #{$sale->invoice_no} has been accepted and is now processing.",
+                        'order_processing',
+                        ['sale_id' => $sale->id],
+                        $customer->id
+                    ));
+                }
+            }
+
             if ($oldDeliveryStatus !== 'shipped' && $newDeliveryStatus === 'shipped') {
                 try {
                     $admins = \App\Models\User::all();
@@ -717,6 +739,16 @@ class AdminApiController extends Controller
                         'dispatch',
                         ['sale_id' => $sale->id]
                     ));
+                    
+                    if ($customer) {
+                        \Illuminate\Support\Facades\Notification::send($customer, new \App\Notifications\CustomerAlertNotification(
+                            'Order Dispatched',
+                            "Your order #{$sale->invoice_no} has been dispatched and is on its way!",
+                            'order_shipped',
+                            ['sale_id' => $sale->id],
+                            $customer->id
+                        ));
+                    }
                 } catch (\Exception $e) {}
             }
 
@@ -729,6 +761,16 @@ class AdminApiController extends Controller
                         'deliver',
                         ['sale_id' => $sale->id]
                     ));
+                    
+                    if ($customer) {
+                        \Illuminate\Support\Facades\Notification::send($customer, new \App\Notifications\CustomerAlertNotification(
+                            'Order Delivered',
+                            "Your order #{$sale->invoice_no} has been delivered successfully.",
+                            'order_delivered',
+                            ['sale_id' => $sale->id],
+                            $customer->id
+                        ));
+                    }
                 } catch (\Exception $e) {}
             }
 

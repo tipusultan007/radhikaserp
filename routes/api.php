@@ -222,4 +222,6 @@ Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
     Route::get('/payments', [CustomerApiController::class, 'payments']);
     Route::get('/dues', [CustomerApiController::class, 'dues']);
     Route::post('/change-password', [CustomerApiController::class, 'changePassword']);
+    Route::get('/notifications', [CustomerApiController::class, 'notifications']);
+    Route::post('/notifications/mark-read', [CustomerApiController::class, 'markNotificationsRead']);
 });
