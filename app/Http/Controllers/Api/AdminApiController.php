@@ -883,6 +883,7 @@ class AdminApiController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'customer_type' => 'required|in:customer,dealer,special_dealer',
             'phone' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
@@ -951,6 +952,7 @@ class AdminApiController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'customer_type' => 'required|in:customer,dealer,special_dealer',
             'phone' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
