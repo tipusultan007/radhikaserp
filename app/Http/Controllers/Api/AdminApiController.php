@@ -141,6 +141,23 @@ class AdminApiController extends Controller
         return response()->json(['message' => 'Product deleted']);
     }
 
+    public function generateProductVariantSku(Request $request)
+    {
+        $prefix = 'VAR';
+        if ($request->has('product_id') && $request->product_id != '') {
+            $product = \App\Models\Product::find($request->product_id);
+            if ($product) {
+                $prefix = $product->sku;
+            }
+        }
+        
+        do {
+            $sku = $prefix . '-' . strtoupper(\Illuminate\Support\Str::random(4));
+        } while (\App\Models\ProductVariant::where('sku', $sku)->exists());
+        
+        return response()->json(['sku' => $sku]);
+    }
+
     public function storeProductVariant(Request $request)
     {
         $validated = $request->validate([

@@ -54,6 +54,8 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         ->middleware('permission:delete products');
 
     // ── Product Variants ──────────────────────────────────────────────────────
+    Route::get('/product-variants/generate-sku', [AdminApiController::class, 'generateProductVariantSku'])
+        ->middleware('permission:create product variants|edit product variants');
     Route::post('/product-variants', [AdminApiController::class, 'storeProductVariant'])
         ->middleware('permission:create product variants');
     Route::put('/product-variants/{id}', [AdminApiController::class, 'updateProductVariant'])
