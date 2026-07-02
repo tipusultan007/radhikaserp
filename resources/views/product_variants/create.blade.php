@@ -56,7 +56,11 @@
 
                              <div class="mb-3">
                                  <label for="sku" class="form-label">Variant SKU <span class="text-danger">*</span></label>
-                                 <input type="text" id="sku" name="sku" class="form-control" placeholder="e.g. SOYA-1KG" value="{{ old('sku') }}" required>
+                                 <div class="input-group">
+                                     <input type="text" id="sku" name="sku" class="form-control" placeholder="e.g. SOYA-1KG" value="{{ old('sku') }}" required>
+                                     <button type="button" class="btn btn-info" id="generate-sku-btn">Auto Generate</button>
+                                 </div>
+                                 <small id="sku-feedback" class="form-text text-muted"></small>
                              </div>
 
                              <div class="mb-3">
@@ -112,3 +116,28 @@
     </div>
 @endsection
 
+@section('script')
+<script>
+    document.getElementById('generate-sku-btn').addEventListener('click', function() {
+        let productId = document.getElementById('product_id').value;
+        let btn = this;
+        let originalText = btn.innerHTML;
+        btn.innerHTML = 'Generating...';
+        btn.disabled = true;
+        
+        fetch(`{{ route('product-variants.generate-sku') }}?product_id=${productId}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('sku').value = data.sku;
+                document.getElementById('sku-feedback').innerHTML = '<span class="text-success"><i class="ri-check-line"></i> Unique SKU generated!</span>';
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            })
+            .catch(error => {
+                document.getElementById('sku-feedback').innerHTML = '<span class="text-danger"><i class="ri-error-warning-line"></i> Failed to generate SKU.</span>';
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
+    });
+</script>
+@endsection

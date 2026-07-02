@@ -61,6 +61,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::get('product-variants', [ProductVariantController::class, 'index'])->name('product-variants.index');
     });
     Route::group(['middleware' => ['permission:create product variants']], function () {
+        Route::get('product-variants/generate-sku', [ProductVariantController::class, 'generateSku'])->name('product-variants.generate-sku');
         Route::get('product-variants/create', [ProductVariantController::class, 'create'])->name('product-variants.create');
         Route::post('product-variants', [ProductVariantController::class, 'store'])->name('product-variants.store');
     });

@@ -20,6 +20,23 @@ class ProductVariantController extends Controller
         return view('product_variants.create', compact('products'));
     }
 
+    public function generateSku(Request $request)
+    {
+        $prefix = 'VAR';
+        if ($request->has('product_id') && $request->product_id != '') {
+            $product = Product::find($request->product_id);
+            if ($product) {
+                $prefix = $product->sku;
+            }
+        }
+        
+        do {
+            $sku = $prefix . '-' . strtoupper(\Illuminate\Support\Str::random(4));
+        } while (ProductVariant::where('sku', $sku)->exists());
+        
+        return response()->json(['sku' => $sku]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
