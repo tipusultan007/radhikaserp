@@ -14,6 +14,17 @@ class ProductVariantController extends Controller
         return view('product_variants.index', compact('variants'));
     }
 
+    public function show(ProductVariant $productVariant)
+    {
+        $transactions = \App\Models\InventoryTransaction::with(['warehouse', 'batch', 'creator'])
+            ->where('product_variant_id', $productVariant->id)
+            ->orderBy('date', 'desc')
+            ->orderBy('id', 'desc')
+            ->paginate(15);
+            
+        return view('product_variants.show', compact('productVariant', 'transactions'));
+    }
+
     public function create()
     {
         $products = Product::all();

@@ -59,6 +59,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     // ─── Product Variants ───────────────────────────────────────────────────────
     Route::group(['middleware' => ['permission:view products']], function () {
         Route::get('product-variants', [ProductVariantController::class, 'index'])->name('product-variants.index');
+        Route::get('product-variants/{product_variant}', [ProductVariantController::class, 'show'])->name('product-variants.show');
     });
     Route::group(['middleware' => ['permission:create product variants']], function () {
         Route::get('product-variants/generate-sku', [ProductVariantController::class, 'generateSku'])->name('product-variants.generate-sku');
