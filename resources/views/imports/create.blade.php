@@ -132,7 +132,7 @@
                                             <td>
                                                 <div class="input-group input-group-sm">
                                                     <span class="input-group-text">$</span>
-                                                    <input type="number" step="1" min="0.01" name="items[0][unit_cost]" class="form-control item-cost" placeholder="0.00" required>
+                                                    <input type="number" step="any" min="0.01" name="items[0][unit_cost]" class="form-control item-cost" placeholder="0.00" required>
                                                 </div>
                                             </td>
                                             <td class="text-end align-middle">
@@ -192,10 +192,10 @@ $(document).ready(function() {
             let qty = parseFloat($(this).find('.item-qty').val()) || 0;
             let cost = parseFloat($(this).find('.item-cost').val()) || 0;
             let subtotal = qty * cost;
-            $(this).find('.row-subtotal').text('$' + subtotal.toFixed(0));
+            $(this).find('.row-subtotal').text('$' + subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
             grandTotal += subtotal;
         });
-        $('#grandTotal').text('$' + grandTotal.toFixed(0));
+        $('#grandTotal').text('$' + grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
         // Disable remove button if only one row left
         let rowCount = $('.item-row').length;
@@ -232,7 +232,7 @@ $(document).ready(function() {
             <td>
                 <div class="input-group input-group-sm">
                     <span class="input-group-text">$</span>
-                    <input type="number" step="1" min="0.01" name="items[${rowIdx}][unit_cost]" class="form-control item-cost" placeholder="0.00" required>
+                    <input type="number" step="any" min="0.01" name="items[${rowIdx}][unit_cost]" class="form-control item-cost" placeholder="0.00" required>
                 </div>
             </td>
             <td class="text-end align-middle">
