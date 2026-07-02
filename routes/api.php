@@ -233,6 +233,31 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         ->middleware('permission:view stock reports|view sales reports|view financial reports');
 
     // ── Accounting ────────────────────────────────────────────────────────────
+    
+    // 💸 Expenses & Categories 💸
+    Route::get('/expense-categories/form-data', [AdminApiController::class, 'expenseCategoryFormData'])
+        ->middleware('permission:view expenses');
+    Route::get('/expense-categories', [AdminApiController::class, 'expenseCategories'])
+        ->middleware('permission:view expenses');
+    Route::post('/expense-categories', [AdminApiController::class, 'storeExpenseCategory'])
+        ->middleware('permission:create expenses');
+    Route::put('/expense-categories/{id}', [AdminApiController::class, 'updateExpenseCategory'])
+        ->middleware('permission:edit expenses');
+    Route::delete('/expense-categories/{id}', [AdminApiController::class, 'destroyExpenseCategory'])
+        ->middleware('permission:delete expenses');
+
+    Route::get('/expense-form-data', [AdminApiController::class, 'expenseFormData'])
+        ->middleware('permission:view expenses');
+    Route::get('/expenses', [AdminApiController::class, 'expenses'])
+        ->middleware('permission:view expenses');
+    Route::post('/expenses', [AdminApiController::class, 'storeExpense'])
+        ->middleware('permission:create expenses');
+    Route::put('/expenses/{id}', [AdminApiController::class, 'updateExpense'])
+        ->middleware('permission:edit expenses');
+    Route::delete('/expenses/{id}', [AdminApiController::class, 'destroyExpense'])
+        ->middleware('permission:delete expenses');
+
+    // 📊 Accounting 📊
     Route::get('/accounting/chart-of-accounts', [AccountingApiController::class, 'chartOfAccounts'])
         ->middleware('permission:view chart of accounts');
     Route::get('/accounting/cashbook', [AccountingApiController::class, 'cashbook'])
