@@ -231,6 +231,10 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     // ── Reports ───────────────────────────────────────────────────────────────
     Route::get('/reports', [AdminApiController::class, 'reports'])
         ->middleware('permission:view stock reports|view sales reports|view financial reports');
+    Route::get('/reports/sales/daily', [AdminApiController::class, 'dailySales']);
+    Route::get('/reports/sales/monthly', [AdminApiController::class, 'monthlySales']);
+    Route::get('/reports/inventory/stock-summary', [AdminApiController::class, 'stockSummary']);
+    Route::get('/reports/financial/cashbook', [AdminApiController::class, 'cashbook']);
 
     // ── Accounting ────────────────────────────────────────────────────────────
     

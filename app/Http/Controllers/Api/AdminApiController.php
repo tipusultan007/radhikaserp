@@ -3026,4 +3026,68 @@ class AdminApiController extends Controller
             return response()->json(['error' => 'Failed to delete expense: ' . $e->getMessage()], 500);
         }
     }
+
+    // ── Mobile App Reports ────────────────────────────────────────────────────────────
+
+    public function dailySales(Request $request)
+    {
+        $startDate = $request->input('start_date', \Carbon\Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate = $request->input('end_date', \Carbon\Carbon::now()->endOfMonth()->format('Y-m-d'));
+
+        $sales = \App\Models\Sale::whereBetween('date', [$startDate, $endDate])
+            ->select(\Illuminate\Support\Facades\DB::raw('DATE(date) as sale_date'), \Illuminate\Support\Facades\DB::raw('count(*) as total_orders'), \Illuminate\Support\Facades\DB::raw('sum(total) as total_revenue'))
+            ->groupBy('sale_date')
+            ->orderBy('sale_date', 'desc')
+            ->get();
+
+        return response()->json(['sales' => $sales]);
+    }
+
+    public function monthlySales(Request $request)
+    {
+        $year = $request->input('year', \Carbon\Carbon::now()->year);
+
+        $sales = \App\Models\Sale::whereYear('date', $year)
+            ->select(\Illuminate\Support\Facades\DB::raw('MONTH(date) as sale_month'), \Illuminate\Support\Facades\DB::raw('count(*) as total_orders'), \Illuminate\Support\Facades\DB::raw('sum(total) as total_revenue'))
+            ->groupBy('sale_month')
+            ->orderBy('sale_month', 'desc')
+            ->get();
+
+        return response()->json(['sales' => $sales]);
+    }
+
+    public function stockSummary(Request $request)
+    {
+        $rawBatches = \App\Models\Batch::whereHas('product', function($q) {
+            $q->where('type', 'raw');
+        })->whereNull('product_variant_id')->with(['product', 'warehouse'])->where('remaining_qty', '>', 0)->get();
+
+        $standaloneBatches = \App\Models\Batch::whereHas('product', function($q) {
+            $q->where('type', 'finished');
+        })->whereNull('product_variant_id')->with(['product', 'warehouse'])->where('remaining_qty', '>', 0)->get();
+
+        $packagedBatches = \App\Models\Batch::whereNotNull('product_variant_id')->with(['productVariant.product', 'warehouse'])->where('remaining_qty', '>', 0)->get();
+
+        return response()->json([
+            'raw_batches' => $rawBatches,
+            'standalone_batches' => $standaloneBatches,
+            'packaged_batches' => $packagedBatches,
+        ]);
+    }
+
+    public function cashbook(Request $request)
+    {
+        $cashAccs = \App\Models\ChartOfAccount::where('is_cash_bank', 1)->orWhere('is_payment_method', 1)->pluck('id');
+        
+        $query = \App\Models\JournalEntry::whereIn('account_id', $cashAccs)->with('journal');
+
+        if ($request->filled('date')) {
+            $query->whereHas('journal', function($q) use ($request) {
+                $q->whereDate('date', $request->date);
+            });
+        }
+
+        $entries = $query->latest()->get();
+        return response()->json(['entries' => $entries]);
+    }
 }
