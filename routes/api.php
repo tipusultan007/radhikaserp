@@ -135,6 +135,18 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('/sales/{id}/pdf', [AdminApiController::class, 'downloadInvoice'])
         ->middleware('permission:view sales');
 
+    // ── Expense Categories ────────────────────────────────────────────────────
+    Route::get('/expense-categories/form-data', [AdminApiController::class, 'expenseCategoryFormData'])
+        ->middleware('permission:view expenses');
+    Route::get('/expense-categories', [AdminApiController::class, 'expenseCategories'])
+        ->middleware('permission:view expenses');
+    Route::post('/expense-categories', [AdminApiController::class, 'storeExpenseCategory'])
+        ->middleware('permission:create expenses');
+    Route::put('/expense-categories/{id}', [AdminApiController::class, 'updateExpenseCategory'])
+        ->middleware('permission:edit expenses');
+    Route::delete('/expense-categories/{id}', [AdminApiController::class, 'destroyExpenseCategory'])
+        ->middleware('permission:delete expenses');
+
     // ── Expenses ──────────────────────────────────────────────────────────────
     Route::get('/expense-form-data', [AdminApiController::class, 'expenseFormData'])
         ->middleware('permission:view expenses');
