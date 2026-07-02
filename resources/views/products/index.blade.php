@@ -83,16 +83,27 @@
                                                  @endif
                                              </td>
                                              <td>
-                                                 <a href="{{ route('products.edit', $product->id) }}" class="text-reset fs-16 px-1" title="Edit"> 
-                                                     <i class="ri-settings-3-line"></i>
-                                                 </a>
-                                                 <form action="{{ route('products.destroy', $product->id) }}" method="POST" class="d-inline-block" onsubmit="return confirm('Are you sure you want to delete this master product?');">
-                                                     @csrf
-                                                     @method('DELETE')
-                                                     <button type="submit" class="btn btn-link text-reset fs-16 p-0 border-0" title="Delete">
-                                                         <i class="ri-delete-bin-2-line"></i>
+                                                 <div class="dropdown">
+                                                     <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                         Action
                                                      </button>
-                                                 </form>
+                                                     <ul class="dropdown-menu">
+                                                         <li>
+                                                             <a class="dropdown-item" href="{{ route('products.edit', $product->id) }}">
+                                                                 <i class="ri-pencil-line me-1"></i> Edit
+                                                             </a>
+                                                         </li>
+                                                         <li>
+                                                             <form action="{{ route('products.destroy', $product->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this master product?');">
+                                                                 @csrf
+                                                                 @method('DELETE')
+                                                                 <button type="submit" class="dropdown-item text-danger">
+                                                                     <i class="ri-delete-bin-2-line me-1"></i> Delete
+                                                                 </button>
+                                                             </form>
+                                                         </li>
+                                                     </ul>
+                                                 </div>
                                              </td>
                                          </tr>
                                      @empty
