@@ -145,7 +145,18 @@ class ImportController extends Controller
     public function show(Import $import)
     {
         $import->load(['items.product', 'supplier', 'warehouse']);
-        return view('imports.show', compact('import'));
+        
+        // Find payments from supplier settlements that reference this import number
+        $relatedPayments = \App\Models\Journal::where('reference_type', \App\Models\Supplier::class)
+            ->where('reference_id', $import->supplier_id)
+            ->where(function($query) use ($import) {
+                $query->where('notes', 'like', '%' . $import->import_no . '%')
+                      ->orWhere('journal_no', 'like', '%' . $import->import_no . '%');
+            })
+            ->with(['entries.account'])
+            ->get();
+            
+        return view('imports.show', compact('import', 'relatedPayments'));
     }
 
     public function edit(Import $import)

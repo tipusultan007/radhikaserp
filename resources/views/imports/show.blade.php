@@ -87,6 +87,40 @@
                              </table>
                          </div>
                          
+                         <!-- Related Payments Section -->
+                         <h6 class="text-uppercase text-muted fs-12 fw-bold mb-3 mt-5">Related Payments</h6>
+                         <div class="table-responsive mb-4">
+                             <table class="table table-striped table-hover table-bordered mb-0">
+                                 <thead class="table-light">
+                                     <tr>
+                                         <th width="15%">Date</th>
+                                         <th width="20%">Journal No</th>
+                                         <th>Notes / Reference</th>
+                                         <th class="text-end" width="20%">Amount Paid</th>
+                                     </tr>
+                                 </thead>
+                                 <tbody>
+                                     @forelse ($relatedPayments as $payment)
+                                         @php
+                                             // Find the debit entry for Accounts Payable to get the amount paid to the supplier
+                                             $debitEntry = $payment->entries->where('type', 'debit')->first();
+                                             $amount = $debitEntry ? $debitEntry->amount : 0;
+                                         @endphp
+                                         <tr>
+                                             <td>{{ $payment->date->format('Y-m-d') }}</td>
+                                             <td><span class="fw-semibold">{{ $payment->journal_no }}</span></td>
+                                             <td>{{ $payment->notes }}</td>
+                                             <td class="text-end fw-semibold text-success">${{ number_format($amount, 2) }}</td>
+                                         </tr>
+                                     @empty
+                                         <tr>
+                                             <td colspan="4" class="text-center text-muted py-3">No payments explicitly linked to this import yet. <br> <small>(To link a payment, include the import number <b>{{ $import->import_no }}</b> in the reference or notes when making a supplier payment.)</small></td>
+                                         </tr>
+                                     @endforelse
+                                 </tbody>
+                             </table>
+                         </div>
+                         
                          <!-- Summary Footer -->
                          <div class="row mt-4">
                              <div class="col-sm-6">
