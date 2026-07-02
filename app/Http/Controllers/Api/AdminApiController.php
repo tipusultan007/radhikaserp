@@ -3077,7 +3077,7 @@ class AdminApiController extends Controller
 
     public function cashbook(Request $request)
     {
-        $cashAccs = \App\Models\ChartOfAccount::where('is_cash_bank', 1)->orWhere('is_payment_method', 1)->pluck('id');
+        $cashAccs = \App\Models\ChartOfAccount::where('name', 'Cash')->orWhere('name', 'Bank')->pluck('id');
         
         $query = \App\Models\JournalEntry::whereIn('account_id', $cashAccs)->with('journal');
 
