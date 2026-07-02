@@ -892,7 +892,12 @@ class AdminApiController extends Controller
             });
         }
 
-        $customers = $query->paginate(20);
+        if ($request->has('all')) {
+            $customers = $query->get();
+        } else {
+            $customers = $query->paginate(20);
+        }
+        
         return response()->json(['customers' => $customers]);
     }
 
