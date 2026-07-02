@@ -69,7 +69,7 @@
                                  <div class="col-md-6">
                                      <div class="mb-3">
                                          <label for="unit_qty" class="form-label">Unit Quantity (Multiplier) <span class="text-danger">*</span></label>
-                                         <input type="number" step="1" id="unit_qty" name="unit_qty" class="form-control" value="{{ old('unit_qty', $productVariant->unit_qty) }}" required>
+                                         <input type="number" step="any" id="unit_qty" name="unit_qty" class="form-control" placeholder="e.g. 1.00 or 0.50" value="{{ old('unit_qty', $productVariant->unit_qty) }}" required>
                                      </div>
                                  </div>
                                  <div class="col-md-6">
@@ -91,7 +91,7 @@
 
                              <div class="mb-3">
                                  <label for="price" class="form-label">Selling Price ($)</label>
-                                 <input type="number" step="1" id="price" name="price" class="form-control" placeholder="e.g. 25.00" value="{{ old('price', $productVariant->price) }}">
+                                 <input type="number" step="any" id="price" name="price" class="form-control" placeholder="e.g. 25.00" value="{{ old('price', $productVariant->price) }}">
                              </div>
 
                              <div class="mb-3">
