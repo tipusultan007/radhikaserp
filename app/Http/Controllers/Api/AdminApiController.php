@@ -2150,7 +2150,7 @@ class AdminApiController extends Controller
 
     public function repackaging(Request $request)
     {
-        $query = RepackagingOrder::with(['warehouse', 'creator'])->orderBy('id', 'desc');
+        $query = RepackagingOrder::with(['warehouse', 'creator', 'inputs.product', 'outputs.productVariant'])->orderBy('id', 'desc');
         
         if ($request->filled('ref_no')) {
             $query->where('ref_no', 'like', '%' . $request->ref_no . '%');
