@@ -113,17 +113,26 @@
                                              </td>
                                              <td>{{ Str::limit($order->notes, 20) }}</td>
                                              <td>
-                                                 <a href="{{ route('repackaging.show', $order->id) }}" class="action-icon text-info me-1" title="View"> <i class="ri-eye-fill fs-4"></i></a>
-                                                 @can('edit repackaging')
-                                                 <a href="{{ route('repackaging.edit', $order->id) }}" class="action-icon text-primary me-1" title="Edit"> <i class="ri-edit-box-line fs-4"></i></a>
-                                                 @endcan
-                                                 @can('delete repackaging')
-                                                 <form action="{{ route('repackaging.destroy', $order->id) }}" method="POST" class="d-inline delete-form">
-                                                     @csrf
-                                                     @method('DELETE')
-                                                     <button type="button" class="action-icon btn btn-link text-danger p-0 delete-btn" title="Delete"> <i class="ri-delete-bin-line fs-4"></i></button>
-                                                 </form>
-                                                 @endcan
+                                                 <div class="dropdown">
+                                                     <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                         Action <i class="mdi mdi-chevron-down"></i>
+                                                     </button>
+                                                     <ul class="dropdown-menu dropdown-menu-end">
+                                                         <li><a class="dropdown-item" href="{{ route('repackaging.show', $order->id) }}"><i class="ri-eye-fill me-2 align-middle text-info"></i> View</a></li>
+                                                         @can('edit repackaging')
+                                                         <li><a class="dropdown-item" href="{{ route('repackaging.edit', $order->id) }}"><i class="ri-edit-box-line me-2 align-middle text-primary"></i> Edit</a></li>
+                                                         @endcan
+                                                         @can('delete repackaging')
+                                                         <li>
+                                                             <form action="{{ route('repackaging.destroy', $order->id) }}" method="POST" class="delete-form m-0 p-0">
+                                                                 @csrf
+                                                                 @method('DELETE')
+                                                                 <button type="button" class="dropdown-item text-danger delete-btn"><i class="ri-delete-bin-line me-2 align-middle"></i> Delete</button>
+                                                             </form>
+                                                         </li>
+                                                         @endcan
+                                                     </ul>
+                                                 </div>
                                              </td>
                                          </tr>
                                      @endforeach
