@@ -84,6 +84,14 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         ->middleware('permission:view suppliers');
     Route::post('/suppliers', [AdminApiController::class, 'storeSupplier'])
         ->middleware('permission:create suppliers');
+    Route::get('/suppliers/{id}', [AdminApiController::class, 'showSupplier'])
+        ->middleware('permission:view suppliers');
+    Route::get('/suppliers/{id}/purchases', [AdminApiController::class, 'supplierPurchases'])
+        ->middleware('permission:view suppliers');
+    Route::get('/suppliers/{id}/payments', [AdminApiController::class, 'supplierPayments'])
+        ->middleware('permission:view suppliers');
+    Route::get('/suppliers/{id}/ledger', [AdminApiController::class, 'supplierLedger'])
+        ->middleware('permission:view suppliers');
     Route::put('/suppliers/{id}', [AdminApiController::class, 'updateSupplier'])
         ->middleware('permission:edit suppliers');
     Route::delete('/suppliers/{id}', [AdminApiController::class, 'destroySupplier'])

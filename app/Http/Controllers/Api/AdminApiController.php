@@ -1064,6 +1064,110 @@ class AdminApiController extends Controller
         return response()->json(['message' => 'Supplier deleted']);
     }
 
+    public function showSupplier($id)
+    {
+        $supplier = Supplier::findOrFail($id);
+        return response()->json(['supplier' => $supplier]);
+    }
+
+    public function supplierPurchases($id)
+    {
+        $purchases = \App\Models\Import::where('supplier_id', $id)
+            ->with('warehouse')
+            ->orderBy('date', 'desc')
+            ->paginate(20);
+        return response()->json(['purchases' => $purchases]);
+    }
+
+    public function supplierPayments($id)
+    {
+        $journals = \App\Models\Journal::with('entries.account')
+            ->where('reference_type', \App\Models\Supplier::class)
+            ->where('reference_id', $id)
+            ->whereHas('entries', function($q) {
+                $q->where('type', 'debit')->whereHas('account', function($q2) {
+                    $q2->where('name', 'Accounts Payable');
+                });
+            })
+            ->orderBy('date', 'desc')
+            ->paginate(20);
+
+        $journals->getCollection()->transform(function($journal) {
+            $amount = $journal->entries->where('type', 'debit')->where('account.name', 'Accounts Payable')->sum('amount');
+            return [
+                'id' => $journal->id,
+                'amount' => $amount,
+                'date' => $journal->date,
+                'reference' => $journal->notes,
+                'sale' => ['invoice_no' => $journal->journal_no]
+            ];
+        });
+
+        return response()->json(['payments' => $journals]);
+    }
+
+    public function supplierLedger(Request $request, $id)
+    {
+        $supplier = Supplier::findOrFail($id);
+        $apAcc = ChartOfAccount::where('name', 'Accounts Payable')->first();
+        
+        if (!$apAcc) {
+            return response()->json(['ledger' => ['data' => []], 'total_payable' => 0]);
+        }
+
+        $importIds = \App\Models\Import::where('supplier_id', $id)->pluck('id');
+
+        $supplierJournalIds = \App\Models\Journal::where(function($q) use ($supplier) {
+            $q->where('reference_type', \App\Models\Supplier::class)->where('reference_id', $supplier->id);
+        })->orWhere(function($q) use ($importIds) {
+            $q->where('reference_type', \App\Models\Import::class)->whereIn('reference_id', $importIds);
+        })->pluck('id');
+
+        $query = \App\Models\JournalEntry::with('journal')
+            ->whereIn('journal_id', $supplierJournalIds)
+            ->where('account_id', $apAcc->id)
+            ->orderBy('id', 'asc');
+
+        $paginatedEntries = $query->paginate(20);
+
+        $initialBalance = 0;
+        if ($paginatedEntries->currentPage() > 1 && $paginatedEntries->first()) {
+            $firstEntryIdOnPage = $paginatedEntries->first()->id;
+            
+            $priorCredits = \App\Models\JournalEntry::whereIn('journal_id', $supplierJournalIds)
+                ->where('account_id', $apAcc->id)
+                ->where('id', '<', $firstEntryIdOnPage)
+                ->where('type', 'credit')
+                ->sum('amount');
+                
+            $priorDebits = \App\Models\JournalEntry::whereIn('journal_id', $supplierJournalIds)
+                ->where('account_id', $apAcc->id)
+                ->where('id', '<', $firstEntryIdOnPage)
+                ->where('type', 'debit')
+                ->sum('amount');
+                
+            $initialBalance = $priorCredits - $priorDebits;
+        }
+
+        $runningBalance = $initialBalance;
+        $paginatedEntries->getCollection()->transform(function ($entry) use (&$runningBalance) {
+            if ($entry->type === 'credit') {
+                $runningBalance += $entry->amount;
+            } else {
+                $runningBalance -= $entry->amount;
+            }
+            $entry->balance = $runningBalance;
+            $entry->date = $entry->journal->date;
+            $entry->description = $entry->journal->notes ?? 'N/A';
+            return $entry;
+        });
+
+        return response()->json([
+            'ledger' => $paginatedEntries,
+            'total_payable' => $supplier->total_payable
+        ]);
+    }
+
     /**
      * Get all imports (purchases).
      */
@@ -1458,14 +1562,19 @@ class AdminApiController extends Controller
 
     public function storeWarehouse(Request $request)
     {
-        $warehouse = Warehouse::create($request->all());
+        $data = $request->all();
+        if (empty($data['code'])) {
+            $data['code'] = 'W-' . strtoupper(\Illuminate\Support\Str::random(4));
+        }
+        $warehouse = Warehouse::create($data);
         return response()->json(['message' => 'Warehouse created', 'warehouse' => $warehouse], 201);
     }
 
     public function updateWarehouse(Request $request, $id)
     {
         $warehouse = Warehouse::findOrFail($id);
-        $warehouse->update($request->all());
+        $data = $request->all();
+        $warehouse->update($data);
         return response()->json(['message' => 'Warehouse updated', 'warehouse' => $warehouse]);
     }
 
