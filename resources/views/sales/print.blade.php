@@ -115,27 +115,35 @@
 <body>
     <div class="invoice-box">
         
-        <div class="header">
-            <div class="header-left" style="width: 65%;">
-                <table style="width: 100%; border-collapse: collapse;">
-                    <tr>
-                        <td style="width: 80px; vertical-align: middle;">
-                            <img src="{{ asset('logo.webp') }}" alt="Logo" style="max-height: 80px;">
-                        </td>
-                        <td style="vertical-align: middle; padding-left: 15px;">
-                            <h2 style="margin: 0 0 5px 0; font-size: 22px; text-transform: uppercase;">Radhikas Trade International</h2>
-                            <div style="font-size: 13px; margin-bottom: 3px;">88/89, Sadarghat Road, Chattogram, Bangladesh 4000</div>
-                            <div style="font-size: 13px;">018 9770 1188, 019 9984 8389 | sales.radhikastradeintl@gmail.com</div>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-            <div class="header-right" style="width: 35%; text-align: right; vertical-align: middle;">
-                <div class="invoice-title" style="margin-top: 15px;">INVOICE</div>
-                <div><strong>Invoice No:</strong> #{{ $sale->invoice_no }}</div>
-                <div><strong>Date:</strong> {{ $sale->date->format('M d, Y') }}</div>
-            </div>
-        </div>
+        <table style="width: 100%; margin-bottom: 30px;">
+            <tr>
+                <td style="width: 65%; vertical-align: top;">
+                    <table style="width: 100%;">
+                        <tr>
+                            <td style="width: 70px; vertical-align: top;">
+                                <?php
+                                    $logoPath = public_path('logo.png');
+                                    $logoData = file_exists($logoPath) ? base64_encode(file_get_contents($logoPath)) : '';
+                                ?>
+                                @if($logoData)
+                                    <img src="data:image/png;base64,{{ $logoData }}" alt="Logo" style="max-height: 60px; max-width: 70px;">
+                                @endif
+                            </td>
+                            <td style="vertical-align: top; padding-left: 10px;">
+                                <h2 style="margin: 0 0 5px 0; font-size: 18px; text-transform: uppercase;">Radhikas Trade International</h2>
+                                <div style="font-size: 12px; margin-bottom: 2px; color: #555;">88/89, Sadarghat Road, Chattogram, Bangladesh 4000</div>
+                                <div style="font-size: 12px; color: #555;">018 9770 1188, 019 9984 8389 | sales.radhikastradeintl@gmail.com</div>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+                <td style="width: 35%; text-align: right; vertical-align: top;">
+                    <div class="invoice-title" style="margin-top: 0; margin-bottom: 5px; font-size: 28px;">INVOICE</div>
+                    <div style="font-size: 13px;"><strong>Invoice No:</strong> #{{ $sale->invoice_no }}</div>
+                    <div style="font-size: 13px;"><strong>Date:</strong> {{ $sale->date->format('M d, Y') }}</div>
+                </td>
+            </tr>
+        </table>
 
         <table class="info-table">
             <tr>
