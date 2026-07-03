@@ -3082,17 +3082,45 @@ class AdminApiController extends Controller
 
     public function cashbook(Request $request)
     {
-        $cashAccs = \App\Models\ChartOfAccount::where('name', 'Cash')->orWhere('name', 'Bank')->pluck('id');
+        $date = $request->filled('date') ? $request->date : now()->toDateString();
         
-        $query = \App\Models\JournalEntry::whereIn('account_id', $cashAccs)->with('journal');
+        $cashAccounts = \App\Models\ChartOfAccount::where('is_payment_method', 1)->get();
+        $cashAccIds = $cashAccounts->pluck('id')->toArray();
 
-        if ($request->filled('date')) {
-            $query->whereHas('journal', function($q) use ($request) {
-                $q->whereDate('date', $request->date);
-            });
-        }
+        $baseOpening = $cashAccounts->sum('opening_balance');
 
-        $entries = $query->latest()->get();
-        return response()->json(['entries' => $entries]);
+        $priorTransactions = \App\Models\JournalEntry::whereIn('account_id', $cashAccIds)
+            ->whereHas('journal', function($q) use ($date) {
+                $q->whereDate('date', '<', $date);
+            })
+            ->selectRaw('SUM(CASE WHEN type = "debit" THEN amount ELSE 0 END) as total_debit')
+            ->selectRaw('SUM(CASE WHEN type = "credit" THEN amount ELSE 0 END) as total_credit')
+            ->first();
+
+        $priorDebit = $priorTransactions->total_debit ?? 0;
+        $priorCredit = $priorTransactions->total_credit ?? 0;
+
+        $openingBalance = $baseOpening + $priorDebit - $priorCredit;
+
+        $entries = \App\Models\JournalEntry::whereIn('account_id', $cashAccIds)
+            ->with(['journal', 'account'])
+            ->whereHas('journal', function($q) use ($date) {
+                $q->whereDate('date', $date);
+            })
+            ->latest()
+            ->get();
+
+        $totalIn = $entries->where('type', 'debit')->sum('amount');
+        $totalOut = $entries->where('type', 'credit')->sum('amount');
+        $closingBalance = $openingBalance + $totalIn - $totalOut;
+
+        return response()->json([
+            'date' => $date,
+            'opening_balance' => $openingBalance,
+            'total_in' => $totalIn,
+            'total_out' => $totalOut,
+            'closing_balance' => $closingBalance,
+            'entries' => $entries,
+        ]);
     }
 }
