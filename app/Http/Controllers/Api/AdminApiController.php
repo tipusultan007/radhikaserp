@@ -1848,7 +1848,11 @@ class AdminApiController extends Controller
 
     public function destroyStockTransfer($id)
     {
-        StockTransfer::destroy($id);
+        $transfer = StockTransfer::find($id);
+        if ($transfer) {
+            $transfer->items()->delete();
+            $transfer->delete();
+        }
         return response()->json(['message' => 'Transfer deleted']);
     }
 
