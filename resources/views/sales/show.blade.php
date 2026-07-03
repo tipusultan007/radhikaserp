@@ -69,10 +69,11 @@
                                  <p class="text-muted">Date: {{ $sale->date->format('M d, Y') }}</p>
                              </div>
                              <div class="col-md-6 text-md-end">
-                                 <h3 class="mt-0">Radhika's ERP</h3>
-                                 <p class="text-muted mb-0">123 Business Avenue, Suite 100</p>
-                                 <p class="text-muted mb-0">City, State, 12345</p>
-                                 <p class="text-muted">Phone: +1 234 567 8900 | Email: billing@radhikaserp.com</p>
+                                 <img src="{{ asset('logo.webp') }}" alt="Logo" style="max-height: 50px; margin-bottom: 10px;">
+                                 <h3 class="mt-0">Radhikas Trade International</h3>
+                                 <p class="text-muted mb-0">88/89, Sadarghat Road, Chattogram, Bangladesh 4000</p>
+                                 <p class="text-muted mb-0"><b>Phone</b>: 018 9770 1188, 019 9984 8389, 017 3222 6604</p>
+                                 <p class="text-muted"><b>Email</b>: sales.radhikastradeintl@gmail.com</p>
                              </div>
                          </div>
 
