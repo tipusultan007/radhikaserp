@@ -1649,7 +1649,7 @@ class AdminApiController extends Controller
 
     public function stockTransfers(Request $request)
     {
-        $query = StockTransfer::with(['fromWarehouse', 'toWarehouse', 'creator'])->orderBy('id', 'desc');
+        $query = StockTransfer::with(['fromWarehouse', 'toWarehouse', 'creator', 'items.productVariant'])->orderBy('id', 'desc');
         
         if ($request->filled('transfer_no')) {
             $query->where('transfer_no', 'like', '%' . $request->transfer_no . '%');
