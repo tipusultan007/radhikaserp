@@ -170,9 +170,9 @@
                 <tr>
                     <th style="width: 5%">#</th>
                     <th style="width: 50%">Description</th>
-                    <th style="width: 15%" class="text-center">Qty</th>
-                    <th style="width: 15%" class="text-right">Unit Price</th>
-                    <th style="width: 15%" class="text-right">Total</th>
+                    <th style="width: 15%; text-align: right;">Qty</th>
+                    <th style="width: 15%; text-align: right;">Unit Price</th>
+                    <th style="width: 15%; text-align: right;">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -183,7 +183,7 @@
                         <strong>{{ $item->productVariant->product->name ?? 'Unknown' }}</strong><br>
                         <span style="color: #7f8c8d; font-size: 12px;">{{ $item->productVariant->name ?? 'Unknown' }}</span>
                     </td>
-                    <td class="text-center">{{ number_format($item->qty, 3) }}</td>
+                    <td class="text-right">{{ number_format($item->qty, 3) }}</td>
                     <td class="text-right">${{ number_format($item->unit_price, 0) }}</td>
                     <td class="text-right">${{ number_format($item->total_price, 0) }}</td>
                 </tr>
