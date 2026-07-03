@@ -116,17 +116,24 @@
     <div class="invoice-box">
         
         <div class="header">
-            <div class="header-left">
-                <div class="invoice-title">INVOICE</div>
+            <div class="header-left" style="width: 65%;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="width: 80px; vertical-align: middle;">
+                            <img src="{{ asset('logo.webp') }}" alt="Logo" style="max-height: 80px;">
+                        </td>
+                        <td style="vertical-align: middle; padding-left: 15px;">
+                            <h2 style="margin: 0 0 5px 0; font-size: 22px; text-transform: uppercase;">Radhikas Trade International</h2>
+                            <div style="font-size: 13px; margin-bottom: 3px;">88/89, Sadarghat Road, Chattogram, Bangladesh 4000</div>
+                            <div style="font-size: 13px;">018 9770 1188, 019 9984 8389 | sales.radhikastradeintl@gmail.com</div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            <div class="header-right" style="width: 35%; text-align: right; vertical-align: middle;">
+                <div class="invoice-title" style="margin-top: 15px;">INVOICE</div>
                 <div><strong>Invoice No:</strong> #{{ $sale->invoice_no }}</div>
                 <div><strong>Date:</strong> {{ $sale->date->format('M d, Y') }}</div>
-            </div>
-            <div class="header-right">
-                <img src="{{ asset('logo.webp') }}" alt="Logo" style="max-height: 60px; margin-bottom: 10px;">
-                <h2 style="margin: 0 0 5px 0;">Radhikas Trade International</h2>
-                <div style="margin-bottom: 3px;">88/89, Sadarghat Road, Chattogram, Bangladesh 4000</div>
-                <div style="margin-bottom: 3px;"><b>Phone</b>: 018 9770 1188, 019 9984 8389, 017 3222 6604</div>
-                <div><b>Email</b>: sales.radhikastradeintl@gmail.com</div>
             </div>
         </div>
 

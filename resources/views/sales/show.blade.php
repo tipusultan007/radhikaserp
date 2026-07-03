@@ -63,17 +63,20 @@
                          
                          <!-- Invoice Header -->
                          <div class="row mb-4 pb-3 border-bottom">
-                             <div class="col-md-6">
-                                 <h2 class="invoice-title text-primary mb-3">INVOICE</h2>
+                             <div class="col-md-8">
+                                 <div class="d-flex align-items-center">
+                                     <img src="{{ asset('logo.webp') }}" alt="Logo" style="max-height: 80px; margin-right: 15px;">
+                                     <div>
+                                         <h3 class="mt-0 mb-1 text-uppercase" style="font-weight: 800; font-size: 26px;">Radhikas Trade International</h3>
+                                         <p class="text-muted mb-0" style="font-size: 15px;">88/89, Sadarghat Road, Chattogram, Bangladesh 4000</p>
+                                         <p class="text-muted mb-0" style="font-size: 15px;">018 9770 1188, 019 9984 8389, 017 3222 6604 | sales.radhikastradeintl@gmail.com</p>
+                                     </div>
+                                 </div>
+                             </div>
+                             <div class="col-md-4 text-md-end">
+                                 <h2 class="invoice-title text-primary mb-2 mt-2 mt-md-0" style="font-weight: bold;">INVOICE</h2>
                                  <h5 class="mb-1">Invoice No: #{{ $sale->invoice_no }}</h5>
                                  <p class="text-muted">Date: {{ $sale->date->format('M d, Y') }}</p>
-                             </div>
-                             <div class="col-md-6 text-md-end">
-                                 <img src="{{ asset('logo.webp') }}" alt="Logo" style="max-height: 50px; margin-bottom: 10px;">
-                                 <h3 class="mt-0">Radhikas Trade International</h3>
-                                 <p class="text-muted mb-0">88/89, Sadarghat Road, Chattogram, Bangladesh 4000</p>
-                                 <p class="text-muted mb-0"><b>Phone</b>: 018 9770 1188, 019 9984 8389, 017 3222 6604</p>
-                                 <p class="text-muted"><b>Email</b>: sales.radhikastradeintl@gmail.com</p>
                              </div>
                          </div>
 
