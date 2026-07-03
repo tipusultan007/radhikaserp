@@ -1643,7 +1643,8 @@ class AdminApiController extends Controller
     {
         $warehouses = \App\Models\Warehouse::all();
         $variants = \App\Models\ProductVariant::with('product')->get();
-        return response()->json(['warehouses' => $warehouses, 'variants' => $variants]);
+        $stocks = \App\Models\WarehouseStock::all();
+        return response()->json(['warehouses' => $warehouses, 'variants' => $variants, 'stocks' => $stocks]);
     }
 
     public function stockTransfers(Request $request)
