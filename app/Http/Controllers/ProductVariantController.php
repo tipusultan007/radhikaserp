@@ -28,7 +28,7 @@ class ProductVariantController extends Controller
     public function create()
     {
         $products = Product::all();
-        $units = \App\Models\Unit::where('status', true)->get();
+        $units = collect(); // Will be populated dynamically when a product is selected
         return view('product_variants.create', compact('products', 'units'));
     }
 
@@ -82,7 +82,22 @@ class ProductVariantController extends Controller
     public function edit(ProductVariant $productVariant)
     {
         $products = Product::all();
-        $units = \App\Models\Unit::where('status', true)->get();
+        
+        $baseUnit = $productVariant->product->unit;
+        $units = collect();
+        if ($baseUnit) {
+            $familyIds = collect([$baseUnit->id]);
+            if ($baseUnit->parent_id) {
+                $familyIds->push($baseUnit->parent_id);
+                $familyIds = $familyIds->merge(\App\Models\Unit::where('parent_id', $baseUnit->parent_id)->pluck('id'));
+            } else {
+                $familyIds = $familyIds->merge(\App\Models\Unit::where('parent_id', $baseUnit->id)->pluck('id'));
+            }
+            $units = \App\Models\Unit::whereIn('id', $familyIds->unique())->where('status', true)->get();
+        } else {
+            $units = \App\Models\Unit::where('status', true)->get();
+        }
+
         return view('product_variants.edit', compact('productVariant', 'products', 'units'));
     }
 

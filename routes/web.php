@@ -69,6 +69,9 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     Route::group(['middleware' => ['permission:delete products']], function () {
         Route::delete('products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
     });
+    
+    // AJAX route for fetching related units
+    Route::get('products/{product}/related-units', [ProductController::class, 'getRelatedUnits'])->name('products.related-units');
 
     // ─── Product Variants ───────────────────────────────────────────────────────
     Route::group(['middleware' => ['permission:view products']], function () {

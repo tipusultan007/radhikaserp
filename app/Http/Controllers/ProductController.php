@@ -112,4 +112,25 @@ class ProductController extends Controller
             return redirect()->route('products.index')->with('error', 'Failed to delete product: ' . $e->getMessage());
         }
     }
+
+    public function getRelatedUnits(Product $product)
+    {
+        $baseUnit = \App\Models\Unit::find($product->unit_id);
+        if (!$baseUnit) {
+            return response()->json(['units' => []]);
+        }
+
+        $familyIds = collect();
+        $familyIds->push($baseUnit->id);
+        
+        if ($baseUnit->parent_id) {
+            $familyIds->push($baseUnit->parent_id);
+            $familyIds = $familyIds->merge(\App\Models\Unit::where('parent_id', $baseUnit->parent_id)->pluck('id'));
+        } else {
+            $familyIds = $familyIds->merge(\App\Models\Unit::where('parent_id', $baseUnit->id)->pluck('id'));
+        }
+
+        $units = \App\Models\Unit::whereIn('id', $familyIds->unique())->where('status', true)->get();
+        return response()->json(['units' => $units]);
+    }
 }

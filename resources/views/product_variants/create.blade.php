@@ -137,5 +137,44 @@
                 btn.disabled = false;
             });
     });
+
+    // Dynamically load units based on selected Master Product
+    $('#product_id').on('change', function() {
+        let productId = $(this).val();
+        let unitSelect = $('#unit_id');
+        
+        unitSelect.html('<option value="">Loading Units...</option>');
+        if (unitSelect.hasClass('select2-hidden-accessible')) {
+            unitSelect.trigger('change');
+        }
+
+        if (!productId) {
+            unitSelect.html('<option value="">Select Unit</option>');
+            if (unitSelect.hasClass('select2-hidden-accessible')) {
+                unitSelect.trigger('change');
+            }
+            return;
+        }
+
+        fetch(`/products/${productId}/related-units`)
+            .then(response => response.json())
+            .then(data => {
+                unitSelect.html('<option value="">Select Unit</option>');
+                data.units.forEach(unit => {
+                    let option = new Option(`${unit.name} (${unit.short_name})`, unit.id, false, false);
+                    unitSelect.append(option);
+                });
+                if (unitSelect.hasClass('select2-hidden-accessible')) {
+                    unitSelect.trigger('change');
+                }
+            })
+            .catch(err => {
+                console.error("Failed to fetch related units", err);
+                unitSelect.html('<option value="">Error Loading Units</option>');
+                if (unitSelect.hasClass('select2-hidden-accessible')) {
+                    unitSelect.trigger('change');
+                }
+            });
+    });
 </script>
 @endsection
