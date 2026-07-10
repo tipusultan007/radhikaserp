@@ -873,6 +873,65 @@ class AdminApiController extends Controller
     /**
      * Get all customers.
      */
+
+    public function updateDeliveryStatus(Request $request, $id)
+    {
+        $request->validate([
+            'delivery_status' => 'required|in:pending,processing,dispatched,delivered,cancelled',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $sale = Sale::with(['items.batch'])->findOrFail($id);
+            $oldStatus = $sale->delivery_status;
+            $newStatus = $request->delivery_status;
+
+            $wasDispatched = in_array($oldStatus, ['dispatched', 'delivered']);
+            $isDispatched  = in_array($newStatus, ['dispatched', 'delivered']);
+
+            $journal = \App\Models\Journal::where('reference_type', Sale::class)
+                ->where('reference_id', $sale->id)
+                ->first();
+
+            if (!$wasDispatched && $isDispatched) {
+                if ($journal) {
+                    $this->consumeStockForSale($sale, $journal->id, $request->user()->id ?? 1);
+                }
+            } elseif ($wasDispatched && !$isDispatched) {
+                foreach ($sale->items as $item) {
+                    if ($item->batch) {
+                        $item->batch->qty_out -= $item->qty;
+                        $item->batch->remaining_qty += $item->qty;
+                        $item->batch->save();
+                    }
+                }
+                \App\Models\InventoryTransaction::where('reference_type', Sale::class)
+                    ->where('reference_id', $sale->id)
+                    ->delete();
+                if ($journal) {
+                    $cogsAcc = \App\Models\ChartOfAccount::where('name', 'Cost of Goods Sold')->first();
+                    $invAcc  = \App\Models\ChartOfAccount::where('name', 'Inventory (Finished)')->first();
+                    if ($cogsAcc) \App\Models\JournalEntry::where('journal_id', $journal->id)->where('account_id', $cogsAcc->id)->delete();
+                    if ($invAcc)  \App\Models\JournalEntry::where('journal_id', $journal->id)->where('account_id', $invAcc->id)->delete();
+                }
+            }
+
+            $sale->delivery_status = $newStatus;
+            $sale->save();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Delivery status updated to ' . $newStatus,
+                'sale' => $sale->fresh(),
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update status: ' . $e->getMessage()], 400);
+        }
+    }
     public function customers(Request $request)
     {
         $query = Customer::orderBy('id', 'desc');

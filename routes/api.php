@@ -140,6 +140,8 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         ->middleware('permission:create sales');
     Route::put('/sales/{id}', [AdminApiController::class, 'updateSale'])
         ->middleware('permission:edit sales');
+    Route::patch('/sales/{id}/delivery-status', [AdminApiController::class, 'updateDeliveryStatus'])
+        ->middleware('permission:edit sales');
     Route::delete('/sales/{id}', [AdminApiController::class, 'destroySale'])
         ->middleware('permission:delete sales');
     Route::get('/sales/{id}/pdf', [AdminApiController::class, 'downloadInvoice'])
