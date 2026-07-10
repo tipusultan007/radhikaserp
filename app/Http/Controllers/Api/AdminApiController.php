@@ -151,8 +151,18 @@ class AdminApiController extends Controller
 
     public function destroyProduct($id)
     {
-        Product::destroy($id);
-        return response()->json(['message' => 'Product deleted']);
+        try {
+            $product = Product::findOrFail($id);
+            // Delete variants first to prevent constraint violations
+            $product->variants()->delete();
+            $product->delete();
+            return response()->json(['message' => 'Product deleted']);
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ($e->getCode() == '23000') {
+                return response()->json(['message' => 'Cannot delete product because it has associated stock, sales, or other records.'], 400);
+            }
+            return response()->json(['message' => 'Failed to delete product: ' . $e->getMessage()], 500);
+        }
     }
 
     public function generateProductVariantSku(Request $request)

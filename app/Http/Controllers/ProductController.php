@@ -88,7 +88,17 @@ class ProductController extends Controller
 
     public function destroy(Product $product)
     {
-        $product->delete();
-        return redirect()->route('products.index')->with('success', 'Master Product deleted successfully.');
+        try {
+            // Delete associated variants first to prevent constraint violations
+            $product->variants()->delete();
+            $product->delete();
+            
+            return redirect()->route('products.index')->with('success', 'Product deleted successfully.');
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ($e->getCode() == '23000') {
+                return redirect()->route('products.index')->with('error', 'Cannot delete product because it has associated stock, sales, or other records.');
+            }
+            return redirect()->route('products.index')->with('error', 'Failed to delete product: ' . $e->getMessage());
+        }
     }
 }
