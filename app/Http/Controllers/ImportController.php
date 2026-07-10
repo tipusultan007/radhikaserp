@@ -327,11 +327,11 @@ class ImportController extends Controller
             $supplier->decrement('total_payable', $import->total_cost);
         }
 
-        // 2. Delete Batches
-        Batch::where('import_id', $import->id)->delete();
-
-        // 3. Delete Inventory Transactions
+        // 2. Delete Inventory Transactions
         InventoryTransaction::where('reference_type', Import::class)->where('reference_id', $import->id)->delete();
+
+        // 3. Delete Batches
+        Batch::where('import_id', $import->id)->delete();
 
         // 4. Delete Accounting Entries
         $journal = Journal::where('reference_type', Import::class)->where('reference_id', $import->id)->first();
