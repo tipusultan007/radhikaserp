@@ -77,16 +77,14 @@
                                  </div>
                                  <div class="col-md-6">
                                      <div class="mb-3">
-                                         <label for="unit_type" class="form-label">Unit Type <span class="text-danger">*</span></label>
-                                         <select id="unit_type" name="unit_type" class="form-select" required>
-                                             @php $selectedUnit = old('unit_type', 'kg'); @endphp
-                                             <option value="kg" {{ $selectedUnit == 'kg' ? 'selected' : '' }}>Kilograms (kg)</option>
-                                             <option value="g" {{ $selectedUnit == 'g' ? 'selected' : '' }}>Grams (g)</option>
-                                             <option value="pcs" {{ $selectedUnit == 'pcs' ? 'selected' : '' }}>Pieces (pcs)</option>
-                                             <option value="liter" {{ $selectedUnit == 'liter' ? 'selected' : '' }}>Liters (L)</option>
-                                             <option value="ml" {{ $selectedUnit == 'ml' ? 'selected' : '' }}>Milliliters (ml)</option>
-                                             <option value="box" {{ $selectedUnit == 'box' ? 'selected' : '' }}>Box</option>
-                                             <option value="packet" {{ $selectedUnit == 'packet' ? 'selected' : '' }}>Packet</option>
+                                         <label for="unit_id" class="form-label">Unit <span class="text-danger">*</span></label>
+                                         <select id="unit_id" name="unit_id" class="form-select select2" data-toggle="select2" required>
+                                             <option value="">Select Unit</option>
+                                             @foreach($units as $unit)
+                                                 <option value="{{ $unit->id }}" {{ old('unit_id') == $unit->id ? 'selected' : '' }}>
+                                                     {{ $unit->name }} ({{ $unit->short_name }})
+                                                 </option>
+                                             @endforeach
                                          </select>
                                      </div>
                                  </div>
