@@ -28,8 +28,11 @@ class ImportController extends Controller
     {
         $suppliers = Supplier::all();
         $warehouses = Warehouse::all();
-        $products = Product::where('type', 'raw')->get(); // Only import raw stock
-        return view('imports.create', compact('suppliers', 'warehouses', 'products'));
+        $products = Product::where('type', 'raw')->get(); // legacy variable, kept to avoid breaking blade if used
+        $variants = \App\Models\ProductVariant::with('product')->whereHas('product', function($q) {
+            $q->where('type', 'raw');
+        })->get();
+        return view('imports.create', compact('suppliers', 'warehouses', 'products', 'variants'));
     }
 
     public function store(Request $request)
@@ -39,9 +42,9 @@ class ImportController extends Controller
             'warehouse_id' => 'required|exists:warehouses,id',
             'date' => 'required|date',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_variant_id' => 'required|exists:product_variants,id',
             'items.*.qty' => 'required|numeric|min:0.001',
-            'items.*.unit_cost' => 'required|numeric|min:1',
+            'items.*.unit_cost' => 'required|numeric|min:0.001',
         ]);
 
         DB::transaction(function () use ($validated, $request) {
@@ -65,36 +68,44 @@ class ImportController extends Controller
 
             foreach ($validated['items'] as $item) {
                 $lineTotal = $item['qty'] * $item['unit_cost'];
+                
+                $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
+                $productId = $variant->product_id;
+                $baseQty = $item['qty'] * $variant->unit_qty;
+                $baseUnitCost = $lineTotal / $baseQty;
 
                 // 2. Create Import Item
                 ImportItem::create([
                     'import_id' => $import->id,
-                    'product_id' => $item['product_id'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
                     'qty' => $item['qty'],
                     'unit_cost' => $item['unit_cost'],
                     'total_cost' => $lineTotal,
                 ]);
 
-                // 3. Generate Batch
+                // 3. Generate Batch (Stores Base Quantities)
                 $batch = Batch::create([
-                    'batch_no' => 'B-' . $import->id . '-' . $item['product_id'] . '-' . strtoupper(Str::random(4)),
-                    'product_id' => $item['product_id'],
+                    'batch_no' => 'B-' . $import->id . '-' . $productId . '-' . strtoupper(Str::random(4)),
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
                     'warehouse_id' => $validated['warehouse_id'],
                     'import_id' => $import->id,
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $baseQty,
                     'qty_out' => 0,
-                    'remaining_qty' => $item['qty'],
-                    'cost_per_unit' => $item['unit_cost'],
-                    'expiry_date' => null, // Not tracking expiry in this simple form
+                    'remaining_qty' => $baseQty,
+                    'cost_per_unit' => $baseUnitCost,
+                    'expiry_date' => null, 
                 ]);
 
                 // 4. Inventory Transaction (Ledger)
                 InventoryTransaction::create([
                     'warehouse_id' => $validated['warehouse_id'],
-                    'product_id' => $item['product_id'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
                     'batch_id' => $batch->id,
                     'type' => 'import',
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $baseQty,
                     'qty_out' => 0,
                     'cost' => $lineTotal,
                     'reference_type' => Import::class,
@@ -165,7 +176,10 @@ class ImportController extends Controller
         $suppliers = Supplier::all();
         $warehouses = Warehouse::all();
         $products = Product::where('type', 'raw')->get();
-        return view('imports.edit', compact('import', 'suppliers', 'warehouses', 'products'));
+        $variants = \App\Models\ProductVariant::with('product')->whereHas('product', function($q) {
+            $q->where('type', 'raw');
+        })->get();
+        return view('imports.edit', compact('import', 'suppliers', 'warehouses', 'products', 'variants'));
     }
 
     public function update(Request $request, Import $import)
@@ -175,9 +189,9 @@ class ImportController extends Controller
             'warehouse_id' => 'required|exists:warehouses,id',
             'date' => 'required|date',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_variant_id' => 'required|exists:product_variants,id',
             'items.*.qty' => 'required|numeric|min:0.001',
-            'items.*.unit_cost' => 'required|numeric|min:1',
+            'items.*.unit_cost' => 'required|numeric|min:0.001',
         ]);
 
         try {
@@ -203,33 +217,41 @@ class ImportController extends Controller
 
             foreach ($validated['items'] as $item) {
                 $lineTotal = $item['qty'] * $item['unit_cost'];
+                
+                $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
+                $productId = $variant->product_id;
+                $baseQty = $item['qty'] * $variant->unit_qty;
+                $baseUnitCost = $lineTotal / $baseQty;
 
                 ImportItem::create([
                     'import_id' => $import->id,
-                    'product_id' => $item['product_id'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
                     'qty' => $item['qty'],
                     'unit_cost' => $item['unit_cost'],
                     'total_cost' => $lineTotal,
                 ]);
 
                 $batch = Batch::create([
-                    'batch_no' => 'B-' . $import->id . '-' . $item['product_id'] . '-' . strtoupper(Str::random(4)),
-                    'product_id' => $item['product_id'],
+                    'batch_no' => 'B-' . $import->id . '-' . $productId . '-' . strtoupper(Str::random(4)),
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
                     'warehouse_id' => $validated['warehouse_id'],
                     'import_id' => $import->id,
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $baseQty,
                     'qty_out' => 0,
-                    'remaining_qty' => $item['qty'],
-                    'cost_per_unit' => $item['unit_cost'],
+                    'remaining_qty' => $baseQty,
+                    'cost_per_unit' => $baseUnitCost,
                     'expiry_date' => null,
                 ]);
 
                 InventoryTransaction::create([
                     'warehouse_id' => $validated['warehouse_id'],
-                    'product_id' => $item['product_id'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
                     'batch_id' => $batch->id,
                     'type' => 'import',
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $baseQty,
                     'qty_out' => 0,
                     'cost' => $lineTotal,
                     'reference_type' => Import::class,

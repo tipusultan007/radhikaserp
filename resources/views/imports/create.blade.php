@@ -116,10 +116,10 @@
                                     <tbody id="items-container">
                                         <tr class="item-row">
                                             <td>
-                                                <select name="items[0][product_id]" class="form-select product-select" required>
-                                                    <option value="">Search Product...</option>
-                                                    @foreach($products as $product)
-                                                        <option value="{{ $product->id }}" data-unit="{{ $product->base_unit }}">{{ $product->name }} ({{ $product->base_unit }})</option>
+                                                <select name="items[0][product_variant_id]" class="form-select product-select" required>
+                                                    <option value="">Search Variant...</option>
+                                                    @foreach($variants as $variant)
+                                                        <option value="{{ $variant->id }}" data-unit="{{ $variant->unit ? $variant->unit->short_name : 'Unit' }}">{{ $variant->product->name }} - {{ $variant->name }}</option>
                                                     @endforeach
                                                 </select>
                                             </td>
@@ -219,7 +219,7 @@ $(document).ready(function() {
         let newRow = `
         <tr class="item-row">
             <td>
-                <select name="items[${rowIdx}][product_id]" class="form-select product-select" required>
+                <select name="items[${rowIdx}][product_variant_id]" class="form-select product-select" required>
                     ${options}
                 </select>
             </td>

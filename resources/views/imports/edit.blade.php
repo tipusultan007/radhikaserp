@@ -100,17 +100,17 @@
                                         @foreach($import->items as $index => $item)
                                         <tr class="item-row">
                                             <td>
-                                                <select name="items[{{ $index }}][product_id]" class="form-select product-select" required>
-                                                    <option value="">Search Product...</option>
-                                                    @foreach($products as $product)
-                                                        <option value="{{ $product->id }}" data-unit="{{ $product->base_unit }}" {{ $item->product_id == $product->id ? 'selected' : '' }}>{{ $product->name }} ({{ $product->base_unit }})</option>
+                                                <select name="items[{{ $index }}][product_variant_id]" class="form-select product-select" required>
+                                                    <option value="">Search Variant...</option>
+                                                    @foreach($variants as $variant)
+                                                        <option value="{{ $variant->id }}" data-unit="{{ $variant->unit ? $variant->unit->short_name : 'Unit' }}" {{ $item->product_variant_id == $variant->id ? 'selected' : '' }}>{{ $variant->product->name }} - {{ $variant->name }}</option>
                                                     @endforeach
                                                 </select>
                                             </td>
                                             <td>
                                                 <div class="input-group input-group-sm">
                                                     <input type="number" step="0.001" min="0.001" name="items[{{ $index }}][qty]" class="form-control item-qty" placeholder="0.00" value="{{ $item->qty }}" required>
-                                                    <span class="input-group-text unit-addon">{{ $item->product->base_unit }}</span>
+                                                    <span class="input-group-text unit-addon">{{ $item->variant && $item->variant->unit ? $item->variant->unit->short_name : 'Unit' }}</span>
                                                 </div>
                                             </td>
                                             <td>
@@ -207,7 +207,7 @@ $(document).ready(function() {
         let newRow = `
         <tr class="item-row">
             <td>
-                <select name="items[${rowIdx}][product_id]" class="form-select product-select" required>
+                <select name="items[${rowIdx}][product_variant_id]" class="form-select product-select" required>
                     ${options}
                 </select>
             </td>

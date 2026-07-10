@@ -1235,11 +1235,13 @@ class AdminApiController extends Controller
     {
         $suppliers = \App\Models\Supplier::all();
         $warehouses = \App\Models\Warehouse::all();
-        $products = \App\Models\Product::all();
+        $variants = \App\Models\ProductVariant::with(['product', 'unit'])->whereHas('product', function($q) {
+            $q->where('type', 'raw');
+        })->get();
         return response()->json([
             'suppliers' => $suppliers,
             'warehouses' => $warehouses,
-            'products' => $products,
+            'variants' => $variants,
         ]);
     }
 
@@ -1262,9 +1264,9 @@ class AdminApiController extends Controller
             'warehouse_id' => 'required|exists:warehouses,id',
             'date' => 'required|date',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_variant_id' => 'required|exists:product_variants,id',
             'items.*.qty' => 'required|numeric|min:0.001',
-            'items.*.unit_cost' => 'required|numeric|min:1',
+            'items.*.unit_cost' => 'required|numeric|min:0.001',
         ]);
 
         try {
@@ -1288,33 +1290,41 @@ class AdminApiController extends Controller
 
             foreach ($validated['items'] as $item) {
                 $lineTotal = $item['qty'] * $item['unit_cost'];
+                
+                $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
+                $productId = $variant->product_id;
+                $baseQty = $item['qty'] * $variant->unit_qty;
+                $baseUnitCost = $lineTotal / $baseQty;
 
                 \App\Models\ImportItem::create([
                     'import_id' => $import->id,
-                    'product_id' => $item['product_id'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
                     'qty' => $item['qty'],
                     'unit_cost' => $item['unit_cost'],
                     'total_cost' => $lineTotal,
                 ]);
 
                 $batch = \App\Models\Batch::create([
-                    'batch_no' => 'B-' . $import->id . '-' . $item['product_id'] . '-' . strtoupper(Str::random(4)),
-                    'product_id' => $item['product_id'],
+                    'batch_no' => 'B-' . $import->id . '-' . $productId . '-' . strtoupper(Str::random(4)),
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
                     'warehouse_id' => $validated['warehouse_id'],
                     'import_id' => $import->id,
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $baseQty,
                     'qty_out' => 0,
-                    'remaining_qty' => $item['qty'],
-                    'cost_per_unit' => $item['unit_cost'],
+                    'remaining_qty' => $baseQty,
+                    'cost_per_unit' => $baseUnitCost,
                     'expiry_date' => null,
                 ]);
 
                 \App\Models\InventoryTransaction::create([
                     'warehouse_id' => $validated['warehouse_id'],
-                    'product_id' => $item['product_id'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
                     'batch_id' => $batch->id,
                     'type' => 'import',
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $baseQty,
                     'qty_out' => 0,
                     'cost' => $lineTotal,
                     'reference_type' => Import::class,
@@ -1354,9 +1364,9 @@ class AdminApiController extends Controller
             'warehouse_id' => 'required|exists:warehouses,id',
             'date' => 'required|date',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_variant_id' => 'required|exists:product_variants,id',
             'items.*.qty' => 'required|numeric|min:0.001',
-            'items.*.unit_cost' => 'required|numeric|min:1',
+            'items.*.unit_cost' => 'required|numeric|min:0.001',
         ]);
 
         try {
@@ -1399,37 +1409,47 @@ class AdminApiController extends Controller
 
             foreach ($validated['items'] as $item) {
                 $lineTotal = $item['qty'] * $item['unit_cost'];
+                
+                $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
+                $productId = $variant->product_id;
+                $baseQty = $item['qty'] * $variant->unit_qty;
+                $baseUnitCost = $lineTotal / $baseQty;
 
                 \App\Models\ImportItem::create([
                     'import_id' => $import->id,
-                    'product_id' => $item['product_id'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
                     'qty' => $item['qty'],
                     'unit_cost' => $item['unit_cost'],
                     'total_cost' => $lineTotal,
                 ]);
 
                 $batch = \App\Models\Batch::create([
-                    'batch_no' => 'B-' . $import->id . '-' . $item['product_id'] . '-' . strtoupper(Str::random(4)),
-                    'product_id' => $item['product_id'],
+                    'batch_no' => 'B-' . $import->id . '-' . $productId . '-' . strtoupper(Str::random(4)),
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
                     'warehouse_id' => $validated['warehouse_id'],
                     'import_id' => $import->id,
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $baseQty,
                     'qty_out' => 0,
-                    'remaining_qty' => $item['qty'],
-                    'cost_per_unit' => $item['unit_cost'],
+                    'remaining_qty' => $baseQty,
+                    'cost_per_unit' => $baseUnitCost,
                     'expiry_date' => null,
                 ]);
 
                 \App\Models\InventoryTransaction::create([
                     'warehouse_id' => $validated['warehouse_id'],
-                    'product_id' => $item['product_id'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
                     'batch_id' => $batch->id,
                     'type' => 'import',
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $baseQty,
                     'qty_out' => 0,
+                    'cost' => $lineTotal,
                     'reference_type' => Import::class,
                     'reference_id' => $import->id,
                     'date' => $validated['date'],
+                    'created_by' => $request->user()->id ?? 1,
                 ]);
             }
 
