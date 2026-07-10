@@ -26,8 +26,19 @@
                                  <p class="text-muted mb-0"><i class="ri-calendar-event-line"></i> Imported on {{ $import->date->format('F d, Y') }}</p>
                              </div>
                              <div class="text-end">
-                                 <div class="d-flex gap-2">
-                                    <a href="{{ route('imports.edit', $import->id) }}" class="btn btn-soft-primary"><i class="ri-edit-line"></i> Edit Shipment</a>
+                                 <div class="d-flex gap-2 justify-content-end">
+                                    <a href="{{ route('imports.edit', $import->id) }}" class="btn btn-soft-primary"><i class="ri-edit-line"></i> Edit</a>
+                                    
+                                    @can('delete imports')
+                                    <form action="{{ route('imports.destroy', $import->id) }}" method="POST" class="d-inline">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-soft-danger" onclick="return confirm('Are you sure you want to delete this Import? This will reverse the supplier payable and remove stock from the warehouse. Action cannot be undone if stock is already consumed.')">
+                                            <i class="ri-delete-bin-line"></i> Delete
+                                        </button>
+                                    </form>
+                                    @endcan
+                                    
                                     <button class="btn btn-soft-dark" onclick="window.print()"><i class="ri-printer-line"></i> Print</button>
                                  </div>
                              </div>
