@@ -120,6 +120,17 @@ class AdminApiController extends Controller
         $validated['sku'] = $sku;
 
         $product = Product::create($validated);
+        
+        \App\Models\ProductVariant::create([
+            'product_id' => $product->id,
+            'name' => $product->name,
+            'sku' => $product->sku . '-DEF',
+            'unit_qty' => 1,
+            'unit_id' => $product->unit_id,
+            'price' => 0,
+            'status' => true,
+        ]);
+
         return response()->json(['message' => 'Product created', 'product' => $product], 201);
     }
 

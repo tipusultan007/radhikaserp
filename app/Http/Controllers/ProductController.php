@@ -49,7 +49,17 @@ class ProductController extends Controller
         } while (\App\Models\Product::where('sku', $sku)->exists());
         $validated['sku'] = $sku;
 
-        Product::create($validated);
+        $product = Product::create($validated);
+
+        \App\Models\ProductVariant::create([
+            'product_id' => $product->id,
+            'name' => $product->name,
+            'sku' => $product->sku . '-DEF',
+            'unit_qty' => 1,
+            'unit_id' => $product->unit_id,
+            'price' => 0,
+            'status' => true,
+        ]);
 
         return redirect()->route('products.index')->with('success', 'Master Product created successfully.');
     }

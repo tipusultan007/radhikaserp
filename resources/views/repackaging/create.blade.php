@@ -127,16 +127,15 @@
                                  <label class="form-label fw-semibold">Output Item (Product or Variant) <span class="text-danger">*</span></label>
                                  <select name="output_item" id="output_item" class="form-select select2" required>
                                      <option value="" data-unit="" data-qty="1">Search Target Item...</option>
-                                     <optgroup label="Standalone Products">
-                                         @foreach($finishedProducts as $product)
-                                             <option value="product_{{ $product->id }}" data-unit="{{ $product->base_unit }}" data-qty="1">{{ $product->name }} ({{ $product->base_unit }})</option>
-                                         @endforeach
-                                     </optgroup>
-                                     <optgroup label="Product Variants">
-                                         @foreach($variants as $variant)
-                                             <option value="variant_{{ $variant->id }}" data-unit="{{ $variant->product->base_unit }}" data-qty="{{ $variant->unit_qty }}">{{ $variant->product->name }} - {{ $variant->name }}</option>
-                                         @endforeach
-                                     </optgroup>
+                                     @foreach($variants as $variant)
+                                         @php
+                                             $displayName = $variant->product->name;
+                                             if ($variant->name !== $variant->product->name && $variant->name !== 'Default') {
+                                                 $displayName .= ' - ' . $variant->name;
+                                             }
+                                         @endphp
+                                         <option value="variant_{{ $variant->id }}" data-unit="{{ $variant->product->unit->short_name ?? '' }}" data-qty="{{ $variant->unit_qty }}">{{ $displayName }}</option>
+                                     @endforeach
                                  </select>
                              </div>
                              

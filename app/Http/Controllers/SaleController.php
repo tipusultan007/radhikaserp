@@ -232,9 +232,15 @@ class SaleController extends Controller
         foreach ($variants as $variant) {
             $stock = $stocks->has($variant->id) ? $stocks->get($variant->id)->stock : 0;
             if ($stock > 0) {
+                $displayName = $variant->product->name;
+                // If variant name is different from product name, display both
+                if ($variant->name !== $variant->product->name && $variant->name !== 'Default') {
+                    $displayName .= ' - ' . $variant->name;
+                }
+
                 $options[] = [
                     'id' => $variant->id,
-                    'text' => $variant->product->name . ' - ' . $variant->name . ' (Stock: ' . (float)$stock . ')',
+                    'text' => $displayName . ' (Stock: ' . (float)$stock . ')',
                     'stock' => $stock,
                     'price' => $variant->price,
                     'unit_qty' => $variant->unit_qty
