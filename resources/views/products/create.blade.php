@@ -42,10 +42,6 @@
                                  <input type="text" id="name" name="name" class="form-control" placeholder="e.g. Soya Bean" value="{{ old('name') }}" required>
                              </div>
 
-                             <div class="mb-3">
-                                 <label for="sku" class="form-label">SKU <span class="text-danger">*</span></label>
-                                 <input type="text" id="sku" name="sku" class="form-control" placeholder="e.g. PROD-SOYA" value="{{ old('sku') }}" required>
-                             </div>
 
                              <div class="mb-3">
                                  <label for="type" class="form-label">Product Type <span class="text-danger">*</span></label>

@@ -108,12 +108,16 @@ class AdminApiController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'sku' => 'required|string|unique:products,sku|max:255',
             'type' => 'required|in:raw,finished',
             'base_unit' => 'required|string|max:50',
             'status' => 'nullable|boolean',
         ]);
         $validated['status'] = $request->has('status') && $request->status;
+
+        do {
+            $sku = 'PRD-' . strtoupper(\Illuminate\Support\Str::random(6));
+        } while (\App\Models\Product::where('sku', $sku)->exists());
+        $validated['sku'] = $sku;
 
         $product = Product::create($validated);
         return response()->json(['message' => 'Product created', 'product' => $product], 201);
@@ -124,7 +128,6 @@ class AdminApiController extends Controller
         $product = Product::findOrFail($id);
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'sku' => 'required|string|unique:products,sku,' . $product->id . '|max:255',
             'type' => 'required|in:raw,finished',
             'base_unit' => 'required|string|max:50',
             'status' => 'nullable|boolean',
