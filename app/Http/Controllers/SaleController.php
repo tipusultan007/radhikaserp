@@ -753,7 +753,10 @@ class SaleController extends Controller
         }
 
         // 2. Delete Inventory Transactions
-        InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->delete();
+        $txns = InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->get();
+        foreach ($txns as $txn) {
+            $txn->delete();
+        }
 
         // 3 & 5. Revert Customer Due, Wallet Balance, and Accounting Entries
         $journal = Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->first();
@@ -904,7 +907,10 @@ class SaleController extends Controller
             }
         }
 
-        InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->delete();
+        $txns = InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->get();
+        foreach ($txns as $txn) {
+            $txn->delete();
+        }
 
         $journal = Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->first();
         if ($journal) {
