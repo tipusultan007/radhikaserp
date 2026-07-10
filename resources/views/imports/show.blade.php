@@ -20,6 +20,17 @@
                  <div class="card shadow-sm border-0">
                      <div class="card-body p-5">
                          <!-- Header Section -->
+                         
+                         @if ($errors->any())
+                             <div class="alert alert-danger">
+                                 <ul class="mb-0">
+                                     @foreach ($errors->all() as $error)
+                                         <li>{{ $error }}</li>
+                                     @endforeach
+                                 </ul>
+                             </div>
+                         @endif
+                         
                          <div class="d-flex justify-content-between align-items-center border-bottom pb-4 mb-4">
                              <div>
                                  <h2 class="mb-1 fw-bold text-dark">Shipment {{ $import->import_no }}</h2>
