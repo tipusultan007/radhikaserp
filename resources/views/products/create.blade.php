@@ -53,7 +53,15 @@
 
                              <div class="mb-3">
                                  <label for="base_unit" class="form-label">Base Unit <span class="text-danger">*</span></label>
-                                 <input type="text" id="base_unit" name="base_unit" class="form-control" placeholder="e.g. kg, pcs, bag" value="{{ old('base_unit', 'kg') }}" required>
+                                 <select id="base_unit" name="base_unit" class="form-control" required>
+                                     <option value="kg" {{ old('base_unit', 'kg') === 'kg' ? 'selected' : '' }}>Kilograms (kg)</option>
+                                     <option value="g" {{ old('base_unit') === 'g' ? 'selected' : '' }}>Grams (g)</option>
+                                     <option value="pcs" {{ old('base_unit') === 'pcs' ? 'selected' : '' }}>Pieces (pcs)</option>
+                                     <option value="liter" {{ old('base_unit') === 'liter' ? 'selected' : '' }}>Liters (L)</option>
+                                     <option value="ml" {{ old('base_unit') === 'ml' ? 'selected' : '' }}>Milliliters (ml)</option>
+                                     <option value="box" {{ old('base_unit') === 'box' ? 'selected' : '' }}>Box</option>
+                                     <option value="packet" {{ old('base_unit') === 'packet' ? 'selected' : '' }}>Packet</option>
+                                 </select>
                              </div>
 
                              <div class="mb-3">
