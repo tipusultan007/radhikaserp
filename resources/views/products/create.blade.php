@@ -69,6 +69,50 @@
                                      <label class="form-check-label" for="status">Active Status</label>
                                  </div>
                              </div>
+                             
+                             <hr class="my-4">
+                             <h4 class="header-title mb-3">Product Variants</h4>
+                             <p class="text-muted font-14">Define at least one variant for this product (e.g. 1kg packet, 5kg bulk). The SKU will be auto-generated.</p>
+                             
+                             <div class="table-responsive">
+                                 <table class="table table-bordered" id="variants-table">
+                                     <thead class="table-light">
+                                         <tr>
+                                             <th>Variant Name <span class="text-danger">*</span></th>
+                                             <th>Unit <span class="text-danger">*</span></th>
+                                             <th>Unit Qty <span class="text-danger">*</span></th>
+                                             <th>Selling Price</th>
+                                             <th>Action</th>
+                                         </tr>
+                                     </thead>
+                                     <tbody id="variants-body">
+                                         <!-- Initial Row -->
+                                         <tr class="variant-row">
+                                             <td>
+                                                 <input type="text" name="variants[0][name]" class="form-control" placeholder="e.g. Default or 1kg" required>
+                                             </td>
+                                             <td>
+                                                 <select name="variants[0][unit_id]" class="form-select" required>
+                                                     <option value="">Select Unit</option>
+                                                     @foreach($units as $unit)
+                                                         <option value="{{ $unit->id }}">{{ $unit->name }} ({{ $unit->short_name }})</option>
+                                                     @endforeach
+                                                 </select>
+                                             </td>
+                                             <td>
+                                                 <input type="number" step="any" name="variants[0][unit_qty]" class="form-control" value="1.00" required>
+                                             </td>
+                                             <td>
+                                                 <input type="number" step="any" name="variants[0][price]" class="form-control" value="0.00">
+                                             </td>
+                                             <td>
+                                                 <button type="button" class="btn btn-danger btn-sm remove-variant" disabled><i class="ri-delete-bin-line"></i></button>
+                                             </td>
+                                         </tr>
+                                     </tbody>
+                                 </table>
+                                 <button type="button" class="btn btn-soft-primary btn-sm mt-2" id="add-variant-btn"><i class="ri-add-line me-1"></i> Add Another Variant</button>
+                             </div>
 
                              <div class="mt-4">
                                  <button type="submit" class="btn btn-primary me-1">Save Product</button>
@@ -80,4 +124,59 @@
              </div>
          </div>
     </div>
+@endsection
+
+@section('script')
+<script>
+    $(document).ready(function() {
+        let variantIndex = 1;
+        
+        // Disable remove button if only 1 row
+        function updateRemoveButtons() {
+            const rows = $('.variant-row');
+            if (rows.length === 1) {
+                rows.find('.remove-variant').prop('disabled', true);
+            } else {
+                rows.find('.remove-variant').prop('disabled', false);
+            }
+        }
+        
+        $('#add-variant-btn').click(function() {
+            const rowHtml = `
+                <tr class="variant-row">
+                    <td>
+                        <input type="text" name="variants[${variantIndex}][name]" class="form-control" placeholder="e.g. 5kg Bulk" required>
+                    </td>
+                    <td>
+                        <select name="variants[${variantIndex}][unit_id]" class="form-select" required>
+                            <option value="">Select Unit</option>
+                            @foreach($units as $unit)
+                                <option value="{{ $unit->id }}">{{ $unit->name }} ({{ $unit->short_name }})</option>
+                            @endforeach
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" step="any" name="variants[${variantIndex}][unit_qty]" class="form-control" value="1.00" required>
+                    </td>
+                    <td>
+                        <input type="number" step="any" name="variants[${variantIndex}][price]" class="form-control" value="0.00">
+                    </td>
+                    <td>
+                        <button type="button" class="btn btn-danger btn-sm remove-variant"><i class="ri-delete-bin-line"></i></button>
+                    </td>
+                </tr>
+            `;
+            $('#variants-body').append(rowHtml);
+            variantIndex++;
+            updateRemoveButtons();
+        });
+        
+        $(document).on('click', '.remove-variant', function() {
+            if ($('.variant-row').length > 1) {
+                $(this).closest('tr').remove();
+                updateRemoveButtons();
+            }
+        });
+    });
+</script>
 @endsection

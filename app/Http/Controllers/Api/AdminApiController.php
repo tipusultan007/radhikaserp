@@ -111,27 +111,39 @@ class AdminApiController extends Controller
             'type' => 'required|in:raw,finished',
             'unit_id' => 'required|exists:units,id',
             'status' => 'nullable|boolean',
+            'variants' => 'required|array|min:1',
+            'variants.*.name' => 'required|string|max:255',
+            'variants.*.unit_qty' => 'required|numeric|min:0',
+            'variants.*.unit_id' => 'required|exists:units,id',
+            'variants.*.price' => 'nullable|numeric|min:0',
         ]);
         $validated['status'] = $request->has('status') && $request->status;
 
         do {
             $sku = 'PRD-' . strtoupper(\Illuminate\Support\Str::random(6));
-        } while (\App\Models\Product::where('sku', $sku)->exists());
+        } while (Product::where('sku', $sku)->exists());
         $validated['sku'] = $sku;
 
         $product = Product::create($validated);
         
-        \App\Models\ProductVariant::create([
-            'product_id' => $product->id,
-            'name' => $product->name,
-            'sku' => $product->sku . '-DEF',
-            'unit_qty' => 1,
-            'unit_id' => $product->unit_id,
-            'price' => 0,
-            'status' => true,
-        ]);
+        $createdVariants = [];
+        foreach ($request->variants as $varData) {
+            do {
+                $varSku = $product->sku . '-' . strtoupper(\Illuminate\Support\Str::random(4));
+            } while (\App\Models\ProductVariant::where('sku', $varSku)->exists());
+            
+            $createdVariants[] = \App\Models\ProductVariant::create([
+                'product_id' => $product->id,
+                'name' => $varData['name'],
+                'sku' => $varSku,
+                'unit_qty' => $varData['unit_qty'],
+                'unit_id' => $varData['unit_id'],
+                'price' => $varData['price'] ?? 0,
+                'status' => true,
+            ]);
+        }
 
-        return response()->json(['message' => 'Product created', 'product' => $product], 201);
+        return response()->json(['message' => 'Product created', 'product' => $product, 'variants' => $createdVariants], 201);
     }
 
     public function updateProduct(Request $request, $id)
