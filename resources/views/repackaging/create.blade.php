@@ -87,7 +87,7 @@
                                  <select name="input_product_id" id="input_product_id" class="form-select select2" required>
                                      <option value="" data-unit="">Search Product...</option>
                                      @foreach($inputProducts as $product)
-                                         <option value="{{ $product->id }}" data-unit="{{ $product->base_unit }}">{{ $product->name }} ({{ ucfirst($product->type) }} - {{ $product->base_unit }})</option>
+                                         <option value="{{ $product->id }}" data-unit="{{ $product->unit ? $product->unit->short_name : 'Unit' }}">{{ $product->name }} ({{ ucfirst($product->type) }} - {{ $product->unit ? $product->unit->short_name : 'Unit' }})</option>
                                      @endforeach
                                  </select>
                                  <small class="text-muted mt-1 d-block"><i class="ri-information-line"></i> FIFO logic consumes oldest batches automatically.</small>
