@@ -90,6 +90,9 @@
                         <li>
                             <a href="{{ route('products.index') }}">Master Products</a>
                         </li>
+                        <li>
+                            <a href="{{ route('units.index') }}">Units</a>
+                        </li>
                         @endcan
                         @canany(['create product variants', 'edit product variants', 'view products'])
                         <li>
