@@ -132,13 +132,13 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     });
 
     // ─── Suppliers ──────────────────────────────────────────────────────────────
-    Route::group(['middleware' => ['permission:view suppliers']], function () {
-        Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
-        Route::get('suppliers/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');
-    });
     Route::group(['middleware' => ['permission:create suppliers']], function () {
         Route::get('suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');
         Route::post('suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
+    });
+    Route::group(['middleware' => ['permission:view suppliers']], function () {
+        Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+        Route::get('suppliers/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');
     });
     Route::group(['middleware' => ['permission:edit suppliers']], function () {
         Route::get('suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->name('suppliers.edit');
