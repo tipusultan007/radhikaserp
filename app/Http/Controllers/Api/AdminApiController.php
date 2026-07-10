@@ -388,7 +388,6 @@ class AdminApiController extends Controller
                 ]);
             }
 
-            $totalCogs = 0;
             $grandTotalWeight = 0;
 
             foreach ($validated['items'] as $item) {
@@ -400,59 +399,16 @@ class AdminApiController extends Controller
                 $unitQty = $variant ? $variant->getBaseQuantity() : 1;
                 $grandTotalWeight += ($itemQty * $unitQty);
 
-                // FIFO Batch Consumption for this variant
-                $batches = Batch::where('product_variant_id', $variantId)
-                    ->where('warehouse_id', $warehouseId)
-                    ->where('remaining_qty', '>', 0)
-                    ->orderBy('id', 'asc')
-                    ->lockForUpdate()
-                    ->get();
-
-                $remainingToConsume = $itemQty;
-
-                foreach ($batches as $batch) {
-                    if ($remainingToConsume <= 0) break;
-
-                    $takeQty = min($batch->remaining_qty, $remainingToConsume);
-                    $cogsForThisTake = $takeQty * $batch->cost_per_unit;
-
-                    // Update batch
-                    $batch->qty_out += $takeQty;
-                    $batch->remaining_qty -= $takeQty;
-                    $batch->save();
-
-                    $totalCogs += $cogsForThisTake;
-                    $remainingToConsume -= $takeQty;
-
-                    SaleItem::create([
-                        'sale_id' => $sale->id,
-                        'product_variant_id' => $variantId,
-                        'batch_id' => $batch->id,
-                        'qty' => $takeQty,
-                        'unit_price' => $unitPrice,
-                        'total_price' => $takeQty * $unitPrice,
-                        'total_weight' => $takeQty * $unitQty,
-                    ]);
-
-                    InventoryTransaction::create([
-                        'warehouse_id' => $warehouseId,
-                        'product_id' => $batch->product_id,
-                        'product_variant_id' => $variantId,
-                        'batch_id' => $batch->id,
-                        'type' => 'sale',
-                        'qty_in' => 0,
-                        'qty_out' => $takeQty,
-                        'cost' => $cogsForThisTake,
-                        'reference_type' => Sale::class,
-                        'reference_id' => $sale->id,
-                        'date' => $validated['date'],
-                        'created_by' => $request->user()->id ?? 1,
-                    ]);
-                }
-
-                if (round($remainingToConsume, 4) > 0) {
-                    throw new \Exception("Insufficient stock for variant ID: {$variantId}. Shortfall: " . $remainingToConsume);
-                }
+                // Just save the item without inventory deduction initially
+                \App\Models\SaleItem::create([
+                    'sale_id' => $sale->id,
+                    'product_variant_id' => $variantId,
+                    'batch_id' => null,
+                    'qty' => $itemQty,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $itemQty * $unitPrice,
+                    'total_weight' => $itemQty * $unitQty,
+                ]);
             }
 
             $sale->total_weight = $grandTotalWeight;
@@ -491,9 +447,10 @@ class AdminApiController extends Controller
                 JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'credit', 'amount' => $newAdvance]);
             }
 
-            // 2. COGS & Inventory Reduction
-            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cogsAcc->id, 'type' => 'debit', 'amount' => $totalCogs]);
-            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $inventoryFinAcc->id, 'type' => 'credit', 'amount' => $totalCogs]);
+            // COGS & Inventory Reduction entries are deferred until dispatch
+            if (in_array($request->input('delivery_status'), ['dispatched', 'delivered'])) {
+                $this->consumeStockForSale($sale, $journal->id, $request->user()->id ?? 1);
+            }
 
             DB::commit();
 
@@ -767,10 +724,10 @@ class AdminApiController extends Controller
             if ($newAdvance > 0) {
                 \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'credit', 'amount' => $newAdvance]);
             }
-
-            \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cogsAcc->id, 'type' => 'debit', 'amount' => $totalCogs]);
-            \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $inventoryFinAcc->id, 'type' => 'credit', 'amount' => $totalCogs]);
-
+            // COGS & Inventory Reduction entries are deferred until dispatch
+            if (in_array($newDeliveryStatus, ['dispatched', 'delivered'])) {
+                $this->consumeStockForSale($sale, $journal->id, $request->user()->id ?? 1);
+            }
             if ($oldDeliveryStatus !== 'processing' && $newDeliveryStatus === 'processing') {
                 if ($customer) {
                     \Illuminate\Support\Facades\Notification::send($customer, new \App\Notifications\CustomerAlertNotification(
@@ -1235,7 +1192,7 @@ class AdminApiController extends Controller
     {
         $suppliers = \App\Models\Supplier::all();
         $warehouses = \App\Models\Warehouse::all();
-        $products = \App\Models\Product::where('type', 'raw')->get();
+        $products = \App\Models\Product::with('unit')->where('type', 'raw')->get();
         return response()->json([
             'suppliers' => $suppliers,
             'warehouses' => $warehouses,
@@ -1245,13 +1202,13 @@ class AdminApiController extends Controller
 
     public function imports(Request $request)
     {
-        $imports = Import::with(['supplier', 'warehouse', 'items.product'])->orderBy('date', 'desc')->get();
+        $imports = Import::with(['supplier', 'warehouse', 'items.product.unit'])->orderBy('date', 'desc')->get();
         return response()->json(['imports' => $imports]);
     }
 
     public function showImport($id)
     {
-        $import = Import::with(['supplier', 'warehouse', 'items.product'])->findOrFail($id);
+        $import = Import::with(['supplier', 'warehouse', 'items.product.unit'])->findOrFail($id);
         return response()->json(['import' => $import]);
     }
 
@@ -1680,14 +1637,14 @@ class AdminApiController extends Controller
         public function transferFormData()
     {
         $warehouses = \App\Models\Warehouse::all();
-        $variants = \App\Models\ProductVariant::with('product')->get();
+        $variants = \App\Models\ProductVariant::with(['product.unit', 'unit'])->get();
         $stocks = \App\Models\WarehouseStock::all();
         return response()->json(['warehouses' => $warehouses, 'variants' => $variants, 'stocks' => $stocks]);
     }
 
     public function stockTransfers(Request $request)
     {
-        $query = StockTransfer::with(['fromWarehouse', 'toWarehouse', 'creator', 'items.productVariant'])->orderBy('id', 'desc');
+        $query = StockTransfer::with(['fromWarehouse', 'toWarehouse', 'creator', 'items.productVariant.unit', 'items.productVariant.product.unit'])->orderBy('id', 'desc');
         
         if ($request->filled('transfer_no')) {
             $query->where('transfer_no', 'like', '%' . $request->transfer_no . '%');
@@ -1702,7 +1659,7 @@ class AdminApiController extends Controller
 
     public function showStockTransfer($id)
     {
-        $transfer = StockTransfer::with(['fromWarehouse', 'toWarehouse', 'creator', 'items.productVariant.product'])->findOrFail($id);
+        $transfer = StockTransfer::with(['fromWarehouse', 'toWarehouse', 'creator', 'items.productVariant.product.unit', 'items.productVariant.unit'])->findOrFail($id);
         return response()->json(['stock_transfer' => $transfer]);
     }
 
@@ -1900,9 +1857,9 @@ class AdminApiController extends Controller
     public function adjustmentFormData()
     {
         $warehouses = \App\Models\Warehouse::all();
-        $products = \App\Models\Product::all();
-        $variants = \App\Models\ProductVariant::all();
-        $batches = \App\Models\Batch::with(['product', 'productVariant'])->where('remaining_qty', '>', 0)->get();
+        $products = \App\Models\Product::with('unit')->get();
+        $variants = \App\Models\ProductVariant::with(['unit', 'product.unit'])->get();
+        $batches = \App\Models\Batch::with(['product.unit', 'productVariant.unit'])->where('remaining_qty', '>', 0)->get();
 
         return response()->json([
             'warehouses' => $warehouses,
@@ -2060,8 +2017,8 @@ class AdminApiController extends Controller
         public function repackagingFormData()
     {
         $warehouses = \App\Models\Warehouse::all();
-        $rawProducts = \App\Models\Product::where('type', 'raw')->get();
-        $variants = \App\Models\ProductVariant::with('product')->get();
+        $rawProducts = \App\Models\Product::with('unit')->where('type', 'raw')->get();
+        $variants = \App\Models\ProductVariant::with(['product.unit', 'unit'])->get();
 
         return response()->json([
             'warehouses' => $warehouses,
