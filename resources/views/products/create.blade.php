@@ -128,20 +128,22 @@
 
 @section('script')
 <script>
-    $(document).ready(function() {
+    document.addEventListener("DOMContentLoaded", function() {
         let variantIndex = 1;
         
         // Disable remove button if only 1 row
         function updateRemoveButtons() {
-            const rows = $('.variant-row');
+            const rows = document.querySelectorAll('.variant-row');
             if (rows.length === 1) {
-                rows.find('.remove-variant').prop('disabled', true);
+                rows[0].querySelector('.remove-variant').disabled = true;
             } else {
-                rows.find('.remove-variant').prop('disabled', false);
+                rows.forEach(row => {
+                    row.querySelector('.remove-variant').disabled = false;
+                });
             }
         }
         
-        $('#add-variant-btn').click(function() {
+        document.getElementById('add-variant-btn').addEventListener('click', function() {
             const rowHtml = `
                 <tr class="variant-row">
                     <td>
@@ -166,15 +168,21 @@
                     </td>
                 </tr>
             `;
-            $('#variants-body').append(rowHtml);
+            const tbody = document.getElementById('variants-body');
+            tbody.insertAdjacentHTML('beforeend', rowHtml);
             variantIndex++;
             updateRemoveButtons();
         });
         
-        $(document).on('click', '.remove-variant', function() {
-            if ($('.variant-row').length > 1) {
-                $(this).closest('tr').remove();
-                updateRemoveButtons();
+        document.addEventListener('click', function(e) {
+            if (e.target && (e.target.matches('.remove-variant') || e.target.closest('.remove-variant'))) {
+                if (document.querySelectorAll('.variant-row').length > 1) {
+                    const row = e.target.closest('.variant-row');
+                    if (row) {
+                        row.remove();
+                        updateRemoveButtons();
+                    }
+                }
             }
         });
     });
