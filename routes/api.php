@@ -42,6 +42,16 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     // Activity Logs
     Route::get('/activity-logs', [AdminApiController::class, 'activityLogs'])
         ->middleware('permission:view activity logs');
+    // ── Units ─────────────────────────────────────────────────────────────────
+    Route::get('/units', [\App\Http\Controllers\Api\UnitApiController::class, 'index'])
+        ->middleware('permission:view products');
+    Route::post('/units', [\App\Http\Controllers\Api\UnitApiController::class, 'store'])
+        ->middleware('permission:create products');
+    Route::put('/units/{id}', [\App\Http\Controllers\Api\UnitApiController::class, 'update'])
+        ->middleware('permission:edit products');
+    Route::delete('/units/{id}', [\App\Http\Controllers\Api\UnitApiController::class, 'destroy'])
+        ->middleware('permission:delete products');
+
 
     // ── Products ─────────────────────────────────────────────────────────────
     Route::get('/products', [AdminApiController::class, 'products'])

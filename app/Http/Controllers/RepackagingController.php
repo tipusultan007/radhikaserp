@@ -165,7 +165,7 @@ class RepackagingController extends Controller
                 $variantId = $outputId;
                 $variant = ProductVariant::find($variantId);
                 $productId = $variant->product_id;
-                $unitQty = $variant->unit_qty;
+                $unitQty = $variant->getBaseQuantity();
             }
 
             RepackagingOutput::create([
@@ -406,7 +406,7 @@ class RepackagingController extends Controller
                 $variantId = $outputId;
                 $variant = ProductVariant::find($variantId);
                 $productId = $variant->product_id;
-                $unitQty = $variant->unit_qty;
+                $unitQty = $variant->getBaseQuantity();
             }
 
             RepackagingOutput::create([

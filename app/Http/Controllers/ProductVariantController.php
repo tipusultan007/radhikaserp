@@ -28,7 +28,8 @@ class ProductVariantController extends Controller
     public function create()
     {
         $products = Product::all();
-        return view('product_variants.create', compact('products'));
+        $units = \App\Models\Unit::where('status', true)->get();
+        return view('product_variants.create', compact('products', 'units'));
     }
 
     public function generateSku(Request $request)
@@ -56,7 +57,7 @@ class ProductVariantController extends Controller
             'sku' => 'required|string|unique:product_variants,sku|max:255',
             'barcode' => 'nullable|string|max:255',
             'unit_qty' => 'required|numeric|min:0',
-            'unit_type' => 'required|string|max:50',
+            'unit_id' => 'required|exists:units,id',
             'price' => 'nullable|numeric|min:0',
             'status' => 'nullable|boolean',
         ]);
@@ -81,7 +82,8 @@ class ProductVariantController extends Controller
     public function edit(ProductVariant $productVariant)
     {
         $products = Product::all();
-        return view('product_variants.edit', compact('productVariant', 'products'));
+        $units = \App\Models\Unit::where('status', true)->get();
+        return view('product_variants.edit', compact('productVariant', 'products', 'units'));
     }
 
     public function update(Request $request, ProductVariant $productVariant)
@@ -92,7 +94,7 @@ class ProductVariantController extends Controller
             'sku' => 'required|string|unique:product_variants,sku,' . $productVariant->id . '|max:255',
             'barcode' => 'nullable|string|max:255',
             'unit_qty' => 'required|numeric|min:0',
-            'unit_type' => 'required|string|max:50',
+            'unit_id' => 'required|exists:units,id',
             'price' => 'nullable|numeric|min:0',
             'status' => 'nullable|boolean',
         ]);

@@ -348,7 +348,7 @@ class SaleController extends Controller
                 $lineTotal = $itemQty * $unitPrice;
                 
                 $variant = ProductVariant::find($variantId);
-                $unitQty = $variant ? $variant->unit_qty : 1;
+                $unitQty = $variant ? $variant->getBaseQuantity() : 1;
                 
                 $grandTotalWeight += ($itemQty * $unitQty);
 
@@ -635,7 +635,7 @@ class SaleController extends Controller
                 $unitPrice = $item['unit_price'];
                 
                 $variant = ProductVariant::find($variantId);
-                $unitQty = $variant ? $variant->unit_qty : 1;
+                $unitQty = $variant ? $variant->getBaseQuantity() : 1;
                 
                 $grandTotalWeight += ($itemQty * $unitQty);
 

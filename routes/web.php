@@ -38,6 +38,20 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     Route::group(['middleware' => ['permission:delete warehouses']], function () {
         Route::delete('warehouses/{warehouse}', [WarehouseController::class, 'destroy'])->name('warehouses.destroy');
     });
+    // ─── Units ──────────────────────────────────────────────────────────────────
+    Route::group(['middleware' => ['permission:view products']], function () {
+        Route::get('units', [\App\Http\Controllers\UnitController::class, 'index'])->name('units.index');
+    });
+    Route::group(['middleware' => ['permission:create products']], function () {
+        Route::post('units', [\App\Http\Controllers\UnitController::class, 'store'])->name('units.store');
+    });
+    Route::group(['middleware' => ['permission:edit products']], function () {
+        Route::put('units/{unit}', [\App\Http\Controllers\UnitController::class, 'update'])->name('units.update');
+    });
+    Route::group(['middleware' => ['permission:delete products']], function () {
+        Route::delete('units/{unit}', [\App\Http\Controllers\UnitController::class, 'destroy'])->name('units.destroy');
+    });
+
 
     // ─── Products ───────────────────────────────────────────────────────────────
     Route::group(['middleware' => ['permission:view products']], function () {

@@ -69,7 +69,7 @@ class AdminApiController extends Controller
         }
 
         // Low stock alerts (< 10)
-        $lowStock = \App\Models\WarehouseStock::with(['productVariant.product', 'warehouse'])
+        $lowStock = \App\Models\WarehouseStock::with(['productVariant.product.unit', 'productVariant.unit', 'warehouse'])
             ->where('stock', '<', 10)
             ->where('stock', '>', 0) // exclude completely out of stock if desired, but let's include 0 as well, wait let's just do < 10
             ->take(10)
@@ -98,8 +98,8 @@ class AdminApiController extends Controller
      */
         public function products(Request $request)
     {
-        $products = Product::with(['variants' => function($q) {
-            $q->with('priceHistory');
+        $products = Product::with(['unit', 'variants' => function($q) {
+            $q->with(['priceHistory', 'unit']);
         }])->orderBy('id', 'desc')->get();
         return response()->json(['products' => $products]);
     }
@@ -109,7 +109,7 @@ class AdminApiController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|in:raw,finished',
-            'base_unit' => 'required|string|max:50',
+            'unit_id' => 'required|exists:units,id',
             'status' => 'nullable|boolean',
         ]);
         $validated['status'] = $request->has('status') && $request->status;
@@ -129,7 +129,7 @@ class AdminApiController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|in:raw,finished',
-            'base_unit' => 'required|string|max:50',
+            'unit_id' => 'required|exists:units,id',
             'status' => 'nullable|boolean',
         ]);
         $validated['status'] = $request->has('status') && $request->status;
@@ -169,7 +169,7 @@ class AdminApiController extends Controller
             'sku' => 'required|string|unique:product_variants,sku|max:255',
             'barcode' => 'nullable|string|max:255',
             'unit_qty' => 'required|numeric|min:0',
-            'unit_type' => 'required|string|max:50',
+            'unit_id' => 'required|exists:units,id',
             'price' => 'nullable|numeric|min:0',
             'status' => 'nullable|boolean',
         ]);
@@ -201,7 +201,7 @@ class AdminApiController extends Controller
             'sku' => 'required|string|unique:product_variants,sku,' . $variant->id . '|max:255',
             'barcode' => 'nullable|string|max:255',
             'unit_qty' => 'required|numeric|min:0',
-            'unit_type' => 'required|string|max:50',
+            'unit_id' => 'required|exists:units,id',
             'price' => 'nullable|numeric|min:0',
             'status' => 'nullable|boolean',
         ]);
@@ -235,7 +235,7 @@ class AdminApiController extends Controller
      */
     public function sales(Request $request)
     {
-        $query = Sale::with(['customer', 'items.productVariant.product', 'warehouse', 'creator']);
+        $query = Sale::with(['customer', 'items.productVariant.product.unit', 'items.productVariant.unit', 'warehouse', 'creator']);
 
         if ($request->filled('invoice_no')) {
             $query->where('invoice_no', 'LIKE', '%' . $request->invoice_no . '%');
@@ -364,7 +364,7 @@ class AdminApiController extends Controller
                 $unitPrice = $item['unit_price'];
 
                 $variant = \App\Models\ProductVariant::find($variantId);
-                $unitQty = $variant ? $variant->unit_qty : 1;
+                $unitQty = $variant ? $variant->getBaseQuantity() : 1;
                 $grandTotalWeight += ($itemQty * $unitQty);
 
                 // FIFO Batch Consumption for this variant
@@ -616,7 +616,7 @@ class AdminApiController extends Controller
                 $unitPrice = $item['unit_price'];
 
                 $variant = \App\Models\ProductVariant::find($variantId);
-                $unitQty = $variant ? $variant->unit_qty : 1;
+                $unitQty = $variant ? $variant->getBaseQuantity() : 1;
                 $grandTotalWeight += ($itemQty * $unitQty);
 
                 if ($shouldConsumeStock) {
@@ -2182,7 +2182,7 @@ class AdminApiController extends Controller
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
-            $totalOutputKg = $validated['output_qty'] * $variant->unit_qty;
+            $totalOutputKg = $validated['output_qty'] * $variant->getBaseQuantity();
             if ($inputQty != $totalOutputKg) {
                 $diff = $totalOutputKg - $inputQty;
                 \App\Models\RepackagingAdjustment::create([
@@ -2400,7 +2400,7 @@ class AdminApiController extends Controller
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
-            $totalOutputKg = $validated['output_qty'] * $variant->unit_qty;
+            $totalOutputKg = $validated['output_qty'] * $variant->getBaseQuantity();
             if ($inputQty != $totalOutputKg) {
                 $diff = $totalOutputKg - $inputQty;
                 \App\Models\RepackagingAdjustment::create([

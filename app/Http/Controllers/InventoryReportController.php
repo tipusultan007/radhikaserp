@@ -88,7 +88,7 @@ class InventoryReportController extends Controller
                     'variant_name' => $txn->productVariant ? $txn->productVariant->name : 'N/A',
                     'type' => ($txn->product->type === 'finished' || $txn->product_variant_id) ? 'finished' : 'raw',
                     'unit' => $txn->productVariant ? $txn->productVariant->unit_type : $txn->product->base_unit,
-                    'variant_unit_qty' => $txn->productVariant ? $txn->productVariant->unit_qty : null,
+                    'variant_unit_qty' => $txn->productVariant ? $txn->productVariant->getBaseQuantity() : null,
                     'base_unit' => $txn->product->base_unit,
                     'qty' => 0,
                     'value' => 0

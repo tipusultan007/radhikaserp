@@ -29,7 +29,8 @@ class ProductController extends Controller
 
     public function create()
     {
-        return view('products.create');
+        $units = \App\Models\Unit::where('status', true)->get();
+        return view('products.create', compact('units'));
     }
 
     public function store(Request $request)
@@ -37,7 +38,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|in:raw,finished',
-            'base_unit' => 'required|string|max:50',
+            'unit_id' => 'required|exists:units,id',
             'status' => 'nullable|boolean',
         ]);
 
@@ -55,7 +56,8 @@ class ProductController extends Controller
 
     public function edit(Product $product)
     {
-        return view('products.edit', compact('product'));
+        $units = \App\Models\Unit::where('status', true)->get();
+        return view('products.edit', compact('product', 'units'));
     }
 
     public function update(Request $request, Product $product)
@@ -63,7 +65,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|in:raw,finished',
-            'base_unit' => 'required|string|max:50',
+            'unit_id' => 'required|exists:units,id',
             'status' => 'nullable|boolean',
         ]);
 

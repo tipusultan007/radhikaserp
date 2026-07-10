@@ -28,7 +28,7 @@ class ProductionReportController extends Controller
             $totalOutputWeight = 0;
             foreach ($order->outputs as $out) {
                 if ($out->product_variant_id) {
-                    $totalOutputWeight += ($out->qty_produced * $out->productVariant->unit_qty);
+                    $totalOutputWeight += ($out->qty_produced * $out->productVariant->getBaseQuantity());
                 } else {
                     $totalOutputWeight += $out->qty_produced; // Standard base unit
                 }
