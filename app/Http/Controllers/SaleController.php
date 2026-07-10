@@ -358,61 +358,16 @@ class SaleController extends Controller
                 
                 $grandTotalWeight += ($itemQty * $unitQty);
 
-                // FIFO Batch Consumption for this variant
-                $batches = Batch::where('product_variant_id', $variantId)
-                    ->where('warehouse_id', $warehouseId)
-                    ->where('remaining_qty', '>', 0)
-                    ->orderBy('id', 'asc')
-                    ->lockForUpdate()
-                    ->get();
-
-                $remainingToConsume = $itemQty;
-
-                foreach ($batches as $batch) {
-                    if ($remainingToConsume <= 0) break;
-
-                    $takeQty = min($batch->remaining_qty, $remainingToConsume);
-                    $cogsForThisTake = $takeQty * $batch->cost_per_unit;
-
-                    // Update batch
-                    $batch->qty_out += $takeQty;
-                    $batch->remaining_qty -= $takeQty;
-                    $batch->save();
-
-                    $totalCogs += $cogsForThisTake;
-                    $remainingToConsume -= $takeQty;
-
-                    // Sale Item record per consumed batch logic (or one combined)
-                    SaleItem::create([
-                        'sale_id' => $sale->id,
-                        'product_variant_id' => $variantId,
-                        'batch_id' => $batch->id,
-                        'qty' => $takeQty,
-                        'unit_price' => $unitPrice,
-                        'total_price' => $takeQty * $unitPrice,
-                        'total_weight' => $takeQty * $unitQty,
-                    ]);
-
-                    // Inventory Transaction
-                    InventoryTransaction::create([
-                        'warehouse_id' => $warehouseId,
-                        'product_id' => $batch->product_id,
-                        'product_variant_id' => $variantId,
-                        'batch_id' => $batch->id,
-                        'type' => 'sale',
-                        'qty_in' => 0,
-                        'qty_out' => $takeQty,
-                        'cost' => $cogsForThisTake, // cost stored here is the COGS cost
-                        'reference_type' => Sale::class,
-                        'reference_id' => $sale->id,
-                        'date' => $validated['date'],
-                        'created_by' => auth()->id() ?? 1,
-                    ]);
-                }
-
-                if (round($remainingToConsume, 4) > 0) {
-                    throw new \Exception("Insufficient finished stock for variant ID: {$variantId}. Shortfall: " . $remainingToConsume);
-                }
+                // Just save the item without inventory deduction initially
+                SaleItem::create([
+                    'sale_id' => $sale->id,
+                    'product_variant_id' => $variantId,
+                    'batch_id' => null,
+                    'qty' => $itemQty,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $itemQty * $unitPrice,
+                    'total_weight' => $itemQty * $unitQty,
+                ]);
             }
             
             // Save the total weight to the Sale
@@ -478,19 +433,7 @@ class SaleController extends Controller
                 ]);
             }
 
-            // 2. COGS & Inventory Reduction
-            JournalEntry::create([
-                'journal_id' => $journal->id,
-                'account_id' => $cogsAcc->id,
-                'type' => 'debit',
-                'amount' => $totalCogs,
-            ]);
-            JournalEntry::create([
-                'journal_id' => $journal->id,
-                'account_id' => $inventoryFinAcc->id,
-                'type' => 'credit',
-                'amount' => $totalCogs,
-            ]);
+            // COGS & Inventory Reduction entries are deferred until dispatch
 
             DB::commit();
 
@@ -645,76 +588,16 @@ class SaleController extends Controller
                 
                 $grandTotalWeight += ($itemQty * $unitQty);
 
-                $shouldConsumeStock = ($sale->source === 'admin') || ($dispatchedAt !== null && $dispatchedBy !== null);
-
-                if ($shouldConsumeStock) {
-                    // FIFO Batch Consumption for this variant
-                    $batches = Batch::where('product_variant_id', $variantId)
-                        ->where('warehouse_id', $warehouseId)
-                        ->where('remaining_qty', '>', 0)
-                        ->orderBy('id', 'asc')
-                        ->lockForUpdate()
-                        ->get();
-
-                    $remainingToConsume = $itemQty;
-
-                    foreach ($batches as $batch) {
-                        if ($remainingToConsume <= 0) break;
-
-                        $takeQty = min($batch->remaining_qty, $remainingToConsume);
-                        $cogsForThisTake = $takeQty * $batch->cost_per_unit;
-
-                        // Update batch
-                        $batch->qty_out += $takeQty;
-                        $batch->remaining_qty -= $takeQty;
-                        $batch->save();
-
-                        $totalCogs += $cogsForThisTake;
-                        $remainingToConsume -= $takeQty;
-
-                        // Sale Item record per consumed batch
-                        SaleItem::create([
-                            'sale_id' => $sale->id,
-                            'product_variant_id' => $variantId,
-                            'batch_id' => $batch->id,
-                            'qty' => $takeQty,
-                            'unit_price' => $unitPrice,
-                            'total_price' => $takeQty * $unitPrice,
-                            'total_weight' => $takeQty * $unitQty,
-                        ]);
-
-                        // Inventory Transaction
-                        InventoryTransaction::create([
-                            'warehouse_id' => $warehouseId,
-                            'product_id' => $batch->product_id,
-                            'product_variant_id' => $variantId,
-                            'batch_id' => $batch->id,
-                            'type' => 'sale',
-                            'qty_in' => 0,
-                            'qty_out' => $takeQty,
-                            'cost' => $cogsForThisTake,
-                            'reference_type' => Sale::class,
-                            'reference_id' => $sale->id,
-                            'date' => $validated['date'],
-                            'created_by' => auth()->id() ?? 1,
-                        ]);
-                    }
-
-                    if (round($remainingToConsume, 4) > 0) {
-                        throw new \Exception("Insufficient finished stock for variant ID: {$variantId}. Shortfall: " . $remainingToConsume);
-                    }
-                } else {
-                    // Just save the item without inventory deduction
-                    SaleItem::create([
-                        'sale_id' => $sale->id,
-                        'product_variant_id' => $variantId,
-                        'batch_id' => null,
-                        'qty' => $itemQty,
-                        'unit_price' => $unitPrice,
-                        'total_price' => $itemQty * $unitPrice,
-                        'total_weight' => $itemQty * $unitQty,
-                    ]);
-                }
+                // Just save the item without inventory deduction initially
+                SaleItem::create([
+                    'sale_id' => $sale->id,
+                    'product_variant_id' => $variantId,
+                    'batch_id' => null,
+                    'qty' => $itemQty,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $itemQty * $unitPrice,
+                    'total_weight' => $itemQty * $unitQty,
+                ]);
             }
 
             $sale->total_weight = $grandTotalWeight;
@@ -779,19 +662,16 @@ class SaleController extends Controller
                 ]);
             }
 
-            // 2. COGS & Inventory Reduction
-            JournalEntry::create([
-                'journal_id' => $journal->id,
-                'account_id' => $cogsAcc->id,
-                'type' => 'debit',
-                'amount' => $totalCogs,
-            ]);
-            JournalEntry::create([
-                'journal_id' => $journal->id,
-                'account_id' => $inventoryFinAcc->id,
-                'type' => 'credit',
-                'amount' => $totalCogs,
-            ]);
+            // COGS & Inventory Reduction entries are deferred until dispatch
+            
+            if ($dispatchedAt) {
+                $sale->delivery_status = 'dispatched';
+                $sale->save();
+            }
+
+            if (in_array($sale->delivery_status, ['dispatched', 'delivered'])) {
+                $this->consumeStockForSale($sale);
+            }
 
             DB::commit();
 
@@ -812,6 +692,7 @@ class SaleController extends Controller
         ]);
 
         try {
+            $oldStatus = $sale->getOriginal('delivery_status');
             if (isset($validated['payment_status'])) {
                 $sale->payment_status = $validated['payment_status'];
             }
@@ -826,6 +707,17 @@ class SaleController extends Controller
                 $sale->notes = $validated['notes'];
             }
             $sale->save();
+
+            if (isset($validated['delivery_status'])) {
+                $wasDispatched = in_array($oldStatus, ['dispatched', 'delivered']);
+                $isDispatched = in_array($sale->delivery_status, ['dispatched', 'delivered']);
+
+                if ($isDispatched && !$wasDispatched) {
+                    $this->consumeStockForSale($sale);
+                } elseif (!$isDispatched && $wasDispatched) {
+                    $this->revertStockForSale($sale);
+                }
+            }
 
             return back()->with('success', 'Sale details updated successfully.');
         } catch (\Exception $e) {
@@ -895,6 +787,161 @@ class SaleController extends Controller
 
         // 6. Delete Sale Items
         SaleItem::where('sale_id', $sale->id)->delete();
+    }
+
+    private function consumeStockForSale(Sale $sale)
+    {
+        $hasTransactions = InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->exists();
+        if ($hasTransactions) return;
+
+        $totalCogs = 0;
+        $items = SaleItem::where('sale_id', $sale->id)->get();
+        
+        $groupedItems = [];
+        foreach ($items as $item) {
+            if (!isset($groupedItems[$item->product_variant_id])) {
+                $groupedItems[$item->product_variant_id] = [
+                    'qty' => 0,
+                    'unit_price' => $item->unit_price,
+                    'total_weight' => 0
+                ];
+            }
+            $groupedItems[$item->product_variant_id]['qty'] += $item->qty;
+            $groupedItems[$item->product_variant_id]['total_weight'] += $item->total_weight;
+        }
+
+        SaleItem::where('sale_id', $sale->id)->delete();
+
+        foreach ($groupedItems as $variantId => $data) {
+            $itemQty = $data['qty'];
+            $unitPrice = $data['unit_price'];
+            $variant = ProductVariant::find($variantId);
+            $unitQty = $variant ? $variant->getBaseQuantity() : 1;
+            
+            $batches = Batch::where('product_variant_id', $variantId)
+                ->where('warehouse_id', $sale->warehouse_id)
+                ->where('remaining_qty', '>', 0)
+                ->orderBy('id', 'asc')
+                ->lockForUpdate()
+                ->get();
+
+            $remainingToConsume = $itemQty;
+
+            foreach ($batches as $batch) {
+                if ($remainingToConsume <= 0) break;
+
+                $takeQty = min($batch->remaining_qty, $remainingToConsume);
+                $cogsForThisTake = $takeQty * $batch->cost_per_unit;
+
+                $batch->qty_out += $takeQty;
+                $batch->remaining_qty -= $takeQty;
+                $batch->save();
+
+                $totalCogs += $cogsForThisTake;
+                $remainingToConsume -= $takeQty;
+
+                SaleItem::create([
+                    'sale_id' => $sale->id,
+                    'product_variant_id' => $variantId,
+                    'batch_id' => $batch->id,
+                    'qty' => $takeQty,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $takeQty * $unitPrice,
+                    'total_weight' => $takeQty * $unitQty,
+                ]);
+
+                InventoryTransaction::create([
+                    'warehouse_id' => $sale->warehouse_id,
+                    'product_id' => $batch->product_id,
+                    'product_variant_id' => $variantId,
+                    'batch_id' => $batch->id,
+                    'type' => 'sale',
+                    'qty_in' => 0,
+                    'qty_out' => $takeQty,
+                    'cost' => $cogsForThisTake,
+                    'reference_type' => Sale::class,
+                    'reference_id' => $sale->id,
+                    'date' => $sale->dispatched_at ?? $sale->date,
+                    'created_by' => auth()->id() ?? 1,
+                ]);
+            }
+
+            if (round($remainingToConsume, 4) > 0) {
+                throw new \Exception("Insufficient finished stock for variant ID: {$variantId}. Shortfall: " . $remainingToConsume);
+            }
+        }
+
+        if ($totalCogs > 0) {
+            $journal = Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->first();
+            if ($journal) {
+                $inventoryFinAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
+                $cogsAcc = ChartOfAccount::firstOrCreate(['name' => 'Cost of Goods Sold', 'type' => 'expense']);
+                
+                JournalEntry::create([
+                    'journal_id' => $journal->id,
+                    'account_id' => $cogsAcc->id,
+                    'type' => 'debit',
+                    'amount' => $totalCogs,
+                ]);
+                JournalEntry::create([
+                    'journal_id' => $journal->id,
+                    'account_id' => $inventoryFinAcc->id,
+                    'type' => 'credit',
+                    'amount' => $totalCogs,
+                ]);
+            }
+        }
+    }
+
+    private function revertStockForSale(Sale $sale)
+    {
+        $items = SaleItem::where('sale_id', $sale->id)->get();
+        foreach ($items as $item) {
+            if ($item->batch) {
+                $item->batch->qty_out -= $item->qty;
+                $item->batch->remaining_qty += $item->qty;
+                $item->batch->save();
+            }
+        }
+
+        InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->delete();
+
+        $journal = Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->first();
+        if ($journal) {
+            $inventoryFinAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
+            $cogsAcc = ChartOfAccount::firstOrCreate(['name' => 'Cost of Goods Sold', 'type' => 'expense']);
+            
+            JournalEntry::where('journal_id', $journal->id)
+                ->whereIn('account_id', [$inventoryFinAcc->id, $cogsAcc->id])
+                ->delete();
+        }
+
+        $groupedItems = [];
+        foreach ($items as $item) {
+            if (!isset($groupedItems[$item->product_variant_id])) {
+                $groupedItems[$item->product_variant_id] = [
+                    'qty' => 0,
+                    'unit_price' => $item->unit_price,
+                    'total_weight' => 0
+                ];
+            }
+            $groupedItems[$item->product_variant_id]['qty'] += $item->qty;
+            $groupedItems[$item->product_variant_id]['total_weight'] += $item->total_weight;
+        }
+
+        SaleItem::where('sale_id', $sale->id)->delete();
+
+        foreach ($groupedItems as $variantId => $data) {
+            SaleItem::create([
+                'sale_id' => $sale->id,
+                'product_variant_id' => $variantId,
+                'batch_id' => null,
+                'qty' => $data['qty'],
+                'unit_price' => $data['unit_price'],
+                'total_price' => $data['qty'] * $data['unit_price'],
+                'total_weight' => $data['total_weight'],
+            ]);
+        }
     }
 }
 
