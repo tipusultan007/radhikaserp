@@ -25,7 +25,7 @@ class JournalController extends Controller
             $query->where('journal_no', 'like', '%' . $request->journal_no . '%');
         }
 
-        $journals = $query->latest('date')->paginate(15)->withQueryString();
+        $journals = $query->orderBy('date', 'desc')->orderBy('id', 'desc')->paginate(15)->withQueryString();
         
         return view('accounting.journals.index', compact('journals'));
     }
