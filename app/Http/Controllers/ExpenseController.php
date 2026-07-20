@@ -88,6 +88,16 @@ class ExpenseController extends Controller
                 'amount' => $validated['amount'],
             ]);
 
+            try {
+                $admins = \App\Models\User::all();
+                \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\AdminAlertNotification(
+                    'New Expense Recorded',
+                    "Expense of {$validated['amount']} has been recorded.",
+                    'expense',
+                    ['expense_id' => $expense->id]
+                ));
+            } catch (\Exception $e) {}
+
             DB::commit();
             return redirect()->route('expenses.index')->with('success', 'Expense recorded successfully.');
 

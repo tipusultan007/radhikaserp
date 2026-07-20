@@ -3177,4 +3177,46 @@ class AdminApiController extends Controller
             'entries' => $entries,
         ]);
     }
+
+    /**
+     * Get unread and read notifications.
+     */
+    public function notifications(Request $request)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['notifications' => [], 'unread_count' => 0]);
+        }
+
+        $notifications = $user->notifications()->take(50)->get();
+        $unreadCount = $user->unreadNotifications()->count();
+
+        // Format for the app
+        $formatted = $notifications->map(function ($notif) {
+            return [
+                'id' => $notif->id,
+                'type' => $notif->data['type'] ?? 'info',
+                'data' => $notif->data,
+                'read_at' => $notif->read_at,
+                'created_at' => $notif->created_at,
+            ];
+        });
+
+        return response()->json([
+            'notifications' => $formatted,
+            'unread_count' => $unreadCount,
+        ]);
+    }
+
+    /**
+     * Mark all notifications as read.
+     */
+    public function markNotificationsRead(Request $request)
+    {
+        if ($request->user()) {
+            $request->user()->unreadNotifications->markAsRead();
+        }
+        return response()->json(['message' => 'Marked as read']);
+    }
 }
+

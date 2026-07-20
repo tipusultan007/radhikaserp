@@ -114,6 +114,16 @@ class CustomerController extends Controller
 
         $customer = Customer::create($validated);
 
+        try {
+            $admins = \App\Models\User::all();
+            \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\AdminAlertNotification(
+                'New Customer Added',
+                "Customer {$customer->name} has been added.",
+                'customer',
+                ['customer_id' => $customer->id]
+            ));
+        } catch (\Exception $e) {}
+
         return response()->json([
             'success' => true,
             'customer' => $customer
@@ -154,6 +164,16 @@ class CustomerController extends Controller
             if ($customer->opening_balance > 0) {
                 $this->createOpeningBalanceJournal($customer);
             }
+
+            try {
+                $admins = \App\Models\User::all();
+                \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\AdminAlertNotification(
+                    'New Customer Added',
+                    "Customer {$customer->name} has been added.",
+                    'customer',
+                    ['customer_id' => $customer->id]
+                ));
+            } catch (\Exception $e) {}
 
             DB::commit();
             return redirect()->route('customers.index')->with('success', 'Customer created successfully.');

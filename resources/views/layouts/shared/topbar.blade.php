@@ -150,7 +150,9 @@
             <li class="dropdown notification-list">
                 <a class="nav-link dropdown-toggle arrow-none" data-bs-toggle="dropdown" href="#" role="button" aria-haspopup="false" aria-expanded="false">
                     <i class="ri-notification-3-fill fs-22"></i>
-                    <span class="noti-icon-badge"></span>
+                    @if(auth()->check() && auth()->user()->unreadNotifications->count() > 0)
+                        <span class="noti-icon-badge badge text-bg-danger rounded-circle" style="font-size: 10px; padding: 2px 5px; position: absolute; top: 0; right: 0; transform: translate(25%, -25%);">{{ auth()->user()->unreadNotifications->count() }}</span>
+                    @endif
                 </a>
                 <div class="dropdown-menu dropdown-menu-end dropdown-menu-animated dropdown-lg py-0">
                     <div class="p-2 border-top-0 border-start-0 border-end-0 border-dashed border">
@@ -159,105 +161,37 @@
                                 <h6 class="m-0 fs-16 fw-semibold"> Notification</h6>
                             </div>
                             <div class="col-auto">
-                                <a href="javascript: void(0);" class="text-dark text-decoration-underline">
-                                    <small>Clear All</small>
+                                <a href="javascript: void(0);" id="mark-all-read" class="text-dark text-decoration-underline">
+                                    <small>Mark All Read</small>
                                 </a>
                             </div>
                         </div>
                     </div>
 
                     <div style="max-height: 300px;" data-simplebar>
-
-                        <h5 class="text-muted fs-12 fw-bold p-2 text-uppercase mb-0">Today</h5>
-                        <!-- item-->
-
-                        <a href="javascript:void(0);" class="dropdown-item p-0 notify-item unread-noti card m-0 shadow-none">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center">
-                                    <div class="flex-shrink-0">
-                                        <div class="notify-icon bg-primary">
-                                            <i class="ri-message-3-line fs-18"></i>
+                        @if(auth()->check())
+                            @forelse(auth()->user()->notifications()->take(10)->get() as $notification)
+                            <a href="javascript:void(0);" class="dropdown-item p-0 notify-item {{ $notification->read_at ? 'read-noti' : 'unread-noti' }} card m-0 shadow-none">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center">
+                                        <div class="flex-shrink-0">
+                                            <div class="notify-icon bg-primary">
+                                                <i class="ri-notification-3-line fs-18"></i>
+                                            </div>
+                                        </div>
+                                        <div class="flex-grow-1 text-truncate ms-2">
+                                            <h5 class="noti-item-title fw-semibold fs-14">{{ $notification->data['title'] ?? 'Notification' }} <small class="fw-normal text-muted float-end ms-1">{{ $notification->created_at->diffForHumans() }}</small></h5>
+                                            <small class="noti-item-subtitle text-muted">{{ $notification->data['message'] ?? '' }}</small>
                                         </div>
                                     </div>
-                                    <div class="flex-grow-1 text-truncate ms-2">
-                                        <h5 class="noti-item-title fw-semibold fs-14">Datacorp <small class="fw-normal text-muted float-end ms-1">1 min ago</small></h5>
-                                        <small class="noti-item-subtitle text-muted">Caleb Flakelar commented on Admin</small>
-                                    </div>
                                 </div>
+                            </a>
+                            @empty
+                            <div class="p-3 text-center text-muted">
+                                No notifications yet
                             </div>
-                        </a>
-
-                        <!-- item-->
-                        <a href="javascript:void(0);" class="dropdown-item p-0 notify-item read-noti card m-0 shadow-none">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center">
-                                    <div class="flex-shrink-0">
-                                        <div class="notify-icon bg-info">
-                                            <i class="ri-user-add-line fs-18"></i>
-                                        </div>
-                                    </div>
-                                    <div class="flex-grow-1 text-truncate ms-2">
-                                        <h5 class="noti-item-title fw-semibold fs-14">Admin <small class="fw-normal text-muted float-end ms-1">1 hr ago</small></h5>
-                                        <small class="noti-item-subtitle text-muted">New user registered</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </a>
-
-                        <h5 class="text-muted fs-12 fw-bold p-2 mb-0 text-uppercase">Yesterday</h5>
-
-                        <!-- item-->
-                        <a href="javascript:void(0);" class="dropdown-item p-0 notify-item read-noti card m-0 shadow-none">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center">
-                                    <div class="flex-shrink-0">
-                                        <div class="notify-icon">
-                                            <img src="/images/users/avatar-2.jpg" class="img-fluid rounded-circle" alt="" />
-                                        </div>
-                                    </div>
-                                    <div class="flex-grow-1 text-truncate ms-2">
-                                        <h5 class="noti-item-title fw-semibold fs-14">Cristina Pride <small class="fw-normal text-muted float-end ms-1">1 day ago</small></h5>
-                                        <small class="noti-item-subtitle text-muted">Hi, How are you? What about our next meeting</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </a>
-
-                        <h5 class="text-muted fs-12 fw-bold p-2 mb-0 text-uppercase">31 Jan 2023</h5>
-
-                        <!-- item-->
-                        <a href="javascript:void(0);" class="dropdown-item p-0 notify-item read-noti card m-0 shadow-none">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center">
-                                    <div class="flex-shrink-0">
-                                        <div class="notify-icon bg-primary">
-                                            <i class="ri-discuss-line fs-18"></i>
-                                        </div>
-                                    </div>
-                                    <div class="flex-grow-1 text-truncate ms-2">
-                                        <h5 class="noti-item-title fw-semibold fs-14">Datacorp</h5>
-                                        <small class="noti-item-subtitle text-muted">Caleb Flakelar commented on Admin</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </a>
-
-                        <!-- item-->
-                        <a href="javascript:void(0);" class="dropdown-item p-0 notify-item read-noti card m-0 shadow-none">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center">
-                                    <div class="flex-shrink-0">
-                                        <div class="notify-icon">
-                                            <img src="/images/users/avatar-4.jpg" class="img-fluid rounded-circle" alt="" />
-                                        </div>
-                                    </div>
-                                    <div class="flex-grow-1 text-truncate ms-2">
-                                        <h5 class="noti-item-title fw-semibold fs-14">Karen Robinson</h5>
-                                        <small class="noti-item-subtitle text-muted">Wow ! this admin looks good and awesome design</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </a>
+                            @endforelse
+                        @endif
                     </div>
 
                     <!-- All-->
@@ -267,6 +201,24 @@
 
                 </div>
             </li>
+            
+            <script>
+                document.addEventListener('DOMContentLoaded', function () {
+                    const markReadBtn = document.getElementById('mark-all-read');
+                    if(markReadBtn) {
+                        markReadBtn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            fetch('{{ route("notifications.markRead") }}', {
+                                method: 'POST',
+                                headers: {
+                                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                    'Content-Type': 'application/json'
+                                }
+                            }).then(() => window.location.reload());
+                        });
+                    }
+                });
+            </script>
 
             <li class="dropdown d-none d-sm-inline-block">
                 <a class="nav-link dropdown-toggle arrow-none" data-bs-toggle="dropdown" href="#" role="button" aria-haspopup="false" aria-expanded="false">

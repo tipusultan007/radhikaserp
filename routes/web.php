@@ -22,6 +22,10 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::get('/home', [RoutingController::class, 'index'])->name('home');
     });
 
+    // ─── Notifications ──────────────────────────────────────────────────────────
+    Route::post('/notifications/mark-read', [App\Http\Controllers\NotificationController::class, 'markAsRead'])->name('notifications.markRead');
+
+
     // ─── Warehouses ─────────────────────────────────────────────────────────────
     Route::group(['middleware' => ['permission:view warehouses']], function () {
         Route::get('warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
