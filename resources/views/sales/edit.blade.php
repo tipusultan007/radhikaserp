@@ -70,8 +70,8 @@
                                          <tr>
                                              <th>Product Variant</th>
                                              <th width="15%">Qty</th>
-                                             <th width="20%">Unit Price ($)</th>
-                                             <th width="20%">Subtotal ($)</th>
+                                             <th width="20%">Unit Price</th>
+                                             <th width="20%">Subtotal</th>
                                          </tr>
                                      </thead>
                                      <tbody id="cart-items">
@@ -117,12 +117,12 @@
                              <hr>
                              
                              <div class="mb-3">
-                                 <label class="form-label">Delivery Charge ($)</label>
+                                 <label class="form-label">Delivery Charge</label>
                                  <input type="number" step="1" name="delivery_charge" class="form-control" value="{{ $sale->delivery_charge }}">
                              </div>
 
                              <div class="mb-3">
-                                 <label class="form-label">Discount ($)</label>
+                                 <label class="form-label">Discount</label>
                                  <input type="number" step="1" name="discount" class="form-control" value="{{ $sale->discount }}">
                              </div>
                              
@@ -154,7 +154,7 @@
                              </div>
 
                              <div class="mb-3">
-                                 <label class="form-label text-success"><strong>Amount Paid Now ($)</strong></label>
+                                 <label class="form-label text-success"><strong>Amount Paid Now</strong></label>
                                  <input type="number" step="1" name="paid_amount" id="paidAmount" class="form-control" value="{{ $sale->paid_amount }}">
                                  <small class="text-muted">Remaining will be added to Customer's Due.</small>
                              </div>

@@ -132,8 +132,8 @@
                                          <thead class="table-light">
                                              <tr>
                                                  <th style="width: 5%">#</th>
-                                                 <th style="width: 45%">Item Description</th>
-                                                 <th style="width: 10%">Quantity</th>
+                                                 <th style="width: 45%">Item</th>
+                                                 <th style="width: 10%">Qty</th>
                                                  <th style="width: 15%">Weight</th>
                                                  <th style="width: 10%">Unit Price</th>
                                                  <th style="width: 15%" class="text-end">Total</th>
@@ -147,10 +147,10 @@
                                                      <b>{{ $item->productVariant->product->name ?? 'Unknown' }}</b> <br/>
                                                      <small class="text-muted">{{ $item->productVariant->name ?? 'Unknown' }}</small>
                                                  </td>
-                                                 <td>{{ number_format($item->qty, 3) }}</td>
-                                                 <td>{{ number_format($item->total_weight, 3) }} kg</td>
-                                                 <td>${{ number_format($item->unit_price, 0) }}</td>
-                                                 <td class="text-end">${{ number_format($item->total_price, 0) }}</td>
+                                                 <td>{{ number_format($item->qty, 0) }}</td>
+                                                 <td>{{ number_format($item->total_weight, 2) }} kg</td>
+                                                 <td>{{ number_format($item->unit_price, 0) }}</td>
+                                                 <td class="text-end">{{ number_format($item->total_price, 0) }}</td>
                                              </tr>
                                              @endforeach
                                          </tbody>
@@ -175,19 +175,19 @@
                                          <tbody>
                                              <tr>
                                                  <td class="text-end text-muted"><strong>Sub-total:</strong></td>
-                                                 <td class="text-end">${{ number_format($sale->subtotal, 0) }}</td>
+                                                 <td class="text-end">{{ number_format($sale->subtotal, 0) }}</td>
                                              </tr>
                                              <tr>
                                                  <td class="text-end text-muted"><strong>Discount:</strong></td>
-                                                 <td class="text-end text-danger">-${{ number_format($sale->discount, 0) }}</td>
+                                                 <td class="text-end text-danger">-{{ number_format($sale->discount, 0) }}</td>
                                              </tr>
                                              <tr>
                                                  <td class="text-end text-muted"><strong>Delivery Charge:</strong></td>
-                                                 <td class="text-end">${{ number_format($sale->delivery_charge, 0) }}</td>
+                                                 <td class="text-end">{{ number_format($sale->delivery_charge, 0) }}</td>
                                              </tr>
                                              <tr class="border-top border-bottom">
                                                  <td class="text-end"><h4><strong>Grand Total:</strong></h4></td>
-                                                 <td class="text-end"><h4><strong>${{ number_format($sale->total, 0) }}</strong></h4></td>
+                                                 <td class="text-end"><h4><strong>{{ number_format($sale->total, 0) }}</strong></h4></td>
                                              </tr>
                                              <tr>
                                                  <td class="text-end text-muted"><strong>Total Physical Weight:</strong></td>
@@ -195,11 +195,11 @@
                                              </tr>
                                              <tr>
                                                  <td class="text-end text-muted">Amount Paid:</td>
-                                                 <td class="text-end text-success">${{ number_format($sale->paid_amount, 0) }}</td>
+                                                 <td class="text-end text-success">{{ number_format($sale->paid_amount, 0) }}</td>
                                              </tr>
                                              <tr>
                                                  <td class="text-end text-muted"><strong>Amount Due:</strong></td>
-                                                 <td class="text-end text-danger"><strong>${{ number_format($sale->due_amount, 0) }}</strong></td>
+                                                 <td class="text-end text-danger"><strong>{{ number_format($sale->due_amount, 0) }}</strong></td>
                                              </tr>
                                          </tbody>
                                      </table>
@@ -271,7 +271,7 @@
                          <form action="{{ route('sale-payments.store', $sale->id) }}" method="POST">
                              @csrf
                              <div class="mb-3">
-                                 <label class="form-label">Amount ($)</label>
+                                 <label class="form-label">Amount</label>
                                  <input type="number" step="1" name="amount" class="form-control" max="{{ $sale->due_amount }}" required>
                              </div>
                              <div class="mb-3">

@@ -183,9 +183,9 @@
                         <strong>{{ $item->productVariant->product->name ?? 'Unknown' }}</strong><br>
                         <span style="color: #7f8c8d; font-size: 12px;">{{ $item->productVariant->name ?? 'Unknown' }}</span>
                     </td>
-                    <td class="text-right">{{ number_format($item->qty, 3) }}</td>
-                    <td class="text-right">${{ number_format($item->unit_price, 0) }}</td>
-                    <td class="text-right">${{ number_format($item->total_price, 0) }}</td>
+                    <td class="text-right">{{ number_format($item->qty, 0) }}</td>
+                    <td class="text-right">{{ number_format($item->unit_price, 0) }}</td>
+                    <td class="text-right">{{ number_format($item->total_price, 0) }}</td>
                 </tr>
                 @endforeach
             </tbody>
@@ -203,27 +203,27 @@
                     <table class="totals-table">
                         <tr>
                             <td class="text-right"><strong>Sub-total:</strong></td>
-                            <td class="text-right">${{ number_format($sale->subtotal, 0) }}</td>
+                            <td class="text-right">{{ number_format($sale->subtotal, 0) }}</td>
                         </tr>
                         <tr>
                             <td class="text-right"><strong>Discount:</strong></td>
-                            <td class="text-right text-danger">-${{ number_format($sale->discount, 0) }}</td>
+                            <td class="text-right text-danger">-{{ number_format($sale->discount, 0) }}</td>
                         </tr>
                         <tr>
                             <td class="text-right"><strong>Delivery Charge:</strong></td>
-                            <td class="text-right">${{ number_format($sale->delivery_charge, 0) }}</td>
+                            <td class="text-right">{{ number_format($sale->delivery_charge, 0) }}</td>
                         </tr>
                         <tr class="grand-total">
                             <td class="text-right">Grand Total:</td>
-                            <td class="text-right">${{ number_format($sale->total, 0) }}</td>
+                            <td class="text-right">{{ number_format($sale->total, 0) }}</td>
                         </tr>
                         <tr>
                             <td class="text-right">Amount Paid:</td>
-                            <td class="text-right text-success">${{ number_format($sale->paid_amount, 0) }}</td>
+                            <td class="text-right text-success">{{ number_format($sale->paid_amount, 0) }}</td>
                         </tr>
                         <tr>
                             <td class="text-right"><strong>Amount Due:</strong></td>
-                            <td class="text-right text-danger"><strong>${{ number_format($sale->due_amount, 0) }}</strong></td>
+                            <td class="text-right text-danger"><strong>{{ number_format($sale->due_amount, 0) }}</strong></td>
                         </tr>
                     </table>
                 </td>
