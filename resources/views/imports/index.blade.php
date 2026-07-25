@@ -63,14 +63,16 @@
                                              <td>${{ number_format($import->total_cost, 0) }}</td>
                                              <td>
                                                  <a href="{{ route('imports.show', $import->id) }}" class="action-icon text-info" title="View"> <i class="ri-eye-fill"></i></a>
-                                                 @can('manage imports')
+                                                 @canany(['edit imports', 'manage imports'])
                                                  <a href="{{ route('imports.edit', $import->id) }}" class="action-icon text-primary" title="Edit"> <i class="ri-edit-box-line"></i></a>
+                                                 @endcanany
+                                                 @canany(['delete imports', 'manage imports'])
                                                  <form action="{{ route('imports.destroy', $import->id) }}" method="POST" class="d-inline">
                                                      @csrf
                                                      @method('DELETE')
                                                      <button type="submit" class="action-icon btn btn-link text-danger p-0" onclick="return confirm('Are you sure you want to delete this Import? This will reverse the supplier payable and remove stock from the warehouse. Action cannot be undone if stock is already consumed.')" title="Delete"> <i class="ri-delete-bin-line"></i></button>
                                                  </form>
-                                                 @endcan
+                                                 @endcanany
                                              </td>
                                          </tr>
                                      @endforeach

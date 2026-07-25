@@ -209,6 +209,42 @@
         const discountInput = document.querySelector('input[name="discount"]');
         const paidAmountInput = document.getElementById('paidAmount');
         const fullPaymentToggle = document.getElementById('fullPaymentToggle');
+        const isPromotionalCheckbox = document.getElementById('isPromotional');
+        const paymentMethodSelect = document.querySelector('select[name="payment_method"]');
+
+        function handlePromotionalState() {
+            if (isPromotionalCheckbox && isPromotionalCheckbox.checked) {
+                if (paidAmountInput) {
+                    paidAmountInput.value = 0;
+                    paidAmountInput.readOnly = true;
+                }
+                if (fullPaymentToggle) {
+                    fullPaymentToggle.checked = false;
+                    fullPaymentToggle.disabled = true;
+                }
+                if (paymentMethodSelect) {
+                    paymentMethodSelect.disabled = true;
+                }
+            } else {
+                if (paidAmountInput) {
+                    paidAmountInput.readOnly = false;
+                }
+                if (fullPaymentToggle) {
+                    fullPaymentToggle.disabled = false;
+                }
+                if (paymentMethodSelect) {
+                    paymentMethodSelect.disabled = false;
+                }
+            }
+        }
+
+        if (isPromotionalCheckbox) {
+            isPromotionalCheckbox.addEventListener('change', function() {
+                handlePromotionalState();
+                updateFullPayment();
+            });
+            handlePromotionalState();
+        }
 
         function calculateTotal() {
             let subtotal = 0;
@@ -228,7 +264,11 @@
         }
 
         function updateFullPayment() {
-            if (fullPaymentToggle.checked) {
+            if (isPromotionalCheckbox && isPromotionalCheckbox.checked) {
+                if (paidAmountInput) paidAmountInput.value = 0;
+                return;
+            }
+            if (fullPaymentToggle && fullPaymentToggle.checked) {
                 paidAmountInput.value = calculateTotal().toFixed(0);
             }
         }

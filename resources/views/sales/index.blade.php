@@ -160,6 +160,14 @@
                                                  <option value="customer" {{ request('source') == 'customer' ? 'selected' : '' }}>Customer</option>
                                              </select>
                                          </div>
+                                         <div class="col-md-2">
+                                             <label for="is_promotional" class="form-label mb-1">Promotional</label>
+                                             <select class="form-control select2" name="is_promotional">
+                                                 <option value="">All Orders</option>
+                                                 <option value="1" {{ request('is_promotional') == '1' ? 'selected' : '' }}>Promotional Only</option>
+                                                 <option value="0" {{ request('is_promotional') == '0' ? 'selected' : '' }}>Regular Only</option>
+                                             </select>
+                                         </div>
                                          <div class="col-md-12 text-end mt-2">
                                              <button type="submit" class="btn btn-primary"><i class="ri-search-line me-1"></i> Filter</button>
                                              <a href="{{ route('sales.index') }}" class="btn btn-danger ms-1"><i class="ri-refresh-line me-1"></i> Reset</a>
@@ -180,6 +188,7 @@
                                          <th>Invoice No</th>
                                          <th>Date</th>
                                          <th>Customer</th>
+                                         <th>Promotional?</th>
                                          <th>Total Amount</th>
                                          <th>Total Weight</th>
                                          <th>Paid</th>
@@ -197,6 +206,13 @@
                                              <td>
                                                  {{ $sale->customer->name ?? 'N/A' }}<br>
                                                  <span class="badge bg-{{ $sale->source == 'customer' ? 'info' : 'secondary' }} mt-1">{{ ucfirst($sale->source ?? 'Admin') }} Order</span>
+                                             </td>
+                                             <td>
+                                                 @if($sale->is_promotional)
+                                                     <span class="badge bg-purple text-white"><i class="ri-gift-line me-1"></i> Promotional</span>
+                                                 @else
+                                                     <span class="badge bg-light text-muted">No</span>
+                                                 @endif
                                              </td>
                                              <td>${{ number_format($sale->total, 0) }}</td>
                                              <td>{{ number_format($sale->total_weight, 3) }} kg</td>

@@ -26,6 +26,15 @@
                          </div>
                          <div class="card-body">
 
+                             @if (!empty($hasConsumedStock))
+                                 <div class="alert alert-warning d-flex align-items-center" role="alert">
+                                     <i class="ri-alert-line fs-18 me-2"></i>
+                                     <div>
+                                         <strong>Stock Consumed Warning:</strong> Some stock from this import shipment has already been consumed or sold. Editing this import is disabled to protect inventory ledger integrity.
+                                     </div>
+                                 </div>
+                             @endif
+
                              @if ($errors->any())
                                  <div class="alert alert-danger alert-dismissible fade show" role="alert">
                                      <ul class="mb-0">
@@ -142,7 +151,7 @@
                         </div>
                         <div class="card-footer bg-white border-top text-end py-3">
                             <a href="{{ route('imports.show', $import->id) }}" class="btn btn-light me-2"><i class="ri-close-line"></i> Cancel</a>
-                            <button type="submit" class="btn btn-primary" id="submitBtn"><i class="ri-save-line"></i> Save Changes</button>
+                            <button type="submit" class="btn btn-primary" id="submitBtn" {{ !empty($hasConsumedStock) ? 'disabled' : '' }}><i class="ri-save-line"></i> Save Changes</button>
                         </div>
                     </div>
                 </div>

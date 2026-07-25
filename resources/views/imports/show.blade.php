@@ -38,9 +38,11 @@
                              </div>
                              <div class="text-end">
                                  <div class="d-flex gap-2 justify-content-end">
+                                    @canany(['edit imports', 'manage imports'])
                                     <a href="{{ route('imports.edit', $import->id) }}" class="btn btn-soft-primary"><i class="ri-edit-line"></i> Edit</a>
+                                    @endcanany
                                     
-                                    @can('delete imports')
+                                    @canany(['delete imports', 'manage imports'])
                                     <form action="{{ route('imports.destroy', $import->id) }}" method="POST" class="d-inline">
                                         @csrf
                                         @method('DELETE')
@@ -48,7 +50,7 @@
                                             <i class="ri-delete-bin-line"></i> Delete
                                         </button>
                                     </form>
-                                    @endcan
+                                    @endcanany
                                     
                                     <button class="btn btn-soft-dark" onclick="window.print()"><i class="ri-printer-line"></i> Print</button>
                                  </div>

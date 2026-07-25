@@ -314,7 +314,7 @@ class AdminApiController extends Controller
 
         $discount = $validated['discount'] ?? 0;
         $deliveryCharge = $validated['delivery_charge'] ?? 0;
-        $paidAmount = $validated['paid_amount'] ?? 0;
+        $isPromotional = !empty($validated['is_promotional']);
 
         try {
             DB::beginTransaction();
@@ -328,24 +328,30 @@ class AdminApiController extends Controller
             }
 
             $total = max(0, $subtotal + $deliveryCharge - $discount);
-            
             $customer = Customer::find($validated['customer_id']);
-            $totalPaymentAvailable = $paidAmount + $customer->wallet_balance;
 
             $walletUsed = 0;
             $newAdvance = 0;
             $dueAmount = 0;
 
-            if ($totalPaymentAvailable >= $total) {
-                $walletUsed = max(0, $total - $paidAmount);
-                $newAdvance = max(0, $paidAmount - $total);
+            if ($isPromotional) {
+                $paidAmount = 0;
+                $paymentStatus = 'paid';
             } else {
-                $walletUsed = $customer->wallet_balance;
-                $dueAmount = $total - $totalPaymentAvailable;
-                $newAdvance = 0;
-            }
+                $paidAmount = $validated['paid_amount'] ?? 0;
+                $totalPaymentAvailable = $paidAmount + ($customer ? $customer->wallet_balance : 0);
 
-            $paymentStatus = $dueAmount > 0 ? ($paidAmount > 0 || $walletUsed > 0 ? 'partial' : 'due') : 'paid';
+                if ($totalPaymentAvailable >= $total) {
+                    $walletUsed = max(0, $total - $paidAmount);
+                    $newAdvance = max(0, $paidAmount - $total);
+                } else {
+                    $walletUsed = $customer ? $customer->wallet_balance : 0;
+                    $dueAmount = $total - $totalPaymentAvailable;
+                    $newAdvance = 0;
+                }
+
+                $paymentStatus = $dueAmount > 0 ? ($paidAmount > 0 || $walletUsed > 0 ? 'partial' : 'due') : 'paid';
+            }
 
             // Create Sale
             $sale = Sale::create([
@@ -356,12 +362,12 @@ class AdminApiController extends Controller
                 'subtotal' => $subtotal,
                 'discount' => $discount,
                 'delivery_charge' => $deliveryCharge,
-                'is_promotional' => $validated['is_promotional'] ?? false,
+                'is_promotional' => $isPromotional,
                 'total' => $total,
                 'paid_amount' => $paidAmount,
                 'due_amount' => $dueAmount,
                 'payment_status' => $paymentStatus,
-                'payment_method' => $validated['payment_method'] ?? null,
+                'payment_method' => $isPromotional ? null : ($validated['payment_method'] ?? null),
                 'payment_details' => $validated['payment_details'] ?? null,
                 'estimate_delivery_date' => $request->input('estimate_delivery_date'),
                 'delivery_status' => $request->input('delivery_status'),
@@ -370,15 +376,17 @@ class AdminApiController extends Controller
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
-            // Update Customer Due and Wallet
-            $customer->wallet_balance = $customer->wallet_balance - $walletUsed + $newAdvance;
-            if ($dueAmount > 0) {
-                $customer->total_due += $dueAmount;
+            // Update Customer Due and Wallet (only if not promotional)
+            if (!$isPromotional && $customer) {
+                $customer->wallet_balance = $customer->wallet_balance - $walletUsed + $newAdvance;
+                if ($dueAmount > 0) {
+                    $customer->total_due += $dueAmount;
+                }
+                $customer->save();
             }
-            $customer->save();
 
-            // Record Payment
-            if ($paidAmount > 0) {
+            // Record Payment (only if not promotional)
+            if (!$isPromotional && $paidAmount > 0) {
                 SalePayment::create([
                     'sale_id' => $sale->id,
                     'amount' => $paidAmount,
@@ -418,6 +426,7 @@ class AdminApiController extends Controller
             $inventoryFinAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
             $cogsAcc = ChartOfAccount::firstOrCreate(['name' => 'Cost of Goods Sold', 'type' => 'expense']);
             $salesRevAcc = ChartOfAccount::firstOrCreate(['name' => 'Sales Revenue', 'type' => 'income']);
+            $promoAcc = ChartOfAccount::firstOrCreate(['name' => 'Promotional Expense', 'type' => 'expense']);
             
             $cashAcc = isset($validated['payment_method']) ? ChartOfAccount::find($validated['payment_method']) : ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
             $arAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Receivable', 'type' => 'asset']);
@@ -428,22 +437,26 @@ class AdminApiController extends Controller
                 'date' => $validated['date'],
                 'reference_type' => Sale::class,
                 'reference_id' => $sale->id,
-                'notes' => 'POS Sale ' . $sale->invoice_no . ' (Mobile)',
+                'notes' => 'POS Sale ' . $sale->invoice_no . ' (Mobile' . ($isPromotional ? ', Promotional' : '') . ')',
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
             // 1. Revenue & Payment
-            if ($paidAmount > 0) {
-                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $paidAmount]);
-            }
-            if ($walletUsed > 0) {
-                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'debit', 'amount' => $walletUsed]);
-            }
-            if ($dueAmount > 0) {
-                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => $dueAmount]);
+            if ($isPromotional) {
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $promoAcc->id, 'type' => 'debit', 'amount' => $total]);
+            } else {
+                if ($paidAmount > 0) {
+                    JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $paidAmount]);
+                }
+                if ($walletUsed > 0) {
+                    JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'debit', 'amount' => $walletUsed]);
+                }
+                if ($dueAmount > 0) {
+                    JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => $dueAmount]);
+                }
             }
             JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $salesRevAcc->id, 'type' => 'credit', 'amount' => $total]);
-            if ($newAdvance > 0) {
+            if (!$isPromotional && $newAdvance > 0) {
                 JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'credit', 'amount' => $newAdvance]);
             }
 
@@ -503,24 +516,35 @@ class AdminApiController extends Controller
             $deliveryCharge = $validated['delivery_charge'] ?? 0;
             $total = max(0, $subtotal + $deliveryCharge - $discount);
 
-            $paidAmount = $request->has('paid_amount') ? $request->input('paid_amount') : $oldPaid;
-            $totalPaymentAvailable = $paidAmount + ($customer ? $customer->wallet_balance : 0);
-
-            $walletUsed = 0;
-            $newAdvance = 0;
-            $dueAmount = 0;
-
-            if ($totalPaymentAvailable >= $total) {
-                $walletUsed = max(0, $total - $paidAmount);
-                $newAdvance = max(0, $paidAmount - $total);
-            } else {
-                $walletUsed = $customer ? $customer->wallet_balance : 0;
-                $dueAmount = $total - $totalPaymentAvailable;
+            $isPromotional = $request->has('is_promotional') ? !empty($request->input('is_promotional')) : !empty($sale->is_promotional);
+            
+            if ($isPromotional) {
+                $paidAmount = 0;
+                $walletUsed = 0;
                 $newAdvance = 0;
-            }
+                $dueAmount = 0;
+                $paymentStatus = 'paid';
+                $paymentMethod = null;
+            } else {
+                $paidAmount = $request->has('paid_amount') ? $request->input('paid_amount') : $oldPaid;
+                $totalPaymentAvailable = $paidAmount + ($customer ? $customer->wallet_balance : 0);
 
-            $paymentStatus = $dueAmount > 0 ? ($paidAmount > 0 || $walletUsed > 0 ? 'partial' : 'due') : 'paid';
-            $paymentMethod = $request->input('payment_method', $sale->payment_method);
+                $walletUsed = 0;
+                $newAdvance = 0;
+                $dueAmount = 0;
+
+                if ($totalPaymentAvailable >= $total) {
+                    $walletUsed = max(0, $total - $paidAmount);
+                    $newAdvance = max(0, $paidAmount - $total);
+                } else {
+                    $walletUsed = $customer ? $customer->wallet_balance : 0;
+                    $dueAmount = $total - $totalPaymentAvailable;
+                    $newAdvance = 0;
+                }
+
+                $paymentStatus = $dueAmount > 0 ? ($paidAmount > 0 || $walletUsed > 0 ? 'partial' : 'due') : 'paid';
+                $paymentMethod = $request->input('payment_method', $sale->payment_method);
+            }
             
             $dispatchedAt = $request->input('dispatched_at', $sale->dispatched_at);
             $dispatchedBy = $request->input('dispatched_by', $sale->dispatched_by);
@@ -551,6 +575,7 @@ class AdminApiController extends Controller
                 'subtotal' => $subtotal,
                 'discount' => $discount,
                 'delivery_charge' => $deliveryCharge,
+                'is_promotional' => $isPromotional,
                 'total' => $total,
                 'paid_amount' => $paidAmount,
                 'due_amount' => $dueAmount,
@@ -566,8 +591,8 @@ class AdminApiController extends Controller
                 'consignment_id' => $consignmentId,
             ]);
 
-            // Update Customer Due and Wallet
-            if ($customer) {
+            // Update Customer Due and Wallet (only for non-promotional sales)
+            if (!$isPromotional && $customer) {
                 $customer->wallet_balance = $customer->wallet_balance - $walletUsed + $newAdvance;
                 if ($dueAmount > 0) {
                     $customer->total_due += $dueAmount;
@@ -575,8 +600,8 @@ class AdminApiController extends Controller
                 $customer->save();
             }
 
-            // Record Payment
-            if ($paidAmount > 0) {
+            // Record Payment (only for non-promotional sales)
+            if (!$isPromotional && $paidAmount > 0) {
                 \App\Models\SalePayment::create([
                     'sale_id' => $sale->id,
                     'amount' => $paidAmount,
@@ -698,6 +723,7 @@ class AdminApiController extends Controller
             $inventoryFinAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
             $cogsAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Cost of Goods Sold', 'type' => 'expense']);
             $salesRevAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Sales Revenue', 'type' => 'income']);
+            $promoAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Promotional Expense', 'type' => 'expense']);
             $cashAcc = $paymentMethod ? \App\Models\ChartOfAccount::find($paymentMethod) : \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
             $arAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Accounts Receivable', 'type' => 'asset']);
             $advAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Customer Advance', 'type' => 'liability']);
@@ -707,21 +733,25 @@ class AdminApiController extends Controller
                 'date' => $sale->date,
                 'reference_type' => Sale::class,
                 'reference_id' => $sale->id,
-                'notes' => 'POS Sale ' . $sale->invoice_no . ' (Mobile Updated)',
+                'notes' => 'POS Sale ' . $sale->invoice_no . ' (Mobile Updated' . ($isPromotional ? ', Promotional' : '') . ')',
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
-            if ($paidAmount > 0) {
-                \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $paidAmount]);
-            }
-            if ($walletUsed > 0) {
-                \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'debit', 'amount' => $walletUsed]);
-            }
-            if ($dueAmount > 0) {
-                \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => $dueAmount]);
+            if ($isPromotional) {
+                \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $promoAcc->id, 'type' => 'debit', 'amount' => $total]);
+            } else {
+                if ($paidAmount > 0) {
+                    \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $paidAmount]);
+                }
+                if ($walletUsed > 0) {
+                    \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'debit', 'amount' => $walletUsed]);
+                }
+                if ($dueAmount > 0) {
+                    \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => $dueAmount]);
+                }
             }
             \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $salesRevAcc->id, 'type' => 'credit', 'amount' => $total]);
-            if ($newAdvance > 0) {
+            if (!$isPromotional && $newAdvance > 0) {
                 \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'credit', 'amount' => $newAdvance]);
             }
             // COGS & Inventory Reduction entries are deferred until dispatch
@@ -1395,6 +1425,14 @@ class AdminApiController extends Controller
 
             \App\Models\Batch::where('import_id', $import->id)->delete();
             \App\Models\InventoryTransaction::where('reference_type', Import::class)->where('reference_id', $import->id)->delete();
+            
+            // Delete old journals
+            $journals = \App\Models\Journal::where('reference_type', Import::class)->where('reference_id', $import->id)->get();
+            foreach ($journals as $journal) {
+                \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
+                $journal->delete();
+            }
+
             $import->items()->delete();
 
             // Apply new data
@@ -1411,7 +1449,9 @@ class AdminApiController extends Controller
             ]);
 
             $supplier = \App\Models\Supplier::find($validated['supplier_id']);
-            $supplier->increment('total_payable', $totalCost);
+            if ($supplier) {
+                $supplier->increment('total_payable', $totalCost);
+            }
 
             foreach ($validated['items'] as $item) {
                 $lineTotal = $item['qty'] * $item['unit_cost'];
@@ -1451,6 +1491,33 @@ class AdminApiController extends Controller
                 ]);
             }
 
+            // Create Accounting Entry
+            $inventoryAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
+            $payableAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Accounts Payable', 'type' => 'liability'], ['parent_id' => null]);
+
+            $journal = \App\Models\Journal::create([
+                'journal_no' => 'JNL-' . strtoupper(Str::random(6)),
+                'date' => $validated['date'],
+                'reference_type' => Import::class,
+                'reference_id' => $import->id,
+                'notes' => 'Import Shipment ' . $import->import_no . ' (Updated)',
+                'created_by' => $request->user()->id ?? 1,
+            ]);
+
+            \App\Models\JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $inventoryAcc->id,
+                'type' => 'debit',
+                'amount' => $totalCost,
+            ]);
+
+            \App\Models\JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $payableAcc->id,
+                'type' => 'credit',
+                'amount' => $totalCost,
+            ]);
+
             DB::commit();
             return response()->json(['message' => 'Import updated successfully', 'import' => $import], 200);
 
@@ -1481,9 +1548,9 @@ class AdminApiController extends Controller
             \App\Models\Batch::where('import_id', $import->id)->delete();
             \App\Models\InventoryTransaction::where('reference_type', Import::class)->where('reference_id', $import->id)->delete();
 
-            $journal = Journal::where('reference_type', Import::class)->where('reference_id', $import->id)->first();
-            if ($journal) {
-                JournalEntry::where('journal_id', $journal->id)->delete();
+            $journals = \App\Models\Journal::where('reference_type', Import::class)->where('reference_id', $import->id)->get();
+            foreach ($journals as $journal) {
+                \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
                 $journal->delete();
             }
 
@@ -3176,47 +3243,6 @@ class AdminApiController extends Controller
             'closing_balance' => $closingBalance,
             'entries' => $entries,
         ]);
-    }
-
-    /**
-     * Get unread and read notifications.
-     */
-    public function notifications(Request $request)
-    {
-        $user = $request->user();
-        if (!$user) {
-            return response()->json(['notifications' => [], 'unread_count' => 0]);
-        }
-
-        $notifications = $user->notifications()->take(50)->get();
-        $unreadCount = $user->unreadNotifications()->count();
-
-        // Format for the app
-        $formatted = $notifications->map(function ($notif) {
-            return [
-                'id' => $notif->id,
-                'type' => $notif->data['type'] ?? 'info',
-                'data' => $notif->data,
-                'read_at' => $notif->read_at,
-                'created_at' => $notif->created_at,
-            ];
-        });
-
-        return response()->json([
-            'notifications' => $formatted,
-            'unread_count' => $unreadCount,
-        ]);
-    }
-
-    /**
-     * Mark all notifications as read.
-     */
-    public function markNotificationsRead(Request $request)
-    {
-        if ($request->user()) {
-            $request->user()->unreadNotifications->markAsRead();
-        }
-        return response()->json(['message' => 'Marked as read']);
     }
 }
 

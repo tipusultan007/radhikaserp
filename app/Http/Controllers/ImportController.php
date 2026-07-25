@@ -165,7 +165,9 @@ class ImportController extends Controller
         $suppliers = Supplier::all();
         $warehouses = Warehouse::all();
         $products = Product::where('type', 'raw')->get();
-        return view('imports.edit', compact('import', 'suppliers', 'warehouses', 'products'));
+        $hasConsumedStock = Batch::where('import_id', $import->id)->where('qty_out', '>', 0)->exists();
+
+        return view('imports.edit', compact('import', 'suppliers', 'warehouses', 'products', 'hasConsumedStock'));
     }
 
     public function update(Request $request, Import $import)
@@ -312,8 +314,8 @@ class ImportController extends Controller
         Batch::where('import_id', $import->id)->delete();
 
         // 4. Delete Accounting Entries
-        $journal = Journal::where('reference_type', Import::class)->where('reference_id', $import->id)->first();
-        if ($journal) {
+        $journals = Journal::where('reference_type', Import::class)->where('reference_id', $import->id)->get();
+        foreach ($journals as $journal) {
             JournalEntry::where('journal_id', $journal->id)->delete();
             $journal->delete();
         }
