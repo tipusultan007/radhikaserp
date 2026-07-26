@@ -1191,20 +1191,33 @@ class AdminApiController extends Controller
             ->where('reference_type', \App\Models\Supplier::class)
             ->where('reference_id', $id)
             ->whereHas('entries', function($q) {
-                $q->where('type', 'debit')->whereHas('account', function($q2) {
-                    $q2->where('name', 'Accounts Payable');
-                });
+                $q->where('type', 'debit');
             })
             ->orderBy('date', 'desc')
             ->paginate(20);
 
         $journals->getCollection()->transform(function($journal) {
-            $amount = $journal->entries->where('type', 'debit')->where('account.name', 'Accounts Payable')->sum('amount');
+            $debitEntry = $journal->entries->firstWhere('type', 'debit');
+            $creditEntry = $journal->entries->firstWhere('type', 'credit');
+            $amount = $journal->entries->where('type', 'debit')->sum('amount');
+            if ($amount <= 0 && $debitEntry) {
+                $amount = $debitEntry->amount;
+            }
+
+            $notes = $journal->notes ?? '';
+            $cleanRef = $notes;
+            if (preg_match('/\(Ref:\s*(.*?)\)/i', $notes, $matches)) {
+                $cleanRef = $matches[1];
+            }
+
             return [
                 'id' => $journal->id,
                 'amount' => $amount,
                 'date' => $journal->date,
-                'reference' => $journal->notes,
+                'reference' => $cleanRef,
+                'raw_notes' => $notes,
+                'payment_method_id' => $creditEntry ? $creditEntry->account_id : null,
+                'payment_method' => $creditEntry && $creditEntry->account ? $creditEntry->account->name : 'Cash',
                 'sale' => ['invoice_no' => $journal->journal_no]
             ];
         });
@@ -1714,6 +1727,8 @@ class AdminApiController extends Controller
             'amount' => 'required|numeric|min:1',
             'date' => 'required|date',
             'reference' => 'nullable|string',
+            'payment_method_id' => 'nullable|exists:chart_of_accounts,id',
+            'payment_method' => 'nullable',
         ]);
 
         $supplier = Supplier::findOrFail($validated['supplier_id']);
@@ -1723,7 +1738,15 @@ class AdminApiController extends Controller
 
             $supplier->decrement('total_payable', $validated['amount']);
 
-            $cashAcc = ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
+            $paymentMethodId = $validated['payment_method_id'] ?? $validated['payment_method'] ?? null;
+            $cashAcc = $paymentMethodId 
+                ? ChartOfAccount::find($paymentMethodId) 
+                : ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
+
+            if (!$cashAcc) {
+                $cashAcc = ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
+            }
+
             $apAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Payable', 'type' => 'liability']);
 
             $journal = Journal::create([
@@ -1751,6 +1774,104 @@ class AdminApiController extends Controller
 
             \Illuminate\Support\Facades\DB::commit();
             return response()->json(['message' => 'Supplier payment recorded successfully']);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function updatePayment(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'date' => 'required|date',
+            'reference' => 'nullable|string',
+            'payment_method_id' => 'nullable|exists:chart_of_accounts,id',
+        ]);
+
+        $journal = \App\Models\Journal::with('entries.account')->findOrFail($id);
+
+        try {
+            \Illuminate\Support\Facades\DB::beginTransaction();
+
+            $newAmount = (float)$validated['amount'];
+            $newDate = $validated['date'];
+            $newRef = $validated['reference'] ?? '';
+            $paymentMethodId = $validated['payment_method_id'] ?? null;
+
+            if ($journal->reference_type === \App\Models\Supplier::class) {
+                $supplier = \App\Models\Supplier::findOrFail($journal->reference_id);
+                $apEntry = $journal->entries->first(function($e) {
+                    return $e->type === 'debit';
+                });
+                $oldAmount = $apEntry ? (float)$apEntry->amount : 0.0;
+                $diff = $newAmount - $oldAmount;
+
+                // Adjust supplier payable balance
+                $supplier->decrement('total_payable', $diff);
+
+                // Update journal date & notes
+                $journal->update([
+                    'date' => $newDate,
+                    'notes' => 'API Payment made to Supplier: ' . $supplier->name . ($newRef ? ' (Ref: ' . $newRef . ')' : ''),
+                ]);
+
+                // Update Debit (Accounts Payable)
+                if ($apEntry) {
+                    $apEntry->update(['amount' => $newAmount]);
+                }
+
+                // Update Credit (Cash/Bank account)
+                $creditEntry = $journal->entries->first(function($e) {
+                    return $e->type === 'credit';
+                });
+
+                if ($creditEntry) {
+                    $creditData = ['amount' => $newAmount];
+                    if ($paymentMethodId) {
+                        $creditData['account_id'] = $paymentMethodId;
+                    }
+                    $creditEntry->update($creditData);
+                }
+            } else {
+                $journal->update(['date' => $newDate, 'notes' => $newRef]);
+                foreach ($journal->entries as $entry) {
+                    $entry->update(['amount' => $newAmount]);
+                }
+            }
+
+            \Illuminate\Support\Facades\DB::commit();
+            return response()->json(['message' => 'Payment updated successfully']);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function destroyPayment($id)
+    {
+        $journal = \App\Models\Journal::with('entries')->findOrFail($id);
+
+        try {
+            \Illuminate\Support\Facades\DB::beginTransaction();
+
+            if ($journal->reference_type === \App\Models\Supplier::class) {
+                $supplier = \App\Models\Supplier::find($journal->reference_id);
+                $apEntry = $journal->entries->first(function($e) {
+                    return $e->type === 'debit';
+                });
+                $oldAmount = $apEntry ? (float)$apEntry->amount : 0.0;
+
+                if ($supplier && $oldAmount > 0) {
+                    $supplier->increment('total_payable', $oldAmount);
+                }
+            }
+
+            \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
+            $journal->delete();
+
+            \Illuminate\Support\Facades\DB::commit();
+            return response()->json(['message' => 'Payment deleted successfully']);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\DB::rollBack();
             return response()->json(['error' => $e->getMessage()], 500);

@@ -178,6 +178,10 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         ->middleware('permission:settle customer dues');
     Route::post('/settlements/pay-supplier', [AdminApiController::class, 'paySupplier'])
         ->middleware('permission:settle supplier payables');
+    Route::put('/settlements/payments/{id}', [AdminApiController::class, 'updatePayment'])
+        ->middleware('permission:settle supplier payables|settle customer dues');
+    Route::delete('/settlements/payments/{id}', [AdminApiController::class, 'destroyPayment'])
+        ->middleware('permission:settle supplier payables|settle customer dues');
 
     // ── Stock Transfers ───────────────────────────────────────────────────────
     Route::get('/transfer-form-data', [AdminApiController::class, 'transferFormData'])
