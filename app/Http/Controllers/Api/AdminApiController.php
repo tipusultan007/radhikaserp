@@ -3119,7 +3119,7 @@ class AdminApiController extends Controller
     
     public function expenseFormData()
     {
-        $categories = \App\Models\ExpenseCategory::all(['id', 'name', 'code']);
+        $categories = \App\Models\ExpenseCategory::all(['id', 'name', 'code', 'chart_of_account_id']);
 
         if ($categories->isEmpty()) {
             $defaultCategories = [
@@ -3133,12 +3133,16 @@ class AdminApiController extends Controller
                 'Miscellaneous',
             ];
             foreach ($defaultCategories as $name) {
+                $acc = \App\Models\ChartOfAccount::firstOrCreate(['name' => $name, 'type' => 'expense']);
                 \App\Models\ExpenseCategory::firstOrCreate(
                     ['name' => $name],
-                    ['code' => strtoupper(substr(str_replace(' ', '', $name), 0, 4))]
+                    [
+                        'code' => strtoupper(substr(str_replace(' ', '', $name), 0, 4)),
+                        'chart_of_account_id' => $acc->id,
+                    ]
                 );
             }
-            $categories = \App\Models\ExpenseCategory::all(['id', 'name', 'code']);
+            $categories = \App\Models\ExpenseCategory::all(['id', 'name', 'code', 'chart_of_account_id']);
         }
 
         $paymentMethods = \App\Models\ChartOfAccount::where('is_payment_method', 1)
@@ -3193,18 +3197,28 @@ class AdminApiController extends Controller
             $expense = \App\Models\Expense::create($validated);
 
             $category = \App\Models\ExpenseCategory::find($validated['expense_category_id']);
-            $expenseAccId = $category->chart_of_account_id ?? null;
+            $expenseAccId = $category ? $category->chart_of_account_id : null;
+            if (!$expenseAccId && $category) {
+                $acc = \App\Models\ChartOfAccount::firstOrCreate(['name' => $category->name, 'type' => 'expense']);
+                $category->chart_of_account_id = $acc->id;
+                $category->save();
+                $expenseAccId = $acc->id;
+            }
             if (!$expenseAccId) {
                 $fallbackAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Operational Expenses', 'type' => 'expense']);
                 $expenseAccId = $fallbackAcc->id;
             }
+
+            $journalNotes = !empty($validated['notes'])
+                ? 'Expense: ' . $validated['notes']
+                : 'Expense (' . ($category->name ?? 'Operational Expense') . ')';
 
             $journal = \App\Models\Journal::create([
                 'journal_no' => 'EXP-' . strtoupper(\Illuminate\Support\Str::random(6)),
                 'date' => $validated['date'],
                 'reference_type' => \App\Models\Expense::class,
                 'reference_id' => $expense->id,
-                'notes' => 'Expense: ' . ($validated['notes'] ?? ($category->name ?? 'Operational Expense')),
+                'notes' => $journalNotes,
                 'created_by' => auth()->id() ?? 1,
             ]);
 
@@ -3254,11 +3268,21 @@ class AdminApiController extends Controller
             $expense->update($validated);
 
             $category = \App\Models\ExpenseCategory::find($validated['expense_category_id']);
-            $expenseAccId = $category->chart_of_account_id ?? null;
+            $expenseAccId = $category ? $category->chart_of_account_id : null;
+            if (!$expenseAccId && $category) {
+                $acc = \App\Models\ChartOfAccount::firstOrCreate(['name' => $category->name, 'type' => 'expense']);
+                $category->chart_of_account_id = $acc->id;
+                $category->save();
+                $expenseAccId = $acc->id;
+            }
             if (!$expenseAccId) {
                 $fallbackAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Operational Expenses', 'type' => 'expense']);
                 $expenseAccId = $fallbackAcc->id;
             }
+
+            $journalNotes = !empty($validated['notes'])
+                ? 'Expense: ' . $validated['notes']
+                : 'Expense (' . ($category->name ?? 'Operational Expense') . ')';
 
             $journal = \App\Models\Journal::where('reference_type', \App\Models\Expense::class)
                 ->where('reference_id', $expense->id)
@@ -3270,13 +3294,13 @@ class AdminApiController extends Controller
                     'date' => $validated['date'],
                     'reference_type' => \App\Models\Expense::class,
                     'reference_id' => $expense->id,
-                    'notes' => 'Expense: ' . ($validated['notes'] ?? ($category->name ?? 'Operational Expense')),
+                    'notes' => $journalNotes,
                     'created_by' => auth()->id() ?? 1,
                 ]);
             } else {
                 $journal->update([
                     'date' => $validated['date'],
-                    'notes' => 'Expense: ' . ($validated['notes'] ?? ($category->name ?? 'Operational Expense')),
+                    'notes' => $journalNotes,
                 ]);
                 $journal->entries()->delete();
             }
