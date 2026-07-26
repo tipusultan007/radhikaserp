@@ -3124,12 +3124,8 @@ class AdminApiController extends Controller
         }
 
         $paymentMethods = \App\Models\ChartOfAccount::where('is_payment_method', 1)
-            ->orWhereIn('type', ['asset', 'bank', 'cash'])
+            ->orWhereIn('type', ['cash', 'bank'])
             ->get(['id', 'name', 'type']);
-
-        if ($paymentMethods->isEmpty()) {
-            $paymentMethods = \App\Models\ChartOfAccount::where('type', 'asset')->get(['id', 'name', 'type']);
-        }
 
         return response()->json([
             'categories' => $categories,
