@@ -3101,17 +3101,34 @@ class AdminApiController extends Controller
     
     public function expenseFormData()
     {
-        $categories = \App\Models\ExpenseCategory::where('status', 1)
-            ->orWhereNull('status')
-            ->get(['id', 'name', 'code']);
+        $categories = \App\Models\ExpenseCategory::all(['id', 'name', 'code']);
 
-        $paymentMethods = \App\Models\ChartOfAccount::where('is_payment_method', true)
-            ->orWhere('is_cash_bank', 1)
+        if ($categories->isEmpty()) {
+            $defaultCategories = [
+                'Office Expenses',
+                'Utility & Bills',
+                'Rent Expense',
+                'Salaries & Wages',
+                'Transport & Travel',
+                'Marketing & Ads',
+                'Maintenance & Repair',
+                'Miscellaneous',
+            ];
+            foreach ($defaultCategories as $name) {
+                \App\Models\ExpenseCategory::firstOrCreate(
+                    ['name' => $name],
+                    ['code' => strtoupper(substr(str_replace(' ', '', $name), 0, 4))]
+                );
+            }
+            $categories = \App\Models\ExpenseCategory::all(['id', 'name', 'code']);
+        }
+
+        $paymentMethods = \App\Models\ChartOfAccount::where('is_payment_method', 1)
             ->orWhereIn('type', ['asset', 'bank', 'cash'])
-            ->get(['id', 'name', 'code', 'type']);
+            ->get(['id', 'name', 'type']);
 
         if ($paymentMethods->isEmpty()) {
-            $paymentMethods = \App\Models\ChartOfAccount::where('type', 'asset')->get(['id', 'name', 'code']);
+            $paymentMethods = \App\Models\ChartOfAccount::where('type', 'asset')->get(['id', 'name', 'type']);
         }
 
         return response()->json([
