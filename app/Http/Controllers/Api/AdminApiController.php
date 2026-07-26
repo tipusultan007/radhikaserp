@@ -2737,7 +2737,25 @@ class AdminApiController extends Controller
      */
     public function journals(Request $request)
     {
-        $journals = Journal::with(['entries.account', 'creator'])->orderBy('id', 'desc')->paginate(20);
+        $query = Journal::with(['entries.account', 'creator']);
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('date', '>=', $request->start_date);
+        }
+
+        if ($request->filled('end_date')) {
+            $query->whereDate('date', '<=', $request->end_date);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('journal_no', 'like', "%{$search}%")
+                  ->orWhere('notes', 'like', "%{$search}%");
+            });
+        }
+
+        $journals = $query->orderBy('date', 'desc')->orderBy('id', 'desc')->paginate($request->get('per_page', 20));
         return response()->json(['journals' => $journals]);
     }
 
@@ -3162,54 +3180,56 @@ class AdminApiController extends Controller
         $validated = $request->validate([
             'expense_category_id' => 'required|exists:expense_categories,id',
             'payment_method_id' => 'required|exists:chart_of_accounts,id',
-            'amount' => 'required|numeric|min:0',
+            'amount' => 'required|numeric|min:0.01',
             'date' => 'required|date',
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
         ]);
 
-        $validated['created_by'] = auth()->id();
+        $validated['created_by'] = auth()->id() ?? 1;
 
-        // Start transaction
         \DB::beginTransaction();
         try {
             $expense = \App\Models\Expense::create($validated);
-            
-            // Generate Journal Entry
+
             $category = \App\Models\ExpenseCategory::find($validated['expense_category_id']);
-            
-            if ($category && $category->chart_of_account_id) {
-                $journal = \App\Models\Journal::create([
-                    'date' => $validated['date'],
-                    'description' => 'Expense: ' . ($validated['notes'] ?? 'Auto generated'),
-                    'reference' => 'EXP-' . $expense->id,
-                    'created_by' => auth()->id(),
-                    'warehouse_id' => null,
-                ]);
-
-                // Debit Expense Account
-                \App\Models\JournalEntry::create([
-                    'journal_id' => $journal->id,
-                    'chart_of_account_id' => $category->chart_of_account_id,
-                    'type' => 'debit',
-                    'amount' => $validated['amount'],
-                ]);
-
-                // Credit Payment Method
-                \App\Models\JournalEntry::create([
-                    'journal_id' => $journal->id,
-                    'chart_of_account_id' => $validated['payment_method_id'],
-                    'type' => 'credit',
-                    'amount' => $validated['amount'],
-                ]);
-                
-                $expense->reference_type = \App\Models\Journal::class;
-                $expense->reference_id = $journal->id;
-                $expense->save();
+            $expenseAccId = $category->chart_of_account_id ?? null;
+            if (!$expenseAccId) {
+                $fallbackAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Operational Expenses', 'type' => 'expense']);
+                $expenseAccId = $fallbackAcc->id;
             }
-            
+
+            $journal = \App\Models\Journal::create([
+                'journal_no' => 'EXP-' . strtoupper(\Illuminate\Support\Str::random(6)),
+                'date' => $validated['date'],
+                'reference_type' => \App\Models\Expense::class,
+                'reference_id' => $expense->id,
+                'notes' => 'Expense: ' . ($validated['notes'] ?? ($category->name ?? 'Operational Expense')),
+                'created_by' => auth()->id() ?? 1,
+            ]);
+
+            // Debit Expense Account
+            \App\Models\JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $expenseAccId,
+                'type' => 'debit',
+                'amount' => $validated['amount'],
+            ]);
+
+            // Credit Payment Method Account
+            \App\Models\JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $validated['payment_method_id'],
+                'type' => 'credit',
+                'amount' => $validated['amount'],
+            ]);
+
+            $expense->reference_type = \App\Models\Journal::class;
+            $expense->reference_id = $journal->id;
+            $expense->save();
+
             \DB::commit();
-            return response()->json(['message' => 'Expense created successfully', 'expense' => $expense], 201);
+            return response()->json(['message' => 'Expense created successfully', 'expense' => $expense->load(['category', 'paymentMethod'])], 201);
         } catch (\Exception $e) {
             \DB::rollBack();
             return response()->json(['error' => 'Failed to create expense: ' . $e->getMessage()], 500);
@@ -3219,11 +3239,11 @@ class AdminApiController extends Controller
     public function updateExpense(Request $request, $id)
     {
         $expense = \App\Models\Expense::findOrFail($id);
-        
+
         $validated = $request->validate([
             'expense_category_id' => 'required|exists:expense_categories,id',
             'payment_method_id' => 'required|exists:chart_of_accounts,id',
-            'amount' => 'required|numeric|min:0',
+            'amount' => 'required|numeric|min:0.01',
             'date' => 'required|date',
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
@@ -3232,42 +3252,53 @@ class AdminApiController extends Controller
         \DB::beginTransaction();
         try {
             $expense->update($validated);
-            
-            // Update Journal Entry if it exists
-            if ($expense->reference_type === \App\Models\Journal::class && $expense->reference_id) {
-                $journal = \App\Models\Journal::find($expense->reference_id);
-                if ($journal) {
-                    $journal->update([
-                        'date' => $validated['date'],
-                        'description' => 'Expense: ' . ($validated['notes'] ?? 'Auto generated'),
-                    ]);
-                    
-                    // Recreate entries
-                    $journal->entries()->delete();
-                    
-                    $category = \App\Models\ExpenseCategory::find($validated['expense_category_id']);
-                    if ($category && $category->chart_of_account_id) {
-                         // Debit Expense Account
-                        \App\Models\JournalEntry::create([
-                            'journal_id' => $journal->id,
-                            'chart_of_account_id' => $category->chart_of_account_id,
-                            'type' => 'debit',
-                            'amount' => $validated['amount'],
-                        ]);
 
-                        // Credit Payment Method
-                        \App\Models\JournalEntry::create([
-                            'journal_id' => $journal->id,
-                            'chart_of_account_id' => $validated['payment_method_id'],
-                            'type' => 'credit',
-                            'amount' => $validated['amount'],
-                        ]);
-                    }
-                }
+            $category = \App\Models\ExpenseCategory::find($validated['expense_category_id']);
+            $expenseAccId = $category->chart_of_account_id ?? null;
+            if (!$expenseAccId) {
+                $fallbackAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Operational Expenses', 'type' => 'expense']);
+                $expenseAccId = $fallbackAcc->id;
             }
-            
+
+            $journal = \App\Models\Journal::where('reference_type', \App\Models\Expense::class)
+                ->where('reference_id', $expense->id)
+                ->first();
+
+            if (!$journal) {
+                $journal = \App\Models\Journal::create([
+                    'journal_no' => 'EXP-' . strtoupper(\Illuminate\Support\Str::random(6)),
+                    'date' => $validated['date'],
+                    'reference_type' => \App\Models\Expense::class,
+                    'reference_id' => $expense->id,
+                    'notes' => 'Expense: ' . ($validated['notes'] ?? ($category->name ?? 'Operational Expense')),
+                    'created_by' => auth()->id() ?? 1,
+                ]);
+            } else {
+                $journal->update([
+                    'date' => $validated['date'],
+                    'notes' => 'Expense: ' . ($validated['notes'] ?? ($category->name ?? 'Operational Expense')),
+                ]);
+                $journal->entries()->delete();
+            }
+
+            // Debit Expense Account
+            \App\Models\JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $expenseAccId,
+                'type' => 'debit',
+                'amount' => $validated['amount'],
+            ]);
+
+            // Credit Payment Method Account
+            \App\Models\JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $validated['payment_method_id'],
+                'type' => 'credit',
+                'amount' => $validated['amount'],
+            ]);
+
             \DB::commit();
-            return response()->json(['message' => 'Expense updated successfully', 'expense' => $expense]);
+            return response()->json(['message' => 'Expense updated successfully', 'expense' => $expense->load(['category', 'paymentMethod'])]);
         } catch (\Exception $e) {
             \DB::rollBack();
             return response()->json(['error' => 'Failed to update expense: ' . $e->getMessage()], 500);
@@ -3277,18 +3308,18 @@ class AdminApiController extends Controller
     public function destroyExpense($id)
     {
         $expense = \App\Models\Expense::findOrFail($id);
-        
+
         \DB::beginTransaction();
         try {
-            // Delete Journal Entry if it exists
-            if ($expense->reference_type === \App\Models\Journal::class && $expense->reference_id) {
-                $journal = \App\Models\Journal::find($expense->reference_id);
-                if ($journal) {
-                    $journal->entries()->delete();
-                    $journal->delete();
-                }
+            $journals = \App\Models\Journal::where('reference_type', \App\Models\Expense::class)
+                ->where('reference_id', $expense->id)
+                ->get();
+
+            foreach ($journals as $journal) {
+                $journal->entries()->delete();
+                $journal->delete();
             }
-            
+
             $expense->delete();
             \DB::commit();
             return response()->json(['message' => 'Expense deleted successfully']);
