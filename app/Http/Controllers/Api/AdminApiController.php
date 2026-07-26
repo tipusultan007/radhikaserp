@@ -3365,5 +3365,201 @@ class AdminApiController extends Controller
             'entries' => $entries,
         ]);
     }
+
+    // ── Expenses API ─────────────────────────────────────────────────────────
+
+    public function expenseFormData()
+    {
+        $categories = \App\Models\ExpenseCategory::where('status', 1)
+            ->orWhereNull('status')
+            ->get(['id', 'name', 'code']);
+
+        $paymentMethods = \App\Models\ChartOfAccount::where('is_payment_method', true)
+            ->orWhereIn('type', ['asset', 'bank', 'cash'])
+            ->get(['id', 'name', 'code', 'type']);
+
+        if ($paymentMethods->isEmpty()) {
+            $paymentMethods = \App\Models\ChartOfAccount::where('type', 'asset')->get(['id', 'name', 'code']);
+        }
+
+        return response()->json([
+            'categories' => $categories,
+            'paymentMethods' => $paymentMethods,
+            'payment_methods' => $paymentMethods,
+        ]);
+    }
+
+    public function expenses(Request $request)
+    {
+        $query = \App\Models\Expense::with(['category', 'paymentMethod']);
+
+        if ($request->filled('category_id')) {
+            $query->where('expense_category_id', $request->category_id);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('reference', 'like', "%{$search}%")
+                  ->orWhere('notes', 'like', "%{$search}%")
+                  ->orWhereHas('category', function($cq) use ($search) {
+                      $cq->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $expenses = $query->orderBy('date', 'desc')->paginate($request->get('per_page', 20));
+
+        return response()->json(['expenses' => $expenses]);
+    }
+
+    public function storeExpense(Request $request)
+    {
+        $validated = $request->validate([
+            'expense_category_id' => 'required|exists:expense_categories,id',
+            'amount' => 'required|numeric|min:0.01',
+            'date' => 'required|date',
+            'payment_method_id' => 'required|exists:chart_of_accounts,id',
+            'reference' => 'nullable|string',
+            'notes' => 'nullable|string',
+        ]);
+
+        $validated['created_by'] = $request->user()->id ?? 1;
+
+        try {
+            \Illuminate\Support\Facades\DB::beginTransaction();
+
+            $expense = \App\Models\Expense::create($validated);
+
+            // Accounting integration
+            $category = \App\Models\ExpenseCategory::find($validated['expense_category_id']);
+            $expenseAccId = $category->chart_of_account_id ?? null;
+
+            if (!$expenseAccId) {
+                $fallbackAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Operational Expenses', 'type' => 'expense']);
+                $expenseAccId = $fallbackAcc->id;
+            }
+
+            $paymentAcc = \App\Models\ChartOfAccount::findOrFail($validated['payment_method_id']);
+
+            $journal = \App\Models\Journal::create([
+                'journal_no' => 'EXP-' . strtoupper(\Illuminate\Support\Str::random(6)),
+                'date' => $validated['date'],
+                'reference_type' => \App\Models\Expense::class,
+                'reference_id' => $expense->id,
+                'notes' => 'Expense: ' . ($validated['notes'] ?? 'Operational Expense'),
+                'created_by' => $request->user()->id ?? 1,
+            ]);
+
+            \App\Models\JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $expenseAccId,
+                'type' => 'debit',
+                'amount' => $validated['amount'],
+            ]);
+
+            \App\Models\JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $paymentAcc->id,
+                'type' => 'credit',
+                'amount' => $validated['amount'],
+            ]);
+
+            \Illuminate\Support\Facades\DB::commit();
+
+            return response()->json([
+                'message' => 'Expense recorded successfully',
+                'expense' => $expense->load(['category', 'paymentMethod']),
+            ], 201);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function updateExpense(Request $request, $id)
+    {
+        $expense = \App\Models\Expense::findOrFail($id);
+
+        $validated = $request->validate([
+            'expense_category_id' => 'required|exists:expense_categories,id',
+            'amount' => 'required|numeric|min:0.01',
+            'date' => 'required|date',
+            'payment_method_id' => 'required|exists:chart_of_accounts,id',
+            'reference' => 'nullable|string',
+            'notes' => 'nullable|string',
+        ]);
+
+        try {
+            \Illuminate\Support\Facades\DB::beginTransaction();
+
+            $expense->update($validated);
+
+            $journal = \App\Models\Journal::where('reference_type', \App\Models\Expense::class)
+                ->where('reference_id', $expense->id)
+                ->first();
+
+            if ($journal) {
+                $category = \App\Models\ExpenseCategory::find($validated['expense_category_id']);
+                $expenseAccId = $category->chart_of_account_id ?? null;
+                if (!$expenseAccId) {
+                    $fallbackAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Operational Expenses', 'type' => 'expense']);
+                    $expenseAccId = $fallbackAcc->id;
+                }
+
+                $journal->update([
+                    'date' => $validated['date'],
+                    'notes' => 'Expense: ' . ($validated['notes'] ?? 'Operational Expense'),
+                ]);
+
+                $debitEntry = \App\Models\JournalEntry::where('journal_id', $journal->id)->where('type', 'debit')->first();
+                if ($debitEntry) {
+                    $debitEntry->update(['account_id' => $expenseAccId, 'amount' => $validated['amount']]);
+                }
+
+                $creditEntry = \App\Models\JournalEntry::where('journal_id', $journal->id)->where('type', 'credit')->first();
+                if ($creditEntry) {
+                    $creditEntry->update(['account_id' => $validated['payment_method_id'], 'amount' => $validated['amount']]);
+                }
+            }
+
+            \Illuminate\Support\Facades\DB::commit();
+
+            return response()->json([
+                'message' => 'Expense updated successfully',
+                'expense' => $expense->load(['category', 'paymentMethod']),
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function destroyExpense($id)
+    {
+        $expense = \App\Models\Expense::findOrFail($id);
+
+        try {
+            \Illuminate\Support\Facades\DB::beginTransaction();
+
+            $journals = \App\Models\Journal::where('reference_type', \App\Models\Expense::class)
+                ->where('reference_id', $expense->id)
+                ->get();
+
+            foreach ($journals as $journal) {
+                \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
+                $journal->delete();
+            }
+
+            $expense->delete();
+
+            \Illuminate\Support\Facades\DB::commit();
+
+            return response()->json(['message' => 'Expense deleted successfully']);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }
 
