@@ -3060,7 +3060,7 @@ class AdminApiController extends Controller
     
     public function expenseCategoryFormData()
     {
-        $coas = \App\Models\ChartOfAccount::where('type', 'expense')->where('status', 1)->get(['id', 'name', 'code']);
+        $coas = \App\Models\ChartOfAccount::where('type', 'expense')->get(['id', 'name']);
         $categories = \App\Models\ExpenseCategory::where('status', 1)->get(['id', 'name']);
         return response()->json([
             'chart_of_accounts' => $coas,
