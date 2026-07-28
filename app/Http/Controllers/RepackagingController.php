@@ -61,8 +61,10 @@ class RepackagingController extends Controller
             'date' => 'required|date',
             'input_product_id' => 'required|exists:products,id',
             'input_qty' => 'required|numeric|min:0.001',
-            'output_item' => 'required|string',
-            'output_qty' => 'required|numeric|min:0.001',
+            'output_items' => 'required|array',
+            'output_items.*' => 'required|string',
+            'output_qtys' => 'required|array',
+            'output_qtys.*' => 'required|numeric|min:0.001',
             'expenses' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
         ]);
@@ -113,9 +115,44 @@ class RepackagingController extends Controller
                 throw new \Exception("Insufficient raw stock in the selected warehouse. Shortfall: " . $remainingToConsume);
             }
 
-            // 2. Cost Redistribution
+            // 2. Pre-process Outputs and Calculate Total Weight
+            $outputItemsData = [];
+            $totalOutputWeight = 0;
+
+            foreach ($validated['output_items'] as $index => $itemString) {
+                $qty = $validated['output_qtys'][$index];
+                
+                $outputParts = explode('_', $itemString);
+                $outputType = $outputParts[0];
+                $outputId = $outputParts[1];
+                
+                $productId = null;
+                $variantId = null;
+                $unitQty = 1;
+
+                if ($outputType === 'product') {
+                    $productId = $outputId;
+                } else {
+                    $variantId = $outputId;
+                    $variant = ProductVariant::find($variantId);
+                    $productId = $variant->product_id;
+                    $unitQty = $variant->getBaseQuantity();
+                }
+
+                $weight = $qty * $unitQty;
+                $totalOutputWeight += $weight;
+
+                $outputItemsData[] = [
+                    'product_id' => $productId,
+                    'variant_id' => $variantId,
+                    'qty' => $qty,
+                    'weight' => $weight,
+                    'unit_qty' => $unitQty
+                ];
+            }
+
+            // Cost Redistribution
             $totalCost = $totalRawCost + $expenses;
-            $outputUnitCost = $totalCost / $validated['output_qty'];
 
             // 3. Create Repackaging Order
             $order = RepackagingOrder::create([
@@ -126,7 +163,7 @@ class RepackagingController extends Controller
                 'notes' => $validated['notes'] ?? '',
             ]);
 
-            // 4. Create Inputs & Output
+            // 4. Create Inputs
             foreach ($consumedBatches as $consumed) {
                 RepackagingInput::create([
                     'repackaging_order_id' => $order->id,
@@ -151,67 +188,54 @@ class RepackagingController extends Controller
                 ]);
             }
 
-            $outputParts = explode('_', $validated['output_item']);
-            $outputType = $outputParts[0];
-            $outputId = $outputParts[1];
-            
-            $productId = null;
-            $variantId = null;
-            $unitQty = 1; // Default for standard products
+            // 5. Create Outputs
+            foreach ($outputItemsData as $outItem) {
+                $proportion = $totalOutputWeight > 0 ? ($outItem['weight'] / $totalOutputWeight) : 0;
+                $variantTotalCost = $totalCost * $proportion;
+                $variantUnitCost = $outItem['qty'] > 0 ? ($variantTotalCost / $outItem['qty']) : 0;
 
-            if ($outputType === 'product') {
-                $productId = $outputId;
-            } else {
-                $variantId = $outputId;
-                $variant = ProductVariant::find($variantId);
-                $productId = $variant->product_id;
-                $unitQty = $variant->getBaseQuantity();
+                RepackagingOutput::create([
+                    'repackaging_order_id' => $order->id,
+                    'product_id' => $outItem['product_id'],
+                    'product_variant_id' => $outItem['variant_id'],
+                    'warehouse_id' => $warehouseId,
+                    'qty_produced' => $outItem['qty'],
+                    'unit_cost' => $variantUnitCost,
+                    'total_cost' => $variantTotalCost,
+                ]);
+
+                $outputBatch = Batch::create([
+                    'batch_no' => 'B-' . $order->id . '-' . $outItem['product_id'] . '-FIN-' . strtoupper(Str::random(4)),
+                    'product_id' => $outItem['product_id'],
+                    'product_variant_id' => $outItem['variant_id'],
+                    'warehouse_id' => $warehouseId,
+                    'import_id' => null,
+                    'qty_in' => $outItem['qty'],
+                    'qty_out' => 0,
+                    'remaining_qty' => $outItem['qty'],
+                    'cost_per_unit' => $variantUnitCost,
+                    'expiry_date' => null,
+                ]);
+
+                InventoryTransaction::create([
+                    'warehouse_id' => $warehouseId,
+                    'product_id' => $outItem['product_id'],
+                    'product_variant_id' => $outItem['variant_id'],
+                    'batch_id' => $outputBatch->id,
+                    'type' => 'repack_output',
+                    'qty_in' => $outItem['qty'],
+                    'qty_out' => 0,
+                    'cost' => $variantTotalCost,
+                    'reference_type' => RepackagingOrder::class,
+                    'reference_id' => $order->id,
+                    'date' => $validated['date'],
+                    'created_by' => auth()->id() ?? 1,
+                ]);
             }
 
-            RepackagingOutput::create([
-                'repackaging_order_id' => $order->id,
-                'product_id' => $productId,
-                'product_variant_id' => $variantId,
-                'warehouse_id' => $warehouseId,
-                'qty_produced' => $validated['output_qty'],
-                'unit_cost' => $outputUnitCost,
-                'total_cost' => $totalCost,
-            ]);
-
-            // Create Batch for output Variant so it can be sold via POS
-            $outputBatch = Batch::create([
-                'batch_no' => 'B-' . $order->id . '-' . $productId . '-FIN-' . strtoupper(Str::random(4)),
-                'product_id' => $productId, // Linked to Master Product
-                'product_variant_id' => $variantId,
-                'warehouse_id' => $warehouseId,
-                'import_id' => null, // Produced internally
-                'qty_in' => $validated['output_qty'],
-                'qty_out' => 0,
-                'remaining_qty' => $validated['output_qty'],
-                'cost_per_unit' => $outputUnitCost,
-                'expiry_date' => null,
-            ]);
-
-            // Inventory Transaction for Output (In)
-            InventoryTransaction::create([
-                'warehouse_id' => $warehouseId,
-                'product_id' => $productId,
-                'product_variant_id' => $variantId,
-                'batch_id' => $outputBatch->id,
-                'type' => 'repack_output',
-                'qty_in' => $validated['output_qty'],
-                'qty_out' => 0,
-                'cost' => $totalCost,
-                'reference_type' => RepackagingOrder::class,
-                'reference_id' => $order->id,
-                'date' => $validated['date'],
-                'created_by' => auth()->id() ?? 1,
-            ]);
-
-            // Yield Calculation (Optional Tracking)
-            $totalOutputKg = $validated['output_qty'] * $unitQty;
-            if ($inputQty != $totalOutputKg) {
-                $diff = $totalOutputKg - $inputQty;
+            // Yield Calculation
+            if ($inputQty != $totalOutputWeight) {
+                $diff = $totalOutputWeight - $inputQty;
                 RepackagingAdjustment::create([
                     'repackaging_order_id' => $order->id,
                     'type' => $diff > 0 ? 'gain' : 'loss',
@@ -539,7 +563,10 @@ class RepackagingController extends Controller
         }
 
         // 1. Delete Inventory Transactions FIRST to remove foreign key dependencies
-        InventoryTransaction::where('reference_type', RepackagingOrder::class)->where('reference_id', $repackaging->id)->delete();
+        $transactions = InventoryTransaction::where('reference_type', RepackagingOrder::class)->where('reference_id', $repackaging->id)->get();
+        foreach ($transactions as $txn) {
+            $txn->delete();
+        }
 
         // 2. Delete Output Batches
         foreach ($outputBatches as $batch) {

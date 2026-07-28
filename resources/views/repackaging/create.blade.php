@@ -123,31 +123,45 @@
                                  </div>
                              </div>
 
-                             <div class="mb-4">
-                                 <label class="form-label fw-semibold">Output Item (Product or Variant) <span class="text-danger">*</span></label>
-                                 <select name="output_item" id="output_item" class="form-select select2" required>
-                                     <option value="" data-unit="" data-qty="1">Search Target Item...</option>
-                                     @foreach($variants as $variant)
-                                         @php
-                                             $displayName = $variant->product->name;
-                                             if ($variant->name !== $variant->product->name && $variant->name !== 'Default') {
-                                                 $displayName .= ' - ' . $variant->name;
-                                             }
-                                         @endphp
-                                         <option value="variant_{{ $variant->id }}" data-unit="{{ $variant->product->unit->short_name ?? '' }}" data-qty="{{ $variant->unit_qty }}">{{ $displayName }}</option>
-                                     @endforeach
-                                 </select>
+                             <div id="output-items-container">
+                                 <div class="output-row mb-2 border-bottom pb-2">
+                                     <div class="row align-items-end gx-2">
+                                         <div class="col-md-7 mb-2">
+                                             <label class="form-label fw-semibold fs-13 mb-1">Output Item <span class="text-danger">*</span></label>
+                                             <select name="output_items[]" class="form-select select2 output-item-select" required>
+                                                 <option value="" data-unit="" data-qty="1">Search Target Item...</option>
+                                                 @foreach($variants as $variant)
+                                                     @php
+                                                         $displayName = $variant->product->name;
+                                                         if ($variant->name !== $variant->product->name && $variant->name !== 'Default') {
+                                                             $displayName .= ' - ' . $variant->name;
+                                                         }
+                                                     @endphp
+                                                     <option value="variant_{{ $variant->id }}" data-unit="{{ $variant->product->unit->short_name ?? '' }}" data-qty="{{ $variant->unit_qty }}">{{ $displayName }}</option>
+                                                 @endforeach
+                                             </select>
+                                         </div>
+                                         
+                                         <div class="col-md-4 mb-2">
+                                             <label class="form-label fw-semibold fs-13 mb-1">Qty <span class="text-danger">*</span></label>
+                                             <div class="input-group">
+                                                 <input type="number" step="0.001" min="0.001" name="output_qtys[]" class="form-control output-qty-input" placeholder="0.00" required>
+                                                 <span class="input-group-text fw-bold text-success output-unit-display px-2 fs-13">Pkg</span>
+                                             </div>
+                                         </div>
+                                         
+                                         <div class="col-md-1 mb-2">
+                                             <button type="button" class="btn btn-outline-danger remove-output-row w-100" style="display:none;" title="Remove"><i class="ri-delete-bin-line"></i></button>
+                                         </div>
+                                     </div>
+                                     <div class="text-end mb-1">
+                                        <span class="badge bg-success-subtle text-success fs-12 px-2 py-1 output-summary-display" style="display:none;"></span>
+                                     </div>
+                                 </div>
                              </div>
                              
-                             <div class="mb-3">
-                                 <label class="form-label fw-semibold">Quantity Produced (Packages/Units) <span class="text-danger">*</span></label>
-                                 <div class="input-group input-group-lg">
-                                     <input type="number" step="0.001" min="0.001" name="output_qty" id="output_qty" class="form-control" placeholder="0.00" required>
-                                     <span class="input-group-text fw-bold text-success" id="output_unit_display">Pkg</span>
-                                 </div>
-                                 <div class="mt-2 text-end">
-                                    <span class="badge bg-success-subtle text-success fs-13 px-2 py-1" id="output_summary" style="display:none;"></span>
-                                 </div>
+                             <div class="text-center mt-3">
+                                 <button type="button" class="btn btn-success btn-sm" id="add-output-row"><i class="ri-add-line"></i> Add Another Output Item</button>
                              </div>
                          </div>
                      </div>
@@ -240,24 +254,35 @@ $(document).ready(function() {
             $('#input_summary').hide();
         }
 
-        // Output logic
-        let outputOption = $('#output_item').find(':selected');
-        let outputUnit = outputOption.data('unit') || 'Pkg';
-        let unitQty = parseFloat(outputOption.data('qty')) || 1;
-        let outputQty = parseFloat($('#output_qty').val()) || 0;
-        let totalOutputWeight = outputQty * unitQty;
+        // Output logic (Multiple outputs)
+        let totalOutputWeight = 0;
         
-        let displayLabel = outputOption.val() && outputOption.val().startsWith('variant') ? 'Packages' : outputUnit;
-        $('#output_unit_display').text(displayLabel);
+        $('.output-row').each(function() {
+            let row = $(this);
+            let outputOption = row.find('.output-item-select').find(':selected');
+            let outputUnit = outputOption.data('unit') || 'Pkg';
+            let unitQty = parseFloat(outputOption.data('qty')) || 1;
+            let outputQty = parseFloat(row.find('.output-qty-input').val()) || 0;
+            let rowOutputWeight = outputQty * unitQty;
+            
+            totalOutputWeight += rowOutputWeight;
+            
+            let displayLabel = outputOption.val() && outputOption.val().startsWith('variant') ? 'Packages' : outputUnit;
+            row.find('.output-unit-display').text(displayLabel);
+            
+            if (outputOption.val() && outputQty > 0) {
+                row.find('.output-summary-display').text(`Equivalent Base Weight: ${rowOutputWeight.toFixed(3)} ${outputUnit}`).show();
+            } else {
+                row.find('.output-summary-display').hide();
+            }
+        });
         
-        if (outputOption.val() && outputQty > 0) {
-            $('#output_summary').text(`Equivalent Base Weight: ${totalOutputWeight.toFixed(3)} ${outputUnit}`).show();
-        } else {
-            $('#output_summary').hide();
-        }
+        // We will assume the base unit is the same for all outputs or take the input unit for comparison.
+        // Usually, all outputs should have the same base unit as the input for repackaging.
+        let outputUnit = inputUnit; // Assuming comparison matches input unit
 
         // Yield Calculation
-        if (inputOption.val() && inputQty > 0 && outputOption.val() && outputQty > 0 && inputUnit === outputUnit) {
+        if (inputOption.val() && inputQty > 0 && totalOutputWeight > 0) {
             $('#yield_summary_box').slideDown();
             let diff = totalOutputWeight - inputQty;
             if (diff > 0) {
@@ -267,16 +292,47 @@ $(document).ready(function() {
             } else {
                 $('#yield_text').html(`<span class="text-dark fw-bold"><i class="ri-check-line text-success"></i> Exact Match:</span> Input and Output weights match perfectly. No loss or gain will be recorded.`);
             }
-        } else if (inputUnit !== outputUnit && inputOption.val() && outputOption.val()) {
-            $('#yield_summary_box').slideDown();
-            $('#yield_text').html(`<span class="text-warning fw-bold"><i class="ri-error-warning-line"></i> Unit Mismatch:</span> Cannot accurately calculate yield because base units differ (${inputUnit} vs ${outputUnit}).`);
         } else {
             $('#yield_summary_box').slideUp();
         }
     }
 
-    $('#input_product_id, #output_item').on('change', calculateYield);
-    $('#input_qty, #output_qty').on('input', calculateYield);
+    $(document).on('change', '#input_product_id, .output-item-select', calculateYield);
+    $(document).on('input', '#input_qty, .output-qty-input', calculateYield);
+    
+    // Add new output row
+    $('#add-output-row').click(function() {
+        let container = $('#output-items-container');
+        let newRow = container.find('.output-row:first').clone();
+        
+        // Reset values and select2
+        newRow.find('.output-item-select').removeClass('select2-hidden-accessible').next('.select2-container').remove();
+        newRow.find('.output-item-select').val('');
+        newRow.find('.output-qty-input').val('');
+        newRow.find('.output-summary-display').hide();
+        newRow.find('.remove-output-row').show();
+        
+        container.append(newRow);
+        newRow.find('.output-item-select').select2({ width: '100%' });
+        
+        // Show remove button on first row if there is more than one row
+        if ($('.output-row').length > 1) {
+            $('.output-row:first .remove-output-row').show();
+        }
+    });
+
+    // Remove output row
+    $(document).on('click', '.remove-output-row', function() {
+        if ($('.output-row').length > 1) {
+            $(this).closest('.output-row').remove();
+            calculateYield();
+            
+            // Hide remove button on first row if it is the only one left
+            if ($('.output-row').length === 1) {
+                $('.output-row:first .remove-output-row').hide();
+            }
+        }
+    });
     
     // Prevent double submission
     $('#repackagingForm').submit(function() {

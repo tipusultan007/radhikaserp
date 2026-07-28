@@ -2696,9 +2696,59 @@ class AdminApiController extends Controller
 
     public function destroyRepackaging($id)
     {
-        // Reversal logic skipped for API simplification unless specifically requested, just deleting order record
-        RepackagingOrder::destroy($id);
-        return response()->json(['message' => 'Repackaging deleted']);
+        try {
+            \Illuminate\Support\Facades\DB::beginTransaction();
+            $repackaging = RepackagingOrder::findOrFail($id);
+            $repackaging->load(['inputs.batch', 'outputs']);
+
+            // Prevent reversal if output stock has been consumed
+            $outputBatches = \App\Models\Batch::where('batch_no', 'like', 'B-' . $repackaging->id . '-%FIN-%')->get();
+            foreach ($outputBatches as $batch) {
+                if ($batch->qty_out > 0) {
+                    throw new \Exception("Cannot reverse repackaging because the finished stock from this order has already been consumed/sold.");
+                }
+            }
+
+            // 1. Delete Inventory Transactions individually to trigger observer
+            $transactions = \App\Models\InventoryTransaction::where('reference_type', RepackagingOrder::class)->where('reference_id', $repackaging->id)->get();
+            foreach ($transactions as $txn) {
+                $txn->delete();
+            }
+
+            // 2. Delete Output Batches
+            foreach ($outputBatches as $batch) {
+                $batch->delete();
+            }
+
+            // 3. Restore Raw Input Batches
+            foreach ($repackaging->inputs as $input) {
+                if ($input->batch) {
+                    $input->batch->qty_out -= $input->qty_used;
+                    $input->batch->remaining_qty += $input->qty_used;
+                    $input->batch->save();
+                }
+            }
+
+            // 4. Delete Accounting Entries
+            $journal = \App\Models\Journal::where('reference_type', RepackagingOrder::class)->where('reference_id', $repackaging->id)->first();
+            if ($journal) {
+                \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
+                $journal->delete();
+            }
+
+            // 5. Delete Associations
+            \App\Models\RepackagingInput::where('repackaging_order_id', $repackaging->id)->delete();
+            \App\Models\RepackagingOutput::where('repackaging_order_id', $repackaging->id)->delete();
+            \App\Models\RepackagingAdjustment::where('repackaging_order_id', $repackaging->id)->delete();
+
+            $repackaging->delete();
+
+            \Illuminate\Support\Facades\DB::commit();
+            return response()->json(['message' => 'Repackaging deleted and stock restored successfully']);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
     }
 
     /**
