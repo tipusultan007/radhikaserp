@@ -54,4 +54,75 @@ class SteadfastService
             return null;
         }
     }
+
+    /**
+     * Prepare sale data and dispatch to Steadfast.
+     *
+     * @param \App\Models\Sale $sale
+     * @return bool Returns true if successfully dispatched and updated, false otherwise.
+     * @throws \Exception
+     */
+    public static function dispatchSale(\App\Models\Sale $sale)
+    {
+        // Prevent re-dispatching
+        if ($sale->consignment_id) {
+            throw new \Exception('Order already dispatched to Steadfast (Consignment ID exists).');
+        }
+
+        // Determine Recipient Details
+        // Use shipping address first, fallback to customer data
+        $recipientName = 'Unknown';
+        $recipientPhone = '00000000000';
+        $recipientAddress = 'N/A';
+
+        if (!empty($sale->shipping_address)) {
+            // Assume shipping_address might be a simple string or JSON. 
+            // If it's a string, we just use customer name/phone and the string as address.
+            $recipientName = $sale->customer ? $sale->customer->name : 'Walk-in Customer';
+            $recipientPhone = $sale->customer ? $sale->customer->phone : '00000000000';
+            $recipientAddress = $sale->shipping_address;
+        } elseif ($sale->customer) {
+            $recipientName = $sale->customer->name;
+            $recipientPhone = $sale->customer->phone;
+            $recipientAddress = $sale->customer->address ?? 'N/A';
+        }
+
+        // Calculate COD Amount
+        // If payment status is paid, cod_amount should be 0. Otherwise it's the due_amount.
+        $codAmount = $sale->due_amount > 0 ? (float) $sale->due_amount : 0;
+
+        $data = [
+            'invoice' => $sale->invoice_no,
+            'recipient_name' => $recipientName,
+            'recipient_phone' => $recipientPhone,
+            'recipient_address' => $recipientAddress,
+            'cod_amount' => $codAmount,
+            'note' => $sale->notes ?? 'ERP Generated Order',
+        ];
+
+        $response = self::createOrder($data);
+
+        if ($response && isset($response['consignment'])) {
+            $consignmentId = $response['consignment']['consignment_id'] ?? null;
+            $trackingCode = $response['consignment']['tracking_code'] ?? null;
+            
+            if ($consignmentId) {
+                $sale->consignment_id = $consignmentId;
+                // If tracking code is needed, we could store it, but there isn't a column for it right now based on Sale model fields.
+                $sale->save();
+
+                \App\Models\ActivityLog::create([
+                    'user_id' => auth()->id() ?? 1,
+                    'action' => 'steadfast_dispatch',
+                    'reference_type' => \App\Models\Sale::class,
+                    'reference_id' => $sale->id,
+                    'description' => "Order dispatched to Steadfast Courier. Consignment ID: {$consignmentId}",
+                ]);
+
+                return true;
+            }
+        }
+
+        throw new \Exception('Failed to dispatch to Steadfast courier. Please check credentials or data format.');
+    }
 }

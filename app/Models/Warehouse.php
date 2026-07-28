@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 class Warehouse extends Model
 {
     use HasFactory;
+    use \App\Traits\LogsActivity;
 
     protected $casts = [
         'status' => 'boolean',

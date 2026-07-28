@@ -370,7 +370,7 @@ class AdminApiController extends Controller
                 'payment_method' => $isPromotional ? null : ($validated['payment_method'] ?? null),
                 'payment_details' => $validated['payment_details'] ?? null,
                 'estimate_delivery_date' => $request->input('estimate_delivery_date'),
-                'delivery_status' => $request->input('delivery_status'),
+                'delivery_status' => $request->input('delivery_method') === 'steadfast' ? 'accepted' : $request->input('delivery_status'),
                 'delivery_method' => $request->input('delivery_method', 'manual'),
                 'shipping_address' => $request->input('shipping_address'),
                 'created_by' => $request->user()->id ?? 1,
@@ -461,8 +461,12 @@ class AdminApiController extends Controller
             }
 
             // COGS & Inventory Reduction entries are deferred until dispatch
-            if (in_array($request->input('delivery_status'), ['dispatched', 'delivered'])) {
+            if (in_array($sale->delivery_status, ['dispatched', 'delivered'])) {
                 $this->consumeStockForSale($sale, $journal->id, $request->user()->id ?? 1);
+            }
+
+            if ($sale->delivery_method === 'steadfast') {
+                \App\Services\SteadfastService::dispatchSale($sale);
             }
 
             DB::commit();
@@ -907,7 +911,7 @@ class AdminApiController extends Controller
     public function updateDeliveryStatus(Request $request, $id)
     {
         $request->validate([
-            'delivery_status' => 'required|in:pending,processing,dispatched,delivered,cancelled',
+            'delivery_status' => 'required|in:pending,accepted,processing,dispatched,delivered,cancelled',
         ]);
 
         try {
@@ -948,6 +952,11 @@ class AdminApiController extends Controller
             }
 
             $sale->delivery_status = $newStatus;
+
+            if ($newStatus === 'accepted' && $oldStatus !== 'accepted' && $sale->delivery_method === 'steadfast') {
+                \App\Services\SteadfastService::dispatchSale($sale);
+            }
+
             $sale->save();
 
             DB::commit();

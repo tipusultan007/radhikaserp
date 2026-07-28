@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 class Expense extends Model
 {
     use HasFactory;
+    use \App\Traits\LogsActivity;
 
     protected $casts = [
         'amount' => 'decimal:2',

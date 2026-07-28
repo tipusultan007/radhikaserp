@@ -38,6 +38,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 class Sale extends Model
 {
     use HasFactory;
+    use \App\Traits\LogsActivity;
 
     protected $casts = [
         'subtotal' => 'decimal:2',

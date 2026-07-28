@@ -21,6 +21,7 @@ class User extends Authenticatable implements HasMedia
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable, HasRoles, InteractsWithMedia;
+    use \App\Traits\LogsActivity;
 
     public $guard_name = 'web';
 

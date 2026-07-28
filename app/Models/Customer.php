@@ -12,6 +12,7 @@ use Illuminate\Notifications\Notifiable;
 class Customer extends Model
 {
     use HasApiTokens, HasFactory, Notifiable;
+    use \App\Traits\LogsActivity;
 
     protected $casts = [
         'credit_limit' => 'decimal:2',

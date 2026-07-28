@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 class Supplier extends Model
 {
     use HasFactory;
+    use \App\Traits\LogsActivity;
 
     protected $casts = [
         'total_payable' => 'decimal:2',

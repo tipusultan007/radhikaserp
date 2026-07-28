@@ -332,6 +332,7 @@ class SaleController extends Controller
                 'payment_status' => $paymentStatus,
                 'payment_method' => $isPromotional ? null : ($validated['payment_method'] ?? null),
                 'delivery_method' => $validated['delivery_method'] ?? null,
+                'delivery_status' => ($validated['delivery_method'] ?? null) === 'steadfast' ? 'accepted' : 'pending',
                 'shipping_address' => $request->input('shipping_address'),
                 'created_by' => auth()->id() ?? 1,
             ]);
@@ -456,6 +457,10 @@ class SaleController extends Controller
             }
 
             // COGS & Inventory Reduction entries are deferred until dispatch
+
+            if ($sale->delivery_method === 'steadfast') {
+                \App\Services\SteadfastService::dispatchSale($sale);
+            }
 
             DB::commit();
 
@@ -765,6 +770,10 @@ class SaleController extends Controller
             if (isset($validated['delivery_status'])) {
                 $wasDispatched = in_array($oldStatus, ['dispatched', 'delivered']);
                 $isDispatched = in_array($sale->delivery_status, ['dispatched', 'delivered']);
+
+                if ($sale->delivery_status === 'accepted' && $oldStatus !== 'accepted' && $sale->delivery_method === 'steadfast') {
+                    \App\Services\SteadfastService::dispatchSale($sale);
+                }
 
                 if ($isDispatched && !$wasDispatched) {
                     $this->consumeStockForSale($sale);

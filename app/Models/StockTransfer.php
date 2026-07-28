@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 class StockTransfer extends Model
 {
     use HasFactory;
+    use \App\Traits\LogsActivity;
 
     public function fromWarehouse()
     {

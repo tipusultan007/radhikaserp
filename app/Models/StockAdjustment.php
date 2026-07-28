@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 class StockAdjustment extends Model
 {
     use HasFactory;
+    use \App\Traits\LogsActivity;
 
     protected $casts = [
         'qty' => 'decimal:3',
