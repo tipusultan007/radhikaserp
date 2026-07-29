@@ -186,6 +186,18 @@
                                  <label class="form-label">Phone <span class="text-danger">*</span></label>
                                  <input type="text" class="form-control" id="new_customer_phone" required>
                              </div>
+                             <div class="mb-3">
+                                 <label class="form-label">Email (Optional)</label>
+                                 <input type="email" class="form-control" id="new_customer_email">
+                             </div>
+                             <div class="mb-3">
+                                 <label class="form-label">Customer Type</label>
+                                 <select class="form-control" id="new_customer_type">
+                                     <option value="customer">Customer</option>
+                                     <option value="dealer">Dealer</option>
+                                     <option value="special_dealer">Special Dealer</option>
+                                 </select>
+                             </div>
                              <div class="text-end">
                                  <button type="submit" class="btn btn-primary">Save Customer</button>
                              </div>
@@ -334,6 +346,8 @@
             e.preventDefault();
             const name = document.getElementById('new_customer_name').value;
             const phone = document.getElementById('new_customer_phone').value;
+            const email = document.getElementById('new_customer_email').value;
+            const customerType = document.getElementById('new_customer_type').value;
             const submitBtn = this.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
             submitBtn.innerHTML = 'Saving...';
@@ -345,7 +359,7 @@
                     'X-CSRF-TOKEN': '{{ csrf_token() }}',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify({ name: name, phone: phone })
+                body: JSON.stringify({ name: name, phone: phone, email: email, customer_type: customerType })
             })
             .then(response => response.json())
             .then(data => {

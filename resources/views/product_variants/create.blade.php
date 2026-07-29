@@ -90,9 +90,19 @@
                                  </div>
                              </div>
 
-                             <div class="mb-3">
-                                 <label for="price" class="form-label">Selling Price ($)</label>
-                                 <input type="number" step="any" id="price" name="price" class="form-control" placeholder="e.g. 25.00" value="{{ old('price', '0.00') }}">
+                             <div class="row">
+                                 <div class="col-md-4 mb-3">
+                                     <label for="price" class="form-label">Selling Price</label>
+                                     <input type="number" step="any" id="price" name="price" class="form-control" placeholder="e.g. 25.00" value="{{ old('price', '0.00') }}">
+                                 </div>
+                                 <div class="col-md-4 mb-3">
+                                     <label for="dealer_price" class="form-label">Dealer Price</label>
+                                     <input type="number" step="any" id="dealer_price" name="dealer_price" class="form-control" placeholder="e.g. 23.00" value="{{ old('dealer_price', '0.00') }}">
+                                 </div>
+                                 <div class="col-md-4 mb-3">
+                                     <label for="special_dealer_price" class="form-label">Special Dealer Price</label>
+                                     <input type="number" step="any" id="special_dealer_price" name="special_dealer_price" class="form-control" placeholder="e.g. 21.00" value="{{ old('special_dealer_price', '0.00') }}">
+                                 </div>
                              </div>
 
                              <div class="mb-3">

@@ -204,6 +204,8 @@ class AdminApiController extends Controller
             'unit_qty' => 'required|numeric|min:0',
             'unit_id' => 'required|exists:units,id',
             'price' => 'nullable|numeric|min:0',
+            'dealer_price' => 'nullable|numeric|min:0',
+            'special_dealer_price' => 'nullable|numeric|min:0',
             'status' => 'nullable|boolean',
         ]);
 
@@ -236,6 +238,8 @@ class AdminApiController extends Controller
             'unit_qty' => 'required|numeric|min:0',
             'unit_id' => 'required|exists:units,id',
             'price' => 'nullable|numeric|min:0',
+            'dealer_price' => 'nullable|numeric|min:0',
+            'special_dealer_price' => 'nullable|numeric|min:0',
             'status' => 'nullable|boolean',
         ]);
 

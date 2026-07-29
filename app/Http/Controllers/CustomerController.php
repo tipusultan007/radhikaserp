@@ -100,6 +100,7 @@ class CustomerController extends Controller
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
             'address' => 'nullable|string',
+            'customer_type' => 'nullable|in:customer,dealer,special_dealer',
         ]);
 
         $validated['credit_limit'] = 0;
@@ -143,6 +144,7 @@ class CustomerController extends Controller
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
             'address' => 'nullable|string',
+            'customer_type' => 'nullable|in:customer,dealer,special_dealer',
             'credit_limit' => 'nullable|numeric|min:0',
             'opening_balance' => 'nullable|numeric|min:0',
         ]);
@@ -225,6 +227,7 @@ class CustomerController extends Controller
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
             'address' => 'nullable|string',
+            'customer_type' => 'nullable|in:customer,dealer,special_dealer',
             'credit_limit' => 'nullable|numeric|min:0',
             'opening_balance' => 'nullable|numeric|min:0',
         ]);

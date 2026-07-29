@@ -247,6 +247,8 @@ class SaleController extends Controller
                     'text' => $displayName . ' (Stock: ' . (float)$stock . ')',
                     'stock' => $stock,
                     'price' => $variant->price,
+                    'dealer_price' => $variant->dealer_price,
+                    'special_dealer_price' => $variant->special_dealer_price,
                     'unit_qty' => $variant->unit_qty
                 ];
             }

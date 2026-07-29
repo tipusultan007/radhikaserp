@@ -42,7 +42,7 @@
                                          <select name="customer_id" id="customer_id" class="form-control select2" data-toggle="select2" required style="width: 100%;">
                                              <option value="">Walk-in / Select Customer</option>
                                              @foreach($customers as $customer)
-                                                 <option value="{{ $customer->id }}">{{ $customer->name }} (Wallet: ${{ $customer->wallet_balance }}, Due: ${{ $customer->total_due }})</option>
+                                                 <option value="{{ $customer->id }}" data-customer-type="{{ $customer->customer_type }}">{{ $customer->name }} (Wallet: ${{ $customer->wallet_balance }}, Due: ${{ $customer->total_due }})</option>
                                              @endforeach
                                          </select>
                                          <button type="button" class="btn btn-primary ms-1" data-bs-toggle="modal" data-bs-target="#addCustomerModal"><i class="ri-add-line"></i></button>
@@ -198,6 +198,14 @@
                                  <input type="email" class="form-control" id="new_customer_email">
                              </div>
                              <div class="mb-3">
+                                 <label class="form-label">Customer Type</label>
+                                 <select class="form-control" id="new_customer_type">
+                                     <option value="customer">Customer</option>
+                                     <option value="dealer">Dealer</option>
+                                     <option value="special_dealer">Special Dealer</option>
+                                 </select>
+                             </div>
+                             <div class="mb-3">
                                  <label class="form-label">Password (Optional)</label>
                                  <input type="password" class="form-control" id="new_customer_password">
                              </div>
@@ -343,6 +351,8 @@
                             const option = new Option(item.text, item.id, false, false);
                             option.dataset.stock = item.stock;
                             option.dataset.price = item.price;
+                            option.dataset.dealer_price = item.dealer_price;
+                            option.dataset.special_dealer_price = item.special_dealer_price;
                             option.dataset.unit_qty = item.unit_qty;
                             $(select).append(option);
                         });
@@ -372,8 +382,20 @@
             const priceInput = tr.find('.price-input')[0];
             const qtyInput = tr.find('.qty-input')[0];
             
-            if (selectedOption && selectedOption.dataset.price && priceInput) {
-                priceInput.value = parseFloat(selectedOption.dataset.price).toFixed(0);
+            if (selectedOption && priceInput) {
+                const customerOption = $('#customer_id option:selected');
+                const customerType = customerOption.length ? (customerOption.data('customer-type') || 'customer') : 'customer';
+                
+                let variantPrice = 0;
+                if (customerType === 'dealer' && selectedOption.dataset.dealer_price && parseFloat(selectedOption.dataset.dealer_price) > 0) {
+                    variantPrice = parseFloat(selectedOption.dataset.dealer_price);
+                } else if (customerType === 'special_dealer' && selectedOption.dataset.special_dealer_price && parseFloat(selectedOption.dataset.special_dealer_price) > 0) {
+                    variantPrice = parseFloat(selectedOption.dataset.special_dealer_price);
+                } else {
+                    variantPrice = parseFloat(selectedOption.dataset.price || 0);
+                }
+                
+                priceInput.value = variantPrice.toFixed(0);
                 
                 // Automatically set qty if it's empty
                 if (!qtyInput.value || parseFloat(qtyInput.value) === 0) {
@@ -387,6 +409,11 @@
                 calculateTotal();
                 updateFullPayment();
             }
+        });
+        
+        // Update prices when customer changes
+        $('#customer_id').on('change', function() {
+            $('.variant-select').trigger('change');
         });
 
         // Add Item Row
@@ -452,6 +479,7 @@
             const name = document.getElementById('new_customer_name').value;
             const phone = document.getElementById('new_customer_phone').value;
             const email = document.getElementById('new_customer_email').value;
+            const customerType = document.getElementById('new_customer_type').value;
             const password = document.getElementById('new_customer_password').value;
             const address = document.getElementById('new_customer_address').value;
             const submitBtn = this.querySelector('button[type="submit"]');
@@ -465,7 +493,7 @@
                     'X-CSRF-TOKEN': '{{ csrf_token() }}',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify({ name: name, phone: phone, email: email, password: password, address: address })
+                body: JSON.stringify({ name: name, phone: phone, email: email, customer_type: customerType, password: password, address: address })
             })
             .then(response => response.json())
             .then(data => {
@@ -475,7 +503,8 @@
                 if(data.success) {
                     const customer = data.customer;
                     // Add to select2
-                    const newOption = new Option(customer.name + ' (Credit: $0)', customer.id, true, true);
+                    const newOption = new Option(customer.name + ' (Wallet: $0, Due: $0)', customer.id, true, true);
+                    newOption.dataset.customerType = customer.customer_type || 'customer';
                     $('#customer_id').append(newOption).trigger('change');
                     
                     // Close modal

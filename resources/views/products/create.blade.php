@@ -82,6 +82,8 @@
                                              <th>Unit <span class="text-danger">*</span></th>
                                              <th>Unit Qty <span class="text-danger">*</span></th>
                                              <th>Selling Price</th>
+                                             <th>Dealer Price</th>
+                                             <th>Special Dealer Price</th>
                                              <th>Action</th>
                                          </tr>
                                      </thead>
@@ -104,6 +106,12 @@
                                              </td>
                                              <td>
                                                  <input type="number" step="any" name="variants[0][price]" class="form-control" value="0.00">
+                                             </td>
+                                             <td>
+                                                 <input type="number" step="any" name="variants[0][dealer_price]" class="form-control" value="0.00">
+                                             </td>
+                                             <td>
+                                                 <input type="number" step="any" name="variants[0][special_dealer_price]" class="form-control" value="0.00">
                                              </td>
                                              <td>
                                                  <button type="button" class="btn btn-danger btn-sm remove-variant" disabled><i class="ri-delete-bin-line"></i></button>
@@ -162,6 +170,12 @@
                     </td>
                     <td>
                         <input type="number" step="any" name="variants[${variantIndex}][price]" class="form-control" value="0.00">
+                    </td>
+                    <td>
+                        <input type="number" step="any" name="variants[${variantIndex}][dealer_price]" class="form-control" value="0.00">
+                    </td>
+                    <td>
+                        <input type="number" step="any" name="variants[${variantIndex}][special_dealer_price]" class="form-control" value="0.00">
                     </td>
                     <td>
                         <button type="button" class="btn btn-danger btn-sm remove-variant"><i class="ri-delete-bin-line"></i></button>

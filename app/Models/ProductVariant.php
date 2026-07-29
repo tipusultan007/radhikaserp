@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 
-#[Fillable(['product_id', 'name', 'sku', 'barcode', 'unit_qty', 'unit_type', 'unit_id', 'price', 'status'])]
+#[Fillable(['product_id', 'name', 'sku', 'barcode', 'unit_qty', 'unit_type', 'unit_id', 'price', 'dealer_price', 'special_dealer_price', 'status'])]
 class ProductVariant extends Model
 {
     use HasFactory;

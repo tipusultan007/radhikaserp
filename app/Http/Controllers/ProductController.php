@@ -68,6 +68,8 @@ class ProductController extends Controller
                 'unit_qty' => $varData['unit_qty'],
                 'unit_id' => $varData['unit_id'],
                 'price' => $varData['price'] ?? 0,
+                'dealer_price' => $varData['dealer_price'] ?? null,
+                'special_dealer_price' => $varData['special_dealer_price'] ?? null,
                 'status' => true,
             ]);
         }

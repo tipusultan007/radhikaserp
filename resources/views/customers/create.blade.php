@@ -49,9 +49,19 @@
                                  </div>
                              </div>
 
-                             <div class="mb-3">
-                                 <label for="email" class="form-label">Email</label>
-                                 <input type="email" id="email" name="email" class="form-control" placeholder="e.g. john@example.com" value="{{ old('email') }}">
+                             <div class="row">
+                                 <div class="col-md-6 mb-3">
+                                     <label for="email" class="form-label">Email</label>
+                                     <input type="email" id="email" name="email" class="form-control" placeholder="e.g. john@example.com" value="{{ old('email') }}">
+                                 </div>
+                                 <div class="col-md-6 mb-3">
+                                     <label for="customer_type" class="form-label">Customer Type</label>
+                                     <select id="customer_type" name="customer_type" class="form-control">
+                                         <option value="customer" {{ old('customer_type') == 'customer' ? 'selected' : '' }}>Customer</option>
+                                         <option value="dealer" {{ old('customer_type') == 'dealer' ? 'selected' : '' }}>Dealer</option>
+                                         <option value="special_dealer" {{ old('customer_type') == 'special_dealer' ? 'selected' : '' }}>Special Dealer</option>
+                                     </select>
+                                 </div>
                              </div>
 
                              <div class="mb-3">
