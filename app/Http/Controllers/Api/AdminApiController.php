@@ -2300,12 +2300,12 @@ class AdminApiController extends Controller
         public function repackagingFormData()
     {
         $warehouses = \App\Models\Warehouse::all();
-        $rawProducts = \App\Models\Product::with('unit')->where('type', 'raw')->get();
+        $inputProducts = \App\Models\Product::with('unit')->whereIn('type', ['raw', 'finished'])->get();
         $variants = \App\Models\ProductVariant::with(['product.unit', 'unit'])->get();
 
         return response()->json([
             'warehouses' => $warehouses,
-            'raw_products' => $rawProducts,
+            'input_products' => $inputProducts,
             'variants' => $variants,
         ]);
     }
@@ -2333,7 +2333,7 @@ class AdminApiController extends Controller
         $validated = $request->validate([
             'warehouse_id' => 'required|exists:warehouses,id',
             'date' => 'required|date',
-            'input_product_id' => 'required|exists:products,id',
+            'input_item' => 'required|string',
             'input_qty' => 'required|numeric|min:0.001',
             'outputs' => 'required|array',
             'outputs.*.variant_id' => 'required|exists:product_variants,id',
@@ -2348,11 +2348,34 @@ class AdminApiController extends Controller
             \Illuminate\Support\Facades\DB::beginTransaction();
 
             $warehouseId = $validated['warehouse_id'];
-            $inputProductId = $validated['input_product_id'];
-            $inputQty = $validated['input_qty'];
+            
+            $inputParts = explode('_', $validated['input_item']);
+            $inputType = $inputParts[0];
+            $inputId = $inputParts[1];
+            
+            $inputProductId = null;
+            $inputVariantId = null;
+            $inputUnitQty = 1;
+            
+            if ($inputType === 'product') {
+                $inputProductId = $inputId;
+            } else {
+                $inputVariantId = $inputId;
+                $variant = \App\Models\ProductVariant::find($inputVariantId);
+                $inputProductId = $variant->product_id;
+                $inputUnitQty = $variant->getBaseQuantity();
+            }
+
+            $inputQty = $validated['input_qty']; // packages or kg
+            $inputRawWeight = $inputQty * $inputUnitQty;
 
             $batches = \App\Models\Batch::where('product_id', $inputProductId)
                 ->where('warehouse_id', $warehouseId)
+                ->when($inputVariantId, function($q) use ($inputVariantId) {
+                    return $q->where('product_variant_id', $inputVariantId);
+                }, function($q) {
+                    return $q->whereNull('product_variant_id');
+                })
                 ->where('remaining_qty', '>', 0)
                 ->orderBy('id', 'asc')
                 ->lockForUpdate()
@@ -2425,12 +2448,14 @@ class AdminApiController extends Controller
                     'repackaging_order_id' => $order->id,
                     'batch_id' => $consumed['batch_id'],
                     'product_id' => $inputProductId,
+                    'product_variant_id' => $inputVariantId,
                     'qty_used' => $consumed['qty_used'],
                 ]);
 
                 \App\Models\InventoryTransaction::create([
                     'warehouse_id' => $warehouseId,
                     'product_id' => $inputProductId,
+                    'product_variant_id' => $inputVariantId,
                     'batch_id' => $consumed['batch_id'],
                     'type' => 'repack_input',
                     'qty_in' => 0,
@@ -2488,8 +2513,8 @@ class AdminApiController extends Controller
                 ]);
             }
 
-            if ($inputQty != $totalOutputWeight) {
-                $diff = $totalOutputWeight - $inputQty;
+            if ($inputRawWeight != $totalOutputWeight) {
+                $diff = $totalOutputWeight - $inputRawWeight;
                 \App\Models\RepackagingAdjustment::create([
                     'repackaging_order_id' => $order->id,
                     'type' => $diff > 0 ? 'gain' : 'loss',

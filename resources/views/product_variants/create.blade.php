@@ -149,42 +149,47 @@
     });
 
     // Dynamically load units based on selected Master Product
-    $('#product_id').on('change', function() {
-        let productId = $(this).val();
-        let unitSelect = $('#unit_id');
-        
-        unitSelect.html('<option value="">Loading Units...</option>');
-        if (unitSelect.hasClass('select2-hidden-accessible')) {
+    document.addEventListener('DOMContentLoaded', function() {
+        function loadUnits() {
+            let productId = $('#product_id').val();
+            let unitSelect = $('#unit_id');
+            let oldUnitId = "{{ old('unit_id') }}";
+            
+            unitSelect.html('<option value="">Loading Units...</option>');
             unitSelect.trigger('change');
-        }
 
-        if (!productId) {
-            unitSelect.html('<option value="">Select Unit</option>');
-            if (unitSelect.hasClass('select2-hidden-accessible')) {
-                unitSelect.trigger('change');
-            }
-            return;
-        }
-
-        fetch(`/products/${productId}/related-units`)
-            .then(response => response.json())
-            .then(data => {
+            if (!productId) {
                 unitSelect.html('<option value="">Select Unit</option>');
-                data.units.forEach(unit => {
-                    let option = new Option(`${unit.name} (${unit.short_name})`, unit.id, false, false);
-                    unitSelect.append(option);
+                unitSelect.trigger('change');
+                return;
+            }
+
+            fetch(`{{ url('products') }}/${productId}/related-units`)
+                .then(response => response.json())
+                .then(data => {
+                    unitSelect.html('<option value="">Select Unit</option>');
+                    if (data.units && data.units.length > 0) {
+                        data.units.forEach(unit => {
+                            let isSelected = (oldUnitId == unit.id) ? true : false;
+                            let option = new Option(`${unit.name} (${unit.short_name})`, unit.id, false, isSelected);
+                            unitSelect.append(option);
+                        });
+                    }
+                    unitSelect.trigger('change');
+                })
+                .catch(err => {
+                    console.error("Failed to fetch related units", err);
+                    unitSelect.html('<option value="">Error Loading Units</option>');
+                    unitSelect.trigger('change');
                 });
-                if (unitSelect.hasClass('select2-hidden-accessible')) {
-                    unitSelect.trigger('change');
-                }
-            })
-            .catch(err => {
-                console.error("Failed to fetch related units", err);
-                unitSelect.html('<option value="">Error Loading Units</option>');
-                if (unitSelect.hasClass('select2-hidden-accessible')) {
-                    unitSelect.trigger('change');
-                }
-            });
+        }
+
+        $('#product_id').on('change', loadUnits);
+
+        // Initial load
+        if ($('#product_id').val()) {
+            loadUnits();
+        }
     });
 </script>
 @endsection

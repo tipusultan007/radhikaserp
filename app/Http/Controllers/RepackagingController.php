@@ -59,7 +59,7 @@ class RepackagingController extends Controller
         $validated = $request->validate([
             'warehouse_id' => 'required|exists:warehouses,id',
             'date' => 'required|date',
-            'input_product_id' => 'required|exists:products,id',
+            'input_item' => 'required|string',
             'input_qty' => 'required|numeric|min:0.001',
             'output_items' => 'required|array',
             'output_items.*' => 'required|string',
@@ -75,12 +75,35 @@ class RepackagingController extends Controller
             DB::beginTransaction();
 
             $warehouseId = $validated['warehouse_id'];
-            $inputProductId = $validated['input_product_id'];
-            $inputQty = $validated['input_qty'];
+            
+            $inputParts = explode('_', $validated['input_item']);
+            $inputType = $inputParts[0];
+            $inputId = $inputParts[1];
+            
+            $inputProductId = null;
+            $inputVariantId = null;
+            $inputUnitQty = 1;
+            
+            if ($inputType === 'product') {
+                $inputProductId = $inputId;
+            } else {
+                $inputVariantId = $inputId;
+                $variant = ProductVariant::find($inputVariantId);
+                $inputProductId = $variant->product_id;
+                $inputUnitQty = $variant->getBaseQuantity();
+            }
+
+            $inputQty = $validated['input_qty']; // This is either packages or kg depending on the type
+            $inputRawWeight = $inputQty * $inputUnitQty; // The actual kg consumed for yield calculation
 
             // 1. FIFO Batch Consumption
             $batches = Batch::where('product_id', $inputProductId)
                 ->where('warehouse_id', $warehouseId)
+                ->when($inputVariantId, function($q) use ($inputVariantId) {
+                    return $q->where('product_variant_id', $inputVariantId);
+                }, function($q) {
+                    return $q->whereNull('product_variant_id');
+                })
                 ->where('remaining_qty', '>', 0)
                 ->orderBy('id', 'asc') // Oldest first
                 ->lockForUpdate()
@@ -169,6 +192,7 @@ class RepackagingController extends Controller
                     'repackaging_order_id' => $order->id,
                     'batch_id' => $consumed['batch_id'],
                     'product_id' => $inputProductId,
+                    'product_variant_id' => $inputVariantId,
                     'qty_used' => $consumed['qty_used'],
                 ]);
 
@@ -176,6 +200,7 @@ class RepackagingController extends Controller
                 InventoryTransaction::create([
                     'warehouse_id' => $warehouseId,
                     'product_id' => $inputProductId,
+                    'product_variant_id' => $inputVariantId,
                     'batch_id' => $consumed['batch_id'],
                     'type' => 'repack_input',
                     'qty_in' => 0,
@@ -234,8 +259,8 @@ class RepackagingController extends Controller
             }
 
             // Yield Calculation
-            if ($inputQty != $totalOutputWeight) {
-                $diff = $totalOutputWeight - $inputQty;
+            if ($inputRawWeight != $totalOutputWeight) {
+                $diff = $totalOutputWeight - $inputRawWeight;
                 RepackagingAdjustment::create([
                     'repackaging_order_id' => $order->id,
                     'type' => $diff > 0 ? 'gain' : 'loss',

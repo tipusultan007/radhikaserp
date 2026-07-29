@@ -83,12 +83,25 @@
                              </div>
 
                              <div class="mb-4">
-                                 <label class="form-label fw-semibold">Input Product <span class="text-danger">*</span></label>
-                                 <select name="input_product_id" id="input_product_id" class="form-select select2" required>
-                                     <option value="" data-unit="">Search Product...</option>
-                                     @foreach($inputProducts as $product)
-                                         <option value="{{ $product->id }}" data-unit="{{ $product->unit ? $product->unit->short_name : 'Unit' }}">{{ $product->name }} ({{ ucfirst($product->type) }} - {{ $product->unit ? $product->unit->short_name : 'Unit' }})</option>
-                                     @endforeach
+                                 <label class="form-label fw-semibold">Input Item <span class="text-danger">*</span></label>
+                                 <select name="input_item" id="input_item" class="form-select select2" required>
+                                     <option value="" data-unit="" data-qty="1">Search Item...</option>
+                                     <optgroup label="Bulk Products (Raw & Finished)">
+                                         @foreach($inputProducts as $product)
+                                             <option value="product_{{ $product->id }}" data-unit="{{ $product->unit ? $product->unit->short_name : 'Unit' }}" data-qty="1">{{ $product->name }} ({{ ucfirst($product->type) }} - {{ $product->unit ? $product->unit->short_name : 'Unit' }})</option>
+                                         @endforeach
+                                     </optgroup>
+                                     <optgroup label="Packaged Variants">
+                                         @foreach($variants as $variant)
+                                             @php
+                                                 $displayName = $variant->product->name;
+                                                 if ($variant->name !== $variant->product->name && $variant->name !== 'Default') {
+                                                     $displayName .= ' - ' . $variant->name;
+                                                 }
+                                             @endphp
+                                             <option value="variant_{{ $variant->id }}" data-unit="{{ $variant->product->unit->short_name ?? 'Unit' }}" data-qty="{{ $variant->unit_qty }}">{{ $displayName }}</option>
+                                         @endforeach
+                                     </optgroup>
                                  </select>
                                  <small class="text-muted mt-1 d-block"><i class="ri-information-line"></i> FIFO logic consumes oldest batches automatically.</small>
                              </div>
@@ -242,14 +255,18 @@ $(document).ready(function() {
 
     function calculateYield() {
         // Input logic
-        let inputOption = $('#input_product_id').find(':selected');
-        let inputUnit = inputOption.data('unit') || 'Unit';
+        let inputOption = $('#input_item').find(':selected');
+        let inputBaseUnit = inputOption.data('unit') || 'Unit';
+        let isVariantInput = inputOption.val() && inputOption.val().startsWith('variant');
+        let inputUnitDisplay = isVariantInput ? 'Pkg' : inputBaseUnit;
+        let inputUnitQty = parseFloat(inputOption.data('qty')) || 1;
         let inputQty = parseFloat($('#input_qty').val()) || 0;
+        let inputRawWeight = inputQty * inputUnitQty;
         
-        $('#input_unit_display').text(inputUnit);
+        $('#input_unit_display').text(inputUnitDisplay);
         
         if (inputOption.val() && inputQty > 0) {
-            $('#input_summary').text(`Total Consumed: ${inputQty} ${inputUnit}`).show();
+            $('#input_summary').text(isVariantInput ? `Equivalent Base Weight: ${inputRawWeight.toFixed(3)} ${inputBaseUnit}` : `Total Consumed: ${inputQty} ${inputBaseUnit}`).show();
         } else {
             $('#input_summary').hide();
         }
@@ -279,16 +296,16 @@ $(document).ready(function() {
         
         // We will assume the base unit is the same for all outputs or take the input unit for comparison.
         // Usually, all outputs should have the same base unit as the input for repackaging.
-        let outputUnit = inputUnit; // Assuming comparison matches input unit
+        let outputUnit = inputBaseUnit; // Assuming comparison matches input base unit
 
         // Yield Calculation
         if (inputOption.val() && inputQty > 0 && totalOutputWeight > 0) {
             $('#yield_summary_box').slideDown();
-            let diff = totalOutputWeight - inputQty;
+            let diff = totalOutputWeight - inputRawWeight;
             if (diff > 0) {
-                $('#yield_text').html(`<span class="text-success fw-bold"><i class="ri-arrow-up-line"></i> Gain Detected:</span> You are producing <strong class="text-dark">${diff.toFixed(3)} ${inputUnit}</strong> more than you are consuming. System will log an automatic inventory gain.`);
+                $('#yield_text').html(`<span class="text-success fw-bold"><i class="ri-arrow-up-line"></i> Gain Detected:</span> You are producing <strong class="text-dark">${diff.toFixed(3)} ${outputUnit}</strong> more than you are consuming. System will log an automatic inventory gain.`);
             } else if (diff < 0) {
-                $('#yield_text').html(`<span class="text-danger fw-bold"><i class="ri-arrow-down-line"></i> Loss Detected:</span> You are producing <strong class="text-dark">${Math.abs(diff).toFixed(3)} ${inputUnit}</strong> less than you are consuming. System will log an automatic inventory loss.`);
+                $('#yield_text').html(`<span class="text-danger fw-bold"><i class="ri-arrow-down-line"></i> Loss Detected:</span> You are producing <strong class="text-dark">${Math.abs(diff).toFixed(3)} ${outputUnit}</strong> less than you are consuming. System will log an automatic inventory loss.`);
             } else {
                 $('#yield_text').html(`<span class="text-dark fw-bold"><i class="ri-check-line text-success"></i> Exact Match:</span> Input and Output weights match perfectly. No loss or gain will be recorded.`);
             }
@@ -297,8 +314,8 @@ $(document).ready(function() {
         }
     }
 
-    $(document).on('change', '#input_product_id, .output-item-select', calculateYield);
-    $(document).on('input', '#input_qty, .output-qty-input', calculateYield);
+    $(document).on('change', '#input_item, .output-item-select', calculateYield);
+    $(document).on('keyup change', '#input_qty, .output-qty-input', calculateYield);
     
     // Add new output row
     $('#add-output-row').click(function() {

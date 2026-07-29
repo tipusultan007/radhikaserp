@@ -54,8 +54,8 @@
                                              <td>{{ $variant->product->name }}</td>
                                              <td><strong>{{ $variant->name }}</strong></td>
                                              <td>{{ $variant->unit_qty }}</td>
-                                             <td>{{ $variant->unit_type }}</td>
-                                             <td>${{ number_format($variant->price, 0) }}</td>
+                                             <td>{{ $variant->unit ? $variant->unit->short_name : '' }}</td>
+                                             <td>{{ number_format($variant->price, 0) }}</td>
                                              <td>
                                                  @if($variant->current_stock > 0)
                                                      <span class="badge bg-success">{{ (float)$variant->current_stock }}</span>
