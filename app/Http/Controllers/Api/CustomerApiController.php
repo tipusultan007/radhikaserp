@@ -34,6 +34,8 @@ class CustomerApiController extends Controller
             'items.*.product_variant_id' => 'required|exists:product_variants,id',
             'items.*.qty' => 'required|numeric|min:1',
             'items.*.unit_price' => 'required|numeric|min:0',
+            'delivery_method' => 'nullable|string|in:manual,pickup,own_delivery,steadfast',
+            'delivery_type' => 'nullable|integer|in:0,1',
         ]);
 
         $customer = $request->user();
@@ -56,6 +58,22 @@ class CustomerApiController extends Controller
                 ];
             }
 
+            $deliveryMethod = $request->input('delivery_method', 'manual');
+            $deliveryType = $request->input('delivery_type', 1); // Default to point delivery
+            $deliveryCharge = 0;
+
+            if ($deliveryMethod === 'steadfast' && $deliveryType == 1) {
+                $grandTotalWeight = 0;
+                foreach ($request->items as $item) {
+                    $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
+                    $unitQty = $variant ? $variant->getBaseQuantity() : 1;
+                    $grandTotalWeight += ($item['qty'] * $unitQty);
+                }
+                $deliveryCharge = max(1, ceil($grandTotalWeight)) * 20;
+            }
+
+            $total = $subtotal + $deliveryCharge;
+
             // Create pending sale (order)
             $sale = Sale::create([
                 'invoice_no' => 'ORD-' . strtoupper(uniqid()),
@@ -64,13 +82,17 @@ class CustomerApiController extends Controller
                 'date' => now()->toDateString(),
                 'subtotal' => $subtotal,
                 'discount' => 0,
-                'total' => $subtotal,
+                'delivery_charge' => $deliveryCharge,
+                'total' => $total,
                 'paid_amount' => 0,
-                'due_amount' => $subtotal,
+                'due_amount' => $total,
                 'payment_status' => 'due',
                 'created_by' => \App\Models\User::first()->id ?? 1, // Fallback to 1 if no admin exists
                 'source' => 'customer',
                 'estimate_delivery_date' => $request->input('estimate_delivery_date'),
+                'delivery_status' => $deliveryMethod === 'steadfast' ? 'accepted' : 'pending',
+                'delivery_method' => $deliveryMethod,
+                'delivery_type' => $deliveryType,
                 'shipping_address' => $request->input('shipping_address'),
             ]);
 
@@ -81,7 +103,7 @@ class CustomerApiController extends Controller
             }
 
             // Update customer total due
-            $customer->total_due += $subtotal;
+            $customer->total_due += $total;
             $customer->save();
 
             DB::commit();

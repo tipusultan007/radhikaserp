@@ -33,7 +33,8 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
     'consignment_id',
     'total_weight',
     'notes',
-    'shipping_address'
+    'shipping_address',
+    'delivery_type'
 ])]
 class Sale extends Model
 {

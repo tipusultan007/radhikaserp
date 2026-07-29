@@ -314,6 +314,7 @@ class AdminApiController extends Controller
             'items.*.product_variant_id' => 'required|exists:product_variants,id',
             'items.*.qty' => 'required|numeric|min:0.001',
             'items.*.unit_price' => 'required|numeric|min:1',
+            'delivery_type' => 'nullable|integer|in:0,1',
         ]);
 
         $discount = $validated['discount'] ?? 0;
@@ -325,10 +326,19 @@ class AdminApiController extends Controller
 
             $warehouseId = $validated['warehouse_id'];
 
-            // Calculate Totals
+            // Calculate Totals and Weight
             $subtotal = 0;
+            $grandTotalWeight = 0;
             foreach ($validated['items'] as $item) {
                 $subtotal += $item['qty'] * $item['unit_price'];
+                $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
+                $unitQty = $variant ? $variant->getBaseQuantity() : 1;
+                $grandTotalWeight += ($item['qty'] * $unitQty);
+            }
+
+            $deliveryType = $validated['delivery_type'] ?? 1; // Default to point delivery
+            if ($request->input('delivery_method') === 'steadfast' && $deliveryType == 1) {
+                $deliveryCharge = max(1, ceil($grandTotalWeight)) * 20;
             }
 
             $total = max(0, $subtotal + $deliveryCharge - $discount);
@@ -376,6 +386,7 @@ class AdminApiController extends Controller
                 'estimate_delivery_date' => $request->input('estimate_delivery_date'),
                 'delivery_status' => $request->input('delivery_method') === 'steadfast' ? 'accepted' : $request->input('delivery_status'),
                 'delivery_method' => $request->input('delivery_method', 'manual'),
+                'delivery_type' => $deliveryType,
                 'shipping_address' => $request->input('shipping_address'),
                 'created_by' => $request->user()->id ?? 1,
             ]);
@@ -501,6 +512,7 @@ class AdminApiController extends Controller
             'items.*.unit_price' => 'required|numeric|min:1',
             'dispatched_at' => 'nullable|date',
             'dispatched_by' => 'nullable|exists:users,id',
+            'delivery_type' => 'nullable|integer|in:0,1',
         ]);
 
         try {
@@ -514,14 +526,24 @@ class AdminApiController extends Controller
 
             $warehouseId = $validated['warehouse_id'];
 
-            // Calculate Totals
+            // Calculate Totals and Weight
             $subtotal = 0;
+            $grandTotalWeight = 0;
             foreach ($validated['items'] as $item) {
                 $subtotal += $item['qty'] * $item['unit_price'];
+                $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
+                $unitQty = $variant ? $variant->getBaseQuantity() : 1;
+                $grandTotalWeight += ($item['qty'] * $unitQty);
             }
 
             $discount = $validated['discount'] ?? 0;
             $deliveryCharge = $validated['delivery_charge'] ?? 0;
+            $deliveryType = $validated['delivery_type'] ?? $sale->delivery_type ?? 1;
+
+            if ($request->input('delivery_method', $sale->delivery_method) === 'steadfast' && $deliveryType == 1) {
+                $deliveryCharge = max(1, ceil($grandTotalWeight)) * 20;
+            }
+
             $total = max(0, $subtotal + $deliveryCharge - $discount);
 
             $isPromotional = $request->has('is_promotional') ? !empty($request->input('is_promotional')) : !empty($sale->is_promotional);
@@ -595,6 +617,7 @@ class AdminApiController extends Controller
                 'estimate_delivery_date' => $request->input('estimate_delivery_date', $sale->estimate_delivery_date),
                 'delivery_status' => $newDeliveryStatus,
                 'delivery_method' => $deliveryMethod,
+                'delivery_type' => $deliveryType,
                 'shipping_address' => $request->input('shipping_address', $sale->shipping_address),
                 'consignment_id' => $consignmentId,
             ]);

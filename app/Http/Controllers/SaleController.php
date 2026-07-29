@@ -273,6 +273,7 @@ class SaleController extends Controller
             'items.*.qty' => 'required|numeric|min:0.001',
             'items.*.unit_price' => 'required|numeric|min:1',
             'delivery_method' => 'nullable|string|in:pickup,own_delivery,steadfast',
+            'delivery_type' => 'nullable|integer|in:0,1',
         ]);
 
         $discount = $validated['discount'] ?? 0;
@@ -284,10 +285,21 @@ class SaleController extends Controller
 
             $warehouseId = $validated['warehouse_id'];
 
-            // Calculate Totals
+            // Calculate Totals and Weight
             $subtotal = 0;
+            $grandTotalWeight = 0;
             foreach ($validated['items'] as $item) {
                 $subtotal += $item['qty'] * $item['unit_price'];
+                $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
+                $unitQty = $variant ? $variant->getBaseQuantity() : 1;
+                $grandTotalWeight += ($item['qty'] * $unitQty);
+            }
+
+            $deliveryType = $validated['delivery_type'] ?? 1; // Default to point delivery
+            if (($validated['delivery_method'] ?? null) === 'steadfast' && $deliveryType == 1) {
+                $deliveryCharge = max(1, ceil($grandTotalWeight)) * 20;
+            } else {
+                $deliveryCharge = $validated['delivery_charge'] ?? 0;
             }
 
             $total = max(0, $subtotal + $deliveryCharge - $discount);
@@ -334,6 +346,7 @@ class SaleController extends Controller
                 'payment_status' => $paymentStatus,
                 'payment_method' => $isPromotional ? null : ($validated['payment_method'] ?? null),
                 'delivery_method' => $validated['delivery_method'] ?? null,
+                'delivery_type' => $deliveryType,
                 'delivery_status' => ($validated['delivery_method'] ?? null) === 'steadfast' ? 'accepted' : 'pending',
                 'shipping_address' => $request->input('shipping_address'),
                 'created_by' => auth()->id() ?? 1,
@@ -523,6 +536,7 @@ class SaleController extends Controller
             'dispatched_at' => 'nullable|date',
             'dispatched_by' => 'nullable|exists:users,id',
             'delivery_method' => 'nullable|string|in:pickup,own_delivery,steadfast',
+            'delivery_type' => 'nullable|integer|in:0,1',
         ]);
 
         $discount = $validated['discount'] ?? 0;
@@ -539,10 +553,21 @@ class SaleController extends Controller
 
             $warehouseId = $validated['warehouse_id'];
 
-            // Calculate Totals
+            // Calculate Totals and Weight
             $subtotal = 0;
+            $grandTotalWeight = 0;
             foreach ($validated['items'] as $item) {
                 $subtotal += $item['qty'] * $item['unit_price'];
+                $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
+                $unitQty = $variant ? $variant->getBaseQuantity() : 1;
+                $grandTotalWeight += ($item['qty'] * $unitQty);
+            }
+
+            $deliveryType = $validated['delivery_type'] ?? 1; // Default to point delivery
+            if (($validated['delivery_method'] ?? null) === 'steadfast' && $deliveryType == 1) {
+                $deliveryCharge = max(1, ceil($grandTotalWeight)) * 20;
+            } else {
+                $deliveryCharge = $validated['delivery_charge'] ?? 0;
             }
 
             $total = max(0, $subtotal + $deliveryCharge - $discount);
@@ -586,6 +611,7 @@ class SaleController extends Controller
                 'payment_status' => $paymentStatus,
                 'payment_method' => $isPromotional ? null : ($validated['payment_method'] ?? null),
                 'delivery_method' => $validated['delivery_method'] ?? null,
+                'delivery_type' => $deliveryType,
                 'dispatched_at' => $dispatchedAt,
                 'dispatched_by' => $dispatchedBy,
                 'shipping_address' => $request->input('shipping_address', $sale->shipping_address),

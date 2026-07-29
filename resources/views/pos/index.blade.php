@@ -136,11 +136,19 @@
 
                              <div class="mb-3">
                                  <label class="form-label">Delivery Method</label>
-                                 <select name="delivery_method" class="form-select">
+                                 <select name="delivery_method" class="form-select" id="deliveryMethodSelect">
                                      <option value="">None / Walk-in</option>
                                      <option value="pickup">Pickup</option>
                                      <option value="own_delivery">Own Delivery</option>
                                      <option value="steadfast">Steadfast Courier</option>
+                                 </select>
+                             </div>
+
+                             <div class="mb-3" id="deliveryTypeContainer" style="display: none;">
+                                 <label class="form-label">Delivery Type (Steadfast)</label>
+                                 <select name="delivery_type" class="form-select" id="deliveryTypeSelect">
+                                     <option value="1" selected>Point Delivery</option>
+                                     <option value="0">Home Delivery</option>
                                  </select>
                              </div>
 
@@ -271,9 +279,11 @@
 
         function calculateTotal() {
             let subtotal = 0;
+            let totalWeight = 0;
             const liveQtyInputs = document.querySelectorAll('.qty-input');
             const livePriceInputs = document.querySelectorAll('.price-input');
             const liveRowSubtotals = document.querySelectorAll('.row-subtotal');
+            const variantSelects = document.querySelectorAll('.variant-select');
 
             for (let i = 0; i < liveQtyInputs.length; i++) {
                 const qty = parseFloat(liveQtyInputs[i].value) || 0;
@@ -283,6 +293,30 @@
                     liveRowSubtotals[i].value = rowTotal.toFixed(0);
                 }
                 subtotal += rowTotal;
+
+                // Calculate Weight
+                const select = variantSelects[i];
+                if (select && select.selectedIndex >= 0) {
+                    const option = select.options[select.selectedIndex];
+                    const unitQty = option.dataset.unit_qty ? parseFloat(option.dataset.unit_qty) : 1;
+                    totalWeight += qty * unitQty;
+                }
+            }
+
+            const deliveryMethod = document.getElementById('deliveryMethodSelect');
+            const deliveryType = document.getElementById('deliveryTypeSelect');
+            
+            if (deliveryMethod && deliveryMethod.value === 'steadfast') {
+                document.getElementById('deliveryTypeContainer').style.display = 'block';
+                if (deliveryType && deliveryType.value === '1') { // Point Delivery
+                    const autoCharge = Math.max(1, Math.ceil(totalWeight)) * 20;
+                    if (deliveryChargeInput) {
+                        deliveryChargeInput.value = autoCharge;
+                    }
+                }
+            } else {
+                const typeContainer = document.getElementById('deliveryTypeContainer');
+                if (typeContainer) typeContainer.style.display = 'none';
             }
 
             const delivery = parseFloat(deliveryChargeInput.value) || 0;
@@ -297,6 +331,11 @@
             
             return grandTotal;
         }
+
+        const deliveryMethodSel = document.getElementById('deliveryMethodSelect');
+        const deliveryTypeSel = document.getElementById('deliveryTypeSelect');
+        if (deliveryMethodSel) deliveryMethodSel.addEventListener('change', calculateTotal);
+        if (deliveryTypeSel) deliveryTypeSel.addEventListener('change', calculateTotal);
 
         function updateFullPayment() {
             if (isPromotionalCheckbox && isPromotionalCheckbox.checked) {

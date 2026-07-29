@@ -36,6 +36,7 @@ class SteadfastService
                 'recipient_address' => $data['recipient_address'] ?? 'N/A',
                 'cod_amount' => $data['cod_amount'],
                 'note' => $data['note'] ?? 'ERP Generated Order',
+                'delivery_type' => $data['delivery_type'] ?? 1, // 0 for Home Delivery, 1 for Point Delivery
             ]);
 
             if ($response->successful()) {
@@ -98,6 +99,7 @@ class SteadfastService
             'recipient_address' => $recipientAddress,
             'cod_amount' => $codAmount,
             'note' => $sale->notes ?? 'ERP Generated Order',
+            'delivery_type' => $sale->delivery_type ?? 1,
         ];
 
         $response = self::createOrder($data);
