@@ -119,19 +119,19 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::delete('/warehouses/{id}', [AdminApiController::class, 'destroyWarehouse'])
         ->middleware('permission:delete warehouses');
 
-    // ── Imports ───────────────────────────────────────────────────────────────
-    Route::get('/import-form-data', [AdminApiController::class, 'importFormData'])
-        ->middleware('permission:view imports');
-    Route::get('/imports', [AdminApiController::class, 'imports'])
-        ->middleware('permission:view imports');
-    Route::get('/imports/{id}', [AdminApiController::class, 'showImport'])
-        ->middleware('permission:view imports');
-    Route::post('/imports', [AdminApiController::class, 'storeImport'])
-        ->middleware('permission:create imports');
-    Route::put('/imports/{id}', [AdminApiController::class, 'updateImport'])
-        ->middleware('permission:edit imports');
-    Route::delete('/imports/{id}', [AdminApiController::class, 'destroyImport'])
-        ->middleware('permission:delete imports');
+    // ── Purchases ─────────────────────────────────────────────────────────────
+    Route::get('/purchase-form-data', [AdminApiController::class, 'purchaseFormData'])
+        ->middleware('permission:view purchases');
+    Route::get('/purchases', [AdminApiController::class, 'purchases'])
+        ->middleware('permission:view purchases');
+    Route::get('/purchases/{id}', [AdminApiController::class, 'showPurchase'])
+        ->middleware('permission:view purchases');
+    Route::post('/purchases', [AdminApiController::class, 'storePurchase'])
+        ->middleware('permission:create purchases');
+    Route::put('/purchases/{id}', [AdminApiController::class, 'updatePurchase'])
+        ->middleware('permission:edit purchases');
+    Route::delete('/purchases/{id}', [AdminApiController::class, 'destroyPurchase'])
+        ->middleware('permission:delete purchases');
 
     // ── Sales ─────────────────────────────────────────────────────────────────
     Route::get('/sales', [AdminApiController::class, 'sales'])

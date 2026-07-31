@@ -64,7 +64,7 @@
             @endcan
 
             {{-- ── Inventory ──────────────────────────────────────────── --}}
-            @canany(['view warehouses', 'view products', 'view imports', 'view journals'])
+            @canany(['view warehouses', 'view products', 'view purchases', 'view journals'])
             <li class="side-nav-title mt-2">Inventory</li>
             @endcanany
 
@@ -104,11 +104,11 @@
             </li>
             @endcanany
 
-            @can('view imports')
+            @can('view purchases')
             <li class="side-nav-item">
-                <a href="{{ route('imports.index') }}" class="side-nav-link">
-                    <i class="ri-download-2-fill"></i>
-                    <span> Imports (Shipments) </span>
+                <a href="{{ route('purchases.index') }}" class="side-nav-link">
+                    <i class="ri-shopping-bag-3-fill"></i>
+                    <span> Purchases (Shipments) </span>
                 </a>
             </li>
             @endcan

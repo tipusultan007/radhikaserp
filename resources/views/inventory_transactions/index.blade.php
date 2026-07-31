@@ -93,7 +93,7 @@
                                     <td>
                                         @php
                                             $badgeClass = 'bg-secondary';
-                                            if(in_array($txn->type, ['import', 'transfer_in', 'repack_output'])) $badgeClass = 'bg-success';
+                                            if(in_array($txn->type, ['purchase', 'import', 'transfer_in', 'repack_output'])) $badgeClass = 'bg-success';
                                             elseif(in_array($txn->type, ['sale', 'transfer_out', 'repack_input'])) $badgeClass = 'bg-danger';
                                             elseif($txn->type == 'adjustment') $badgeClass = 'bg-warning text-dark';
                                         @endphp

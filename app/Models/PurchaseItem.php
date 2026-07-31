@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 
-#[Fillable(['import_id', 'product_id', 'qty', 'unit_cost', 'total_cost'])]
-class ImportItem extends Model
+#[Fillable(['purchase_id', 'product_id', 'qty', 'unit_cost', 'total_cost'])]
+class PurchaseItem extends Model
 {
     use HasFactory;
 
@@ -17,9 +17,9 @@ class ImportItem extends Model
         'total_cost' => 'decimal:2',
     ];
 
-    public function import()
+    public function purchase()
     {
-        return $this->belongsTo(Import::class);
+        return $this->belongsTo(Purchase::class);
     }
 
     public function product()

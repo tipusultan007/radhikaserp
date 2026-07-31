@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 
-#[Fillable(['import_no', 'supplier_id', 'warehouse_id', 'date', 'total_cost'])]
-class Import extends Model
+#[Fillable(['purchase_no', 'supplier_id', 'warehouse_id', 'date', 'total_cost', 'purchase_type', 'delivery_cost', 'total_landed_cost', 'cost_breakdown'])]
+class Purchase extends Model
 {
     use HasFactory;
     use \App\Traits\LogsActivity;
@@ -15,6 +15,9 @@ class Import extends Model
     protected $casts = [
         'date' => 'date',
         'total_cost' => 'decimal:2',
+        'delivery_cost' => 'decimal:2',
+        'total_landed_cost' => 'decimal:2',
+        'cost_breakdown' => 'array',
     ];
 
     public function supplier()
@@ -29,6 +32,6 @@ class Import extends Model
 
     public function items()
     {
-        return $this->hasMany(ImportItem::class);
+        return $this->hasMany(PurchaseItem::class);
     }
 }

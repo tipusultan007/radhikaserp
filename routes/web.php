@@ -7,7 +7,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductVariantController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\SupplierController;
-use App\Http\Controllers\ImportController;
+use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SalePaymentController;
 use App\Http\Controllers\ReportController;
@@ -156,22 +156,22 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::delete('suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
     });
 
-    // ─── Imports ────────────────────────────────────────────────────────────────
-    Route::group(['middleware' => ['permission:create imports']], function () {
-        Route::get('imports/create', [ImportController::class, 'create'])->name('imports.create');
-        Route::post('imports', [ImportController::class, 'store'])->name('imports.store');
+    // ─── Purchases ───────────────────────────────────────────────────────────────
+    Route::group(['middleware' => ['permission:create purchases']], function () {
+        Route::get('purchases/create', [PurchaseController::class, 'create'])->name('purchases.create');
+        Route::post('purchases', [PurchaseController::class, 'store'])->name('purchases.store');
     });
-    Route::group(['middleware' => ['permission:view imports']], function () {
-        Route::get('imports', [ImportController::class, 'index'])->name('imports.index');
-        Route::get('imports/{import}', [ImportController::class, 'show'])->name('imports.show');
+    Route::group(['middleware' => ['permission:view purchases']], function () {
+        Route::get('purchases', [PurchaseController::class, 'index'])->name('purchases.index');
+        Route::get('purchases/{purchase}', [PurchaseController::class, 'show'])->name('purchases.show');
     });
-    Route::group(['middleware' => ['permission:edit imports']], function () {
-        Route::get('imports/{import}/edit', [ImportController::class, 'edit'])->name('imports.edit');
-        Route::put('imports/{import}', [ImportController::class, 'update'])->name('imports.update');
-        Route::patch('imports/{import}', [ImportController::class, 'update']);
+    Route::group(['middleware' => ['permission:edit purchases']], function () {
+        Route::get('purchases/{purchase}/edit', [PurchaseController::class, 'edit'])->name('purchases.edit');
+        Route::put('purchases/{purchase}', [PurchaseController::class, 'update'])->name('purchases.update');
+        Route::patch('purchases/{purchase}', [PurchaseController::class, 'update']);
     });
-    Route::group(['middleware' => ['permission:delete imports']], function () {
-        Route::delete('imports/{import}', [ImportController::class, 'destroy'])->name('imports.destroy');
+    Route::group(['middleware' => ['permission:delete purchases']], function () {
+        Route::delete('purchases/{purchase}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
     });
 
     // ─── Sales / POS ────────────────────────────────────────────────────────────

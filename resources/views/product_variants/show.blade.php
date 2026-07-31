@@ -87,7 +87,7 @@
                                          <tr>
                                              <td>{{ $transaction->date->format('d M Y') }}</td>
                                              <td>
-                                                 @if(in_array($transaction->type, ['import', 'opening_balance', 'production', 'transfer_in', 'repackaging_in', 'stock_in', 'adjustment_add']))
+                                                 @if(in_array($transaction->type, ['purchase', 'import', 'opening_balance', 'production', 'transfer_in', 'repackaging_in', 'stock_in', 'adjustment_add']))
                                                      <span class="badge bg-success">{{ ucfirst(str_replace('_', ' ', $transaction->type)) }}</span>
                                                  @else
                                                      <span class="badge bg-danger">{{ ucfirst(str_replace('_', ' ', $transaction->type)) }}</span>

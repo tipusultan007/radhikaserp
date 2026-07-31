@@ -46,7 +46,7 @@ class RoutingController extends Controller
 
         // Recent Activity
         $recentSales = \App\Models\Sale::with('customer')->latest('date')->take(5)->get();
-        $recentImports = \App\Models\Import::with('supplier')->latest('date')->take(5)->get();
+        $recentPurchases = \App\Models\Purchase::with('supplier')->latest('date')->take(5)->get();
 
         // Chart.js Data (Last 7 Days)
         $dates = collect();
@@ -61,7 +61,7 @@ class RoutingController extends Controller
             $expensesData->push(\App\Models\Expense::whereDate('date', $date)->sum('amount'));
         }
 
-        return view('index', compact('totalSales', 'totalExpenses', 'cashBalance', 'lowStockAlerts', 'lowStockBatches', 'recentSales', 'recentImports', 'dates', 'salesData', 'expensesData'));
+        return view('index', compact('totalSales', 'totalExpenses', 'cashBalance', 'lowStockAlerts', 'lowStockBatches', 'recentSales', 'recentPurchases', 'dates', 'salesData', 'expensesData'));
     }
 
     /**

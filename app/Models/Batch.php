@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 
-#[Fillable(['batch_no', 'product_id', 'product_variant_id', 'warehouse_id', 'import_id', 'qty_in', 'qty_out', 'remaining_qty', 'cost_per_unit', 'expiry_date'])]
+#[Fillable(['batch_no', 'product_id', 'product_variant_id', 'warehouse_id', 'purchase_id', 'qty_in', 'qty_out', 'remaining_qty', 'cost_per_unit', 'expiry_date'])]
 class Batch extends Model
 {
     use HasFactory;
@@ -34,8 +34,8 @@ class Batch extends Model
         return $this->belongsTo(Warehouse::class);
     }
 
-    public function import()
+    public function purchase()
     {
-        return $this->belongsTo(Import::class);
+        return $this->belongsTo(Purchase::class);
     }
 }

@@ -8,7 +8,8 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Customer;
 use App\Models\Supplier;
-use App\Models\Import;
+use App\Models\Purchase;
+use App\Models\PurchaseItem;
 use App\Models\Expense;
 use App\Models\Warehouse;
 use App\Models\StockTransfer;
@@ -1214,7 +1215,7 @@ class AdminApiController extends Controller
 
     public function supplierPurchases($id)
     {
-        $purchases = \App\Models\Import::where('supplier_id', $id)
+        $purchases = \App\Models\Purchase::where('supplier_id', $id)
             ->with('warehouse')
             ->orderBy('date', 'desc')
             ->paginate(20);
@@ -1270,12 +1271,12 @@ class AdminApiController extends Controller
             return response()->json(['ledger' => ['data' => []], 'total_payable' => 0]);
         }
 
-        $importIds = \App\Models\Import::where('supplier_id', $id)->pluck('id');
+        $purchaseIds = \App\Models\Purchase::where('supplier_id', $id)->pluck('id');
 
         $supplierJournalIds = \App\Models\Journal::where(function($q) use ($supplier) {
             $q->where('reference_type', \App\Models\Supplier::class)->where('reference_id', $supplier->id);
-        })->orWhere(function($q) use ($importIds) {
-            $q->where('reference_type', \App\Models\Import::class)->whereIn('reference_id', $importIds);
+        })->orWhere(function($q) use ($purchaseIds) {
+            $q->where('reference_type', \App\Models\Purchase::class)->whereIn('reference_id', $purchaseIds);
         })->pluck('id');
 
         $query = \App\Models\JournalEntry::with('journal')
@@ -1324,9 +1325,9 @@ class AdminApiController extends Controller
     }
 
     /**
-     * Get all imports (purchases).
+     * Get all purchases.
      */
-        public function importFormData()
+    public function purchaseFormData()
     {
         $suppliers = \App\Models\Supplier::all();
         $warehouses = \App\Models\Warehouse::all();
@@ -1338,19 +1339,19 @@ class AdminApiController extends Controller
         ]);
     }
 
-    public function imports(Request $request)
+    public function purchases(Request $request)
     {
-        $imports = Import::with(['supplier', 'warehouse', 'items.product.unit'])->orderBy('date', 'desc')->get();
-        return response()->json(['imports' => $imports]);
+        $purchases = Purchase::with(['supplier', 'warehouse', 'items.product.unit'])->orderBy('date', 'desc')->get();
+        return response()->json(['purchases' => $purchases]);
     }
 
-    public function showImport($id)
+    public function showPurchase($id)
     {
-        $import = Import::with(['supplier', 'warehouse', 'items.product.unit'])->findOrFail($id);
-        return response()->json(['import' => $import]);
+        $purchase = Purchase::with(['supplier', 'warehouse', 'items.product.unit'])->findOrFail($id);
+        return response()->json(['purchase' => $purchase]);
     }
 
-    public function storeImport(Request $request)
+    public function storePurchase(Request $request)
     {
         $validated = $request->validate([
             'supplier_id' => 'required|exists:suppliers,id',
@@ -1359,7 +1360,7 @@ class AdminApiController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.qty' => 'required|numeric|min:0.001',
-            'items.*.unit_cost' => 'required|numeric|min:0.001',
+            'items.*.unit_cost' => 'nullable|numeric|min:0',
         ]);
 
         try {
@@ -1367,130 +1368,12 @@ class AdminApiController extends Controller
 
             $totalCost = 0;
             foreach ($validated['items'] as $item) {
-                $totalCost += $item['qty'] * $item['unit_cost'];
+                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float)$item['unit_cost'] : 0;
+                $totalCost += $item['qty'] * $unitCost;
             }
 
-            $import = Import::create([
-                'import_no' => 'IMP-' . strtoupper(Str::random(6)),
-                'supplier_id' => $validated['supplier_id'],
-                'warehouse_id' => $validated['warehouse_id'],
-                'date' => $validated['date'],
-                'total_cost' => $totalCost,
-            ]);
-
-            $supplier = \App\Models\Supplier::find($validated['supplier_id']);
-            $supplier->increment('total_payable', $totalCost);
-
-            foreach ($validated['items'] as $item) {
-                $lineTotal = $item['qty'] * $item['unit_cost'];
-
-                \App\Models\ImportItem::create([
-                    'import_id' => $import->id,
-                    'product_id' => $item['product_id'],
-                    'qty' => $item['qty'],
-                    'unit_cost' => $item['unit_cost'],
-                    'total_cost' => $lineTotal,
-                ]);
-
-                $batch = \App\Models\Batch::create([
-                    'batch_no' => 'B-' . $import->id . '-' . $item['product_id'] . '-' . strtoupper(Str::random(4)),
-                    'product_id' => $item['product_id'],
-                    'warehouse_id' => $validated['warehouse_id'],
-                    'import_id' => $import->id,
-                    'qty_in' => $item['qty'],
-                    'qty_out' => 0,
-                    'remaining_qty' => $item['qty'],
-                    'cost_per_unit' => $item['unit_cost'],
-                    'expiry_date' => null,
-                ]);
-
-                \App\Models\InventoryTransaction::create([
-                    'warehouse_id' => $validated['warehouse_id'],
-                    'product_id' => $item['product_id'],
-                    'batch_id' => $batch->id,
-                    'type' => 'import',
-                    'qty_in' => $item['qty'],
-                    'qty_out' => 0,
-                    'cost' => $lineTotal,
-                    'reference_type' => Import::class,
-                    'reference_id' => $import->id,
-                    'date' => $validated['date'],
-                    'created_by' => $request->user()->id ?? 1,
-                ]);
-            }
-
-            $inventoryAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
-            $payableAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Payable', 'type' => 'liability'], ['parent_id' => null]);
-
-            $journal = Journal::create([
-                'journal_no' => 'JNL-' . strtoupper(Str::random(6)),
-                'date' => $validated['date'],
-                'reference_type' => Import::class,
-                'reference_id' => $import->id,
-                'notes' => 'Import Shipment ' . $import->import_no,
-                'created_by' => $request->user()->id ?? 1,
-            ]);
-
-            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $inventoryAcc->id, 'type' => 'debit', 'amount' => $totalCost]);
-            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $payableAcc->id, 'type' => 'credit', 'amount' => $totalCost]);
-
-            DB::commit();
-            return response()->json(['message' => 'Import confirmed successfully', 'import' => $import], 201);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['error' => $e->getMessage()], 400);
-        }
-    }
-
-    public function updateImport(Request $request, $id)
-    {
-        $validated = $request->validate([
-            'supplier_id' => 'required|exists:suppliers,id',
-            'warehouse_id' => 'required|exists:warehouses,id',
-            'date' => 'required|date',
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.qty' => 'required|numeric|min:0.001',
-            'items.*.unit_cost' => 'required|numeric|min:0.001',
-        ]);
-
-        try {
-            DB::beginTransaction();
-
-            $import = Import::findOrFail($id);
-
-            // Reverse existing import
-            $batches = \App\Models\Batch::where('import_id', $import->id)->get();
-            foreach ($batches as $batch) {
-                if ($batch->qty_out > 0) {
-                    throw new \Exception("Cannot update import. Stock from batch {$batch->batch_no} has already been consumed.");
-                }
-            }
-
-            $supplier = \App\Models\Supplier::find($import->supplier_id);
-            if ($supplier) {
-                $supplier->decrement('total_payable', $import->total_cost);
-            }
-
-            \App\Models\Batch::where('import_id', $import->id)->delete();
-            \App\Models\InventoryTransaction::where('reference_type', Import::class)->where('reference_id', $import->id)->delete();
-            
-            // Delete old journals
-            $journals = \App\Models\Journal::where('reference_type', Import::class)->where('reference_id', $import->id)->get();
-            foreach ($journals as $journal) {
-                \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
-                $journal->delete();
-            }
-
-            $import->items()->delete();
-
-            // Apply new data
-            $totalCost = 0;
-            foreach ($validated['items'] as $item) {
-                $totalCost += $item['qty'] * $item['unit_cost'];
-            }
-
-            $import->update([
+            $purchase = Purchase::create([
+                'purchase_no' => 'PUR-' . strtoupper(Str::random(6)),
                 'supplier_id' => $validated['supplier_id'],
                 'warehouse_id' => $validated['warehouse_id'],
                 'date' => $validated['date'],
@@ -1503,25 +1386,26 @@ class AdminApiController extends Controller
             }
 
             foreach ($validated['items'] as $item) {
-                $lineTotal = $item['qty'] * $item['unit_cost'];
+                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float)$item['unit_cost'] : 0;
+                $lineTotal = $item['qty'] * $unitCost;
 
-                \App\Models\ImportItem::create([
-                    'import_id' => $import->id,
+                PurchaseItem::create([
+                    'purchase_id' => $purchase->id,
                     'product_id' => $item['product_id'],
                     'qty' => $item['qty'],
-                    'unit_cost' => $item['unit_cost'],
+                    'unit_cost' => $unitCost,
                     'total_cost' => $lineTotal,
                 ]);
 
                 $batch = \App\Models\Batch::create([
-                    'batch_no' => 'B-' . $import->id . '-' . $item['product_id'] . '-' . strtoupper(Str::random(4)),
+                    'batch_no' => 'B-' . $purchase->id . '-' . $item['product_id'] . '-' . strtoupper(Str::random(4)),
                     'product_id' => $item['product_id'],
                     'warehouse_id' => $validated['warehouse_id'],
-                    'import_id' => $import->id,
+                    'purchase_id' => $purchase->id,
                     'qty_in' => $item['qty'],
                     'qty_out' => 0,
                     'remaining_qty' => $item['qty'],
-                    'cost_per_unit' => $item['unit_cost'],
+                    'cost_per_unit' => $unitCost,
                     'expiry_date' => null,
                 ]);
 
@@ -1529,12 +1413,135 @@ class AdminApiController extends Controller
                     'warehouse_id' => $validated['warehouse_id'],
                     'product_id' => $item['product_id'],
                     'batch_id' => $batch->id,
-                    'type' => 'import',
+                    'type' => 'purchase',
                     'qty_in' => $item['qty'],
                     'qty_out' => 0,
                     'cost' => $lineTotal,
-                    'reference_type' => Import::class,
-                    'reference_id' => $import->id,
+                    'reference_type' => Purchase::class,
+                    'reference_id' => $purchase->id,
+                    'date' => $validated['date'],
+                    'created_by' => $request->user()->id ?? 1,
+                ]);
+            }
+
+            $inventoryAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
+            $payableAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Accounts Payable', 'type' => 'liability'], ['parent_id' => null]);
+
+            $journal = Journal::create([
+                'journal_no' => 'JNL-' . strtoupper(Str::random(6)),
+                'date' => $validated['date'],
+                'reference_type' => Purchase::class,
+                'reference_id' => $purchase->id,
+                'notes' => 'Purchase Shipment ' . $purchase->purchase_no,
+                'created_by' => $request->user()->id ?? 1,
+            ]);
+
+            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $inventoryAcc->id, 'type' => 'debit', 'amount' => $totalCost]);
+            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $payableAcc->id, 'type' => 'credit', 'amount' => $totalCost]);
+
+            DB::commit();
+            return response()->json(['message' => 'Purchase confirmed successfully', 'purchase' => $purchase], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    public function updatePurchase(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'supplier_id' => 'required|exists:suppliers,id',
+            'warehouse_id' => 'required|exists:warehouses,id',
+            'date' => 'required|date',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.qty' => 'required|numeric|min:0.001',
+            'items.*.unit_cost' => 'nullable|numeric|min:0',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $purchase = Purchase::findOrFail($id);
+
+            // Reverse existing purchase
+            $batches = \App\Models\Batch::where('purchase_id', $purchase->id)->get();
+            foreach ($batches as $batch) {
+                if ($batch->qty_out > 0) {
+                    throw new \Exception("Cannot update purchase. Stock from batch {$batch->batch_no} has already been consumed.");
+                }
+            }
+
+            $supplier = \App\Models\Supplier::find($purchase->supplier_id);
+            if ($supplier) {
+                $supplier->decrement('total_payable', $purchase->total_cost);
+            }
+
+            \App\Models\Batch::where('purchase_id', $purchase->id)->delete();
+            \App\Models\InventoryTransaction::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->delete();
+            
+            // Delete old journals
+            $journals = \App\Models\Journal::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->get();
+            foreach ($journals as $journal) {
+                \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
+                $journal->delete();
+            }
+
+            $purchase->items()->delete();
+
+            // Apply new data
+            $totalCost = 0;
+            foreach ($validated['items'] as $item) {
+                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float)$item['unit_cost'] : 0;
+                $totalCost += $item['qty'] * $unitCost;
+            }
+
+            $purchase->update([
+                'supplier_id' => $validated['supplier_id'],
+                'warehouse_id' => $validated['warehouse_id'],
+                'date' => $validated['date'],
+                'total_cost' => $totalCost,
+            ]);
+
+            $supplier = \App\Models\Supplier::find($validated['supplier_id']);
+            if ($supplier) {
+                $supplier->increment('total_payable', $totalCost);
+            }
+
+            foreach ($validated['items'] as $item) {
+                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float)$item['unit_cost'] : 0;
+                $lineTotal = $item['qty'] * $unitCost;
+
+                PurchaseItem::create([
+                    'purchase_id' => $purchase->id,
+                    'product_id' => $item['product_id'],
+                    'qty' => $item['qty'],
+                    'unit_cost' => $unitCost,
+                    'total_cost' => $lineTotal,
+                ]);
+
+                $batch = \App\Models\Batch::create([
+                    'batch_no' => 'B-' . $purchase->id . '-' . $item['product_id'] . '-' . strtoupper(Str::random(4)),
+                    'product_id' => $item['product_id'],
+                    'warehouse_id' => $validated['warehouse_id'],
+                    'purchase_id' => $purchase->id,
+                    'qty_in' => $item['qty'],
+                    'qty_out' => 0,
+                    'remaining_qty' => $item['qty'],
+                    'cost_per_unit' => $unitCost,
+                    'expiry_date' => null,
+                ]);
+
+                \App\Models\InventoryTransaction::create([
+                    'warehouse_id' => $validated['warehouse_id'],
+                    'product_id' => $item['product_id'],
+                    'batch_id' => $batch->id,
+                    'type' => 'purchase',
+                    'qty_in' => $item['qty'],
+                    'qty_out' => 0,
+                    'cost' => $lineTotal,
+                    'reference_type' => Purchase::class,
+                    'reference_id' => $purchase->id,
                     'date' => $validated['date'],
                     'created_by' => $request->user()->id ?? 1,
                 ]);
@@ -1547,9 +1554,9 @@ class AdminApiController extends Controller
             $journal = \App\Models\Journal::create([
                 'journal_no' => 'JNL-' . strtoupper(Str::random(6)),
                 'date' => $validated['date'],
-                'reference_type' => Import::class,
-                'reference_id' => $import->id,
-                'notes' => 'Import Shipment ' . $import->import_no . ' (Updated)',
+                'reference_type' => Purchase::class,
+                'reference_id' => $purchase->id,
+                'notes' => 'Purchase Shipment ' . $purchase->purchase_no . ' (Updated)',
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
@@ -1568,7 +1575,7 @@ class AdminApiController extends Controller
             ]);
 
             DB::commit();
-            return response()->json(['message' => 'Import updated successfully', 'import' => $import], 200);
+            return response()->json(['message' => 'Purchase updated successfully', 'purchase' => $purchase], 200);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1576,38 +1583,38 @@ class AdminApiController extends Controller
         }
     }
 
-    public function destroyImport($id)
+    public function destroyPurchase($id)
     {
         try {
             DB::beginTransaction();
-            $import = Import::findOrFail($id);
+            $purchase = Purchase::findOrFail($id);
 
-            $batches = \App\Models\Batch::where('import_id', $import->id)->get();
+            $batches = \App\Models\Batch::where('purchase_id', $purchase->id)->get();
             foreach ($batches as $batch) {
                 if ($batch->qty_out > 0) {
-                    throw new \Exception("Cannot reverse import. Stock from batch {$batch->batch_no} has already been consumed.");
+                    throw new \Exception("Cannot reverse purchase. Stock from batch {$batch->batch_no} has already been consumed.");
                 }
             }
 
-            $supplier = \App\Models\Supplier::find($import->supplier_id);
+            $supplier = \App\Models\Supplier::find($purchase->supplier_id);
             if ($supplier) {
-                $supplier->decrement('total_payable', $import->total_cost);
+                $supplier->decrement('total_payable', $purchase->total_cost);
             }
 
-            \App\Models\Batch::where('import_id', $import->id)->delete();
-            \App\Models\InventoryTransaction::where('reference_type', Import::class)->where('reference_id', $import->id)->delete();
+            \App\Models\Batch::where('purchase_id', $purchase->id)->delete();
+            \App\Models\InventoryTransaction::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->delete();
 
-            $journals = \App\Models\Journal::where('reference_type', Import::class)->where('reference_id', $import->id)->get();
+            $journals = \App\Models\Journal::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->get();
             foreach ($journals as $journal) {
                 \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
                 $journal->delete();
             }
 
-            \App\Models\ImportItem::where('import_id', $import->id)->delete();
-            $import->delete();
+            PurchaseItem::where('purchase_id', $purchase->id)->delete();
+            $purchase->delete();
 
             DB::commit();
-            return response()->json(['message' => 'Import deleted successfully']);
+            return response()->json(['message' => 'Purchase deleted successfully']);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['error' => $e->getMessage()], 400);

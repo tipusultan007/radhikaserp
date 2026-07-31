@@ -170,8 +170,8 @@
             <div class="col-xl-6">
                 <div class="card">
                     <div class="d-flex card-header justify-content-between align-items-center">
-                        <h4 class="header-title">Recent Imports</h4>
-                        <a href="{{ route('imports.index') }}" class="btn btn-sm btn-success">View All</a>
+                        <h4 class="header-title">Recent Purchases</h4>
+                        <a href="{{ route('purchases.index') }}" class="btn btn-sm btn-success">View All</a>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive">
@@ -185,13 +185,13 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach($recentImports as $import)
+                                    @foreach($recentPurchases as $purchase)
                                     <tr>
-                                        @can('view imports')
-                                        <td>{{ $import->ref_no }}</td>
-                                        <td>{{ $import->date->format('M d, Y') }}</td>
-                                        <td>{{ $import->supplier->name ?? 'N/A' }}</td>
-                                        <td class="text-danger fw-bold">${{ number_format($import->grand_total, 0) }}</td>
+                                        @can('view purchases')
+                                        <td>{{ $purchase->purchase_no }}</td>
+                                        <td>{{ $purchase->date->format('M d, Y') }}</td>
+                                        <td>{{ $purchase->supplier->name ?? 'N/A' }}</td>
+                                        <td class="text-danger fw-bold">${{ number_format($purchase->total_cost, 0) }}</td>
                                         @endcan
                                     </tr>
                                     @endforeach

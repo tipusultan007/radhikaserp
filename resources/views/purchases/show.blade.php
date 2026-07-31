@@ -1,15 +1,15 @@
-@extends('layouts.vertical', ['page_title' => 'Import Shipment Details', 'mode' => $mode ?? '', 'demo' => $demo ?? ''])
+@extends('layouts.vertical', ['page_title' => 'Purchase Shipment Details', 'mode' => $mode ?? '', 'demo' => $demo ?? ''])
 
 @section('content')
     <div class="container-fluid">
          <div class="row">
             <div class="col-12">
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
-                    <h4 class="page-title">Import Details</h4>
+                    <h4 class="page-title">Purchase Details</h4>
                     <ol class="breadcrumb m-0">
                         <li class="breadcrumb-item"><a href="{{ route('home') }}">ERP</a></li>
-                        <li class="breadcrumb-item"><a href="{{ route('imports.index') }}">Imports</a></li>
-                        <li class="breadcrumb-item active">{{ $import->import_no }}</li>
+                        <li class="breadcrumb-item"><a href="{{ route('purchases.index') }}">Purchases</a></li>
+                        <li class="breadcrumb-item active">{{ $purchase->purchase_no }}</li>
                     </ol>
                 </div>
             </div>
@@ -33,20 +33,27 @@
                          
                          <div class="d-flex justify-content-between align-items-center border-bottom pb-4 mb-4">
                              <div>
-                                 <h2 class="mb-1 fw-bold text-dark">Shipment {{ $import->import_no }}</h2>
-                                 <p class="text-muted mb-0"><i class="ri-calendar-event-line"></i> Imported on {{ $import->date->format('F d, Y') }}</p>
+                                 <div class="d-flex align-items-center gap-2">
+                                     <h2 class="mb-1 fw-bold text-dark">Shipment {{ $purchase->purchase_no }}</h2>
+                                     @if($purchase->purchase_type === 'local')
+                                         <span class="badge bg-success-subtle text-success fs-13 px-2 py-1"><i class="ri-map-pin-user-line me-1"></i> Local Purchase</span>
+                                     @else
+                                         <span class="badge bg-primary-subtle text-primary fs-13 px-2 py-1"><i class="ri-global-line me-1"></i> Imported Purchase</span>
+                                     @endif
+                                 </div>
+                                 <p class="text-muted mb-0 mt-1"><i class="ri-calendar-event-line"></i> Purchased on {{ $purchase->date->format('F d, Y') }}</p>
                              </div>
                              <div class="text-end">
                                  <div class="d-flex gap-2 justify-content-end">
-                                    @canany(['edit imports', 'manage imports'])
-                                    <a href="{{ route('imports.edit', $import->id) }}" class="btn btn-soft-primary"><i class="ri-edit-line"></i> Edit</a>
+                                    @canany(['edit purchases', 'manage purchases'])
+                                    <a href="{{ route('purchases.edit', $purchase->id) }}" class="btn btn-soft-primary"><i class="ri-edit-line"></i> Edit</a>
                                     @endcanany
                                     
-                                    @canany(['delete imports', 'manage imports'])
-                                    <form action="{{ route('imports.destroy', $import->id) }}" method="POST" class="d-inline">
+                                    @canany(['delete purchases', 'manage purchases'])
+                                    <form action="{{ route('purchases.destroy', $purchase->id) }}" method="POST" class="d-inline">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="submit" class="btn btn-soft-danger" onclick="return confirm('Are you sure you want to delete this Import? This will reverse the supplier payable and remove stock from the warehouse. Action cannot be undone if stock is already consumed.')">
+                                        <button type="submit" class="btn btn-soft-danger" onclick="return confirm('Are you sure you want to delete this Purchase? This will reverse the supplier payable and remove stock from the warehouse. Action cannot be undone if stock is already consumed.')">
                                             <i class="ri-delete-bin-line"></i> Delete
                                         </button>
                                     </form>
@@ -62,23 +69,63 @@
                              <div class="col-sm-6">
                                  <h6 class="text-uppercase text-muted fs-12 fw-bold mb-2">Supplier Details</h6>
                                  <div class="p-3 bg-light rounded">
-                                     <h5 class="mb-1 text-dark fw-semibold"><i class="ri-building-line text-primary me-1"></i> {{ $import->supplier->name ?? 'N/A' }}</h5>
-                                     @if($import->supplier)
-                                        <p class="mb-0 text-muted fs-13"><i class="ri-phone-line me-1"></i> {{ $import->supplier->phone ?? 'No phone' }}</p>
-                                        <p class="mb-0 text-muted fs-13"><i class="ri-map-pin-line me-1"></i> {{ $import->supplier->address ?? 'No address provided' }}</p>
+                                     <h5 class="mb-1 text-dark fw-semibold"><i class="ri-building-line text-primary me-1"></i> {{ $purchase->supplier->name ?? 'N/A' }}</h5>
+                                     @if($purchase->supplier)
+                                        <p class="mb-0 text-muted fs-13"><i class="ri-phone-line me-1"></i> {{ $purchase->supplier->phone ?? 'No phone' }}</p>
+                                        <p class="mb-0 text-muted fs-13"><i class="ri-map-pin-line me-1"></i> {{ $purchase->supplier->address ?? 'No address provided' }}</p>
                                      @endif
                                  </div>
                              </div>
                              <div class="col-sm-6">
                                  <h6 class="text-uppercase text-muted fs-12 fw-bold mb-2 mt-3 mt-sm-0">Destination Warehouse</h6>
                                  <div class="p-3 bg-light rounded h-100">
-                                     <h5 class="mb-1 text-dark fw-semibold"><i class="ri-store-2-line text-success me-1"></i> {{ $import->warehouse->name ?? 'N/A' }}</h5>
-                                     @if($import->warehouse)
-                                        <p class="mb-0 text-muted fs-13"><i class="ri-map-pin-line me-1"></i> {{ $import->warehouse->location ?? 'No location provided' }}</p>
+                                     <h5 class="mb-1 text-dark fw-semibold"><i class="ri-store-2-line text-success me-1"></i> {{ $purchase->warehouse->name ?? 'N/A' }}</h5>
+                                     @if($purchase->warehouse)
+                                        <p class="mb-0 text-muted fs-13"><i class="ri-map-pin-line me-1"></i> {{ $purchase->warehouse->location ?? 'No location provided' }}</p>
                                      @endif
                                  </div>
                              </div>
                          </div>
+
+                         <!-- Landed Cost / Delivery Expenses Section -->
+                         @if($purchase->purchase_type === 'local')
+                             <h6 class="text-uppercase text-muted fs-12 fw-bold mb-3">Local Purchase Expenses</h6>
+                             <div class="p-3 bg-light rounded mb-4 d-flex justify-content-between align-items-center">
+                                 <span class="fw-semibold text-dark fs-14"><i class="ri-truck-line me-1 text-primary"></i> Delivery Cost</span>
+                                 <span class="fw-bold fs-15 text-dark">${{ number_format($purchase->delivery_cost, 2) }}</span>
+                             </div>
+                         @elseif(!empty($purchase->cost_breakdown))
+                             <h6 class="text-uppercase text-muted fs-12 fw-bold mb-3">Imported Landed Cost Breakdown</h6>
+                             <div class="table-responsive mb-4">
+                                 <table class="table table-striped table-hover table-bordered mb-0">
+                                     <thead class="table-light">
+                                         <tr>
+                                             <th width="5%" class="text-center">#</th>
+                                             <th>Description</th>
+                                             <th class="text-end" width="25%">Amount (৳)</th>
+                                         </tr>
+                                     </thead>
+                                     <tbody>
+                                         @foreach ($purchase->cost_breakdown as $idx => $costRow)
+                                             @php
+                                                 $amt = $costRow['amount'] ?? ($costRow['bd_cost'] ?? 0);
+                                             @endphp
+                                             <tr>
+                                                 <td class="text-center fw-semibold text-muted">{{ $idx + 1 }}</td>
+                                                 <td class="fw-semibold text-dark">{{ $costRow['description'] ?? '' }}</td>
+                                                 <td class="text-end fw-bold">{{ !empty($amt) ? '৳' . number_format($amt, 2) : '-' }}</td>
+                                             </tr>
+                                         @endforeach
+                                     </tbody>
+                                     <tfoot>
+                                         <tr class="table-light">
+                                             <td colspan="2" class="text-end fw-bold">Total Landed Cost:</td>
+                                             <td class="text-end fw-bold text-success fs-5">৳{{ number_format($purchase->total_landed_cost, 2) }}</td>
+                                         </tr>
+                                     </tfoot>
+                                 </table>
+                             </div>
+                         @endif
 
                          <!-- Table Section -->
                          <h6 class="text-uppercase text-muted fs-12 fw-bold mb-3">Received Items</h6>
@@ -94,14 +141,14 @@
                                      </tr>
                                  </thead>
                                  <tbody>
-                                     @foreach ($import->items as $index => $item)
+                                     @foreach ($purchase->items as $index => $item)
                                          <tr>
                                              <td class="fw-semibold text-muted">{{ $index + 1 }}</td>
                                              <td>
                                                  <span class="fw-semibold text-dark">{{ $item->product->name }}</span>
                                              </td>
                                              <td class="text-end">
-                                                 <span class="badge bg-primary-subtle text-primary px-2 py-1 fs-13">{{ number_format($item->qty, 3) }} {{ $item->product->base_unit }}</span>
+                                                 <span class="badge bg-primary-subtle text-primary px-2 py-1 fs-13">{{ number_format($item->qty, 3) }} {{ $item->product && $item->product->unit ? $item->product->unit->short_name : 'Unit' }}</span>
                                              </td>
                                              <td class="text-end">${{ number_format($item->unit_cost, 0) }}</td>
                                              <td class="text-end fw-semibold">${{ number_format($item->total_cost, 0) }}</td>
@@ -126,7 +173,6 @@
                                  <tbody>
                                      @forelse ($relatedPayments as $payment)
                                          @php
-                                             // Find the debit entry for Accounts Payable to get the amount paid to the supplier
                                              $debitEntry = $payment->entries->where('type', 'debit')->first();
                                              $amount = $debitEntry ? $debitEntry->amount : 0;
                                          @endphp
@@ -138,7 +184,7 @@
                                          </tr>
                                      @empty
                                          <tr>
-                                             <td colspan="4" class="text-center text-muted py-3">No payments explicitly linked to this import yet. <br> <small>(To link a payment, include the import number <b>{{ $import->import_no }}</b> in the reference or notes when making a supplier payment.)</small></td>
+                                             <td colspan="4" class="text-center text-muted py-3">No payments explicitly linked to this purchase yet. <br> <small>(To link a payment, include the purchase number <b>{{ $purchase->purchase_no }}</b> in the reference or notes when making a supplier payment.)</small></td>
                                          </tr>
                                      @endforelse
                                  </tbody>
@@ -158,20 +204,25 @@
                              </div>
                              <div class="col-sm-6 text-end">
                                  <div class="mt-3 mt-sm-0">
-                                     <p class="mb-2 fs-15">Subtotal: <span class="fw-semibold ms-2">${{ number_format($import->total_cost, 0) }}</span></p>
-                                     <h3 class="fw-bold mt-3 mb-0 text-success">Grand Total: ${{ number_format($import->total_cost, 0) }}</h3>
+                                     <p class="mb-2 fs-15">Items Total Cost: <span class="fw-semibold ms-2">${{ number_format($purchase->total_cost, 2) }}</span></p>
+                                     @if($purchase->purchase_type === 'local' && $purchase->delivery_cost > 0)
+                                         <p class="mb-2 fs-15">Delivery Cost: <span class="fw-semibold ms-2">${{ number_format($purchase->delivery_cost, 2) }}</span></p>
+                                     @elseif($purchase->purchase_type === 'imported' && $purchase->total_landed_cost > 0)
+                                         <p class="mb-2 fs-15">Landed Expenses: <span class="fw-semibold ms-2">৳{{ number_format($purchase->total_landed_cost, 2) }}</span></p>
+                                     @endif
+                                     <h3 class="fw-bold mt-3 mb-0 text-success">Grand Total: ${{ number_format($purchase->total_cost, 2) }}</h3>
                                  </div>
                              </div>
                          </div>
                          
                          <div class="d-print-none mt-5 text-center">
-                             <a href="{{ route('imports.index') }}" class="btn btn-light"><i class="ri-arrow-left-line me-1"></i> Back to Imports List</a>
+                             <a href="{{ route('purchases.index') }}" class="btn btn-light"><i class="ri-arrow-left-line me-1"></i> Back to Purchases List</a>
                          </div>
 
                      </div>
                  </div>
              </div>
-         </div>
+          </div>
     </div>
 @endsection
 
@@ -195,4 +246,3 @@
     }
 </style>
 @endsection
-
