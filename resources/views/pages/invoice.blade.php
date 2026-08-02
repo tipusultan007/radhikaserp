@@ -13,7 +13,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">Invoice</h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Pages</a></li>
                         <li class="breadcrumb-item active">Invoice</li>
                     </ol>
@@ -30,7 +30,7 @@
                         <!-- Invoice Logo-->
                         <div class="clearfix">
                             <div class="float-start mb-3">
-                                <img src="/images/logo-dark.png" alt="dark logo" height="22">
+                                <span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span>
                             </div>
                             <div class="float-end">
                                 <h4 class="m-0 d-print-none">Invoice</h4>

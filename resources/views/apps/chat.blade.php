@@ -13,7 +13,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">Chat</h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Apps</a></li>
                         <li class="breadcrumb-item active">Chat</li>
                     </ol>
@@ -453,7 +453,7 @@
                                                     </div>
                                                 </div>
                                                 <div class="col ps-0">
-                                                    <a href="javascript:void(0);" class="text-muted fw-bold">Jidox-sketch.zip</a>
+                                                    <a href="javascript:void(0);" class="text-muted fw-bold">Radhikas Trade International-sketch.zip</a>
                                                     <p class="mb-0 text-muted">2.3 MB</p>
                                                 </div>
                                                 <div class="col-auto">

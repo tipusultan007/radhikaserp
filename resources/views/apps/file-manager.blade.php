@@ -10,7 +10,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">File Manager</h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Apps</a></li>
                         <li class="breadcrumb-item active">File Manager</li>
                     </ol>
@@ -92,7 +92,7 @@
                                                         </div>
                                                     </div>
                                                     <div class="col ps-0">
-                                                        <a href="javascript:void(0);" class="text-muted fw-bold">Jidox-sketch.zip</a>
+                                                        <a href="javascript:void(0);" class="text-muted fw-bold">Radhikas Trade International-sketch.zip</a>
                                                         <p class="mb-0 fs-13">2.3 MB</p>
                                                     </div>
                                                 </div> <!-- end row -->
@@ -212,7 +212,7 @@
                                                         </div>
                                                     </div>
                                                     <div class="col ps-0">
-                                                        <a href="javascript:void(0);" class="text-muted fw-bold">Jidox Integrations</a>
+                                                        <a href="javascript:void(0);" class="text-muted fw-bold">Radhikas Trade International Integrations</a>
                                                         <p class="mb-0 fs-13">874 MB</p>
                                                     </div>
                                                 </div> <!-- end row -->
@@ -286,7 +286,7 @@
 
                                             <tr>
                                                 <td>
-                                                    <span class="fw-semibold"><a href="javascript: void(0);" class="text-reset">Jidox-sketch-design.zip</a></span>
+                                                    <span class="fw-semibold"><a href="javascript: void(0);" class="text-reset">Radhikas Trade International-sketch-design.zip</a></span>
                                                 </td>
                                                 <td>
                                                     <p class="mb-0">Feb 13, 2023</p>

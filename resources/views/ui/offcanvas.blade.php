@@ -13,7 +13,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">Offcanvas</h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Base UI</a></li>
                         <li class="breadcrumb-item active">Offcanvas</li>
                     </ol>

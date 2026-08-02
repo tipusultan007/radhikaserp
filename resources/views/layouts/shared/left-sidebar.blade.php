@@ -3,21 +3,21 @@
 
     <!-- Brand Logo Light -->
     <a href="{{ route('any', 'index') }}" class="logo logo-light">
-        <span class="logo-lg">
-            <img src="/images/logo.png" alt="logo">
+        <span class="logo-lg" style="color: white; font-size: 16px; font-weight: bold; white-space: normal; line-height: 1.2;">
+            Radhikas Trade International
         </span>
-        <span class="logo-sm">
-            <img src="/images/logo-sm.png" alt="small logo">
+        <span class="logo-sm" style="color: white; font-size: 16px; font-weight: bold;">
+            RTI
         </span>
     </a>
 
     <!-- Brand Logo Dark -->
     <a href="{{ route('any', 'index') }}" class="logo logo-dark">
-        <span class="logo-lg">
-            <img src="/images/logo-dark.png" alt="logo">
+        <span class="logo-lg" style="color: #313a46; font-size: 16px; font-weight: bold; white-space: normal; line-height: 1.2;">
+            Radhikas Trade International
         </span>
-        <span class="logo-sm">
-            <img src="/images/logo-sm.png" alt="small logo">
+        <span class="logo-sm" style="color: #313a46; font-size: 16px; font-weight: bold;">
+            RTI
         </span>
     </a>
 

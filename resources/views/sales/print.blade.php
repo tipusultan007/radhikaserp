@@ -120,16 +120,7 @@
                 <td style="width: 65%; vertical-align: top;">
                     <table style="width: 100%;">
                         <tr>
-                            <td style="width: 70px; vertical-align: top;">
-                                <?php
-                                    $logoPath = public_path('logo.png');
-                                    $logoData = file_exists($logoPath) ? base64_encode(file_get_contents($logoPath)) : '';
-                                ?>
-                                @if($logoData)
-                                    <img src="data:image/png;base64,{{ $logoData }}" alt="Logo" style="max-height: 60px; max-width: 70px;">
-                                @endif
-                            </td>
-                            <td style="vertical-align: top; padding-left: 10px;">
+                            <td style="vertical-align: top; padding-left: 0;">
                                 <h2 style="margin: 0 0 5px 0; font-size: 18px; text-transform: uppercase;">Radhikas Trade International</h2>
                                 <div style="font-size: 12px; margin-bottom: 2px; color: #555;">88/89, Sadarghat Road, Chattogram, Bangladesh 4000</div>
                                 <div style="font-size: 12px; color: #555;">018 9770 1188, 019 9984 8389 | sales.radhikastradeintl@gmail.com</div>

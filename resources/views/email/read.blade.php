@@ -14,7 +14,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">Email Read</h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Email</a></li>
                         <li class="breadcrumb-item active">Email Read</li>
                     </ol>
@@ -164,7 +164,7 @@
                                                         </div>
                                                     </div>
                                                     <div class="col ps-0">
-                                                        <a href="javascript:void(0);" class="text-muted fw-bold">Jidox-admin-design.zip</a>
+                                                        <a href="javascript:void(0);" class="text-muted fw-bold">Radhikas Trade International-admin-design.zip</a>
                                                         <p class="mb-0">2.3 MB</p>
                                                     </div>
                                                     <div class="col-auto">

@@ -13,7 +13,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">Widgets</h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Extras</a></li>
                         <li class="breadcrumb-item active">Widgets</li>
                     </ol>
@@ -688,7 +688,7 @@
                                 <i class="ri-upload-line text-bg-info timeline-icon"></i>
                                 <div class="timeline-item-info">
                                     <a href="#" class="text-info fw-bold mb-1 d-block">You sold an item</a>
-                                    <small>Paul Burgess just purchased “Jidox - Admin Dashboard”!</small>
+                                    <small>Paul Burgess just purchased “Radhikas Trade International - Admin Dashboard”!</small>
                                     <p class="mb-0 pb-2">
                                         <small class="text-muted">5 minutes ago</small>
                                     </p>
@@ -764,7 +764,7 @@
                                 <i class="ri-arrow-up-line text-danger fs-18"></i>
                             </div>
                             <div class="col ps-0">
-                                <a href="javascript:void(0);" class="text-body">Purchased Jidox Admin Template</a>
+                                <a href="javascript:void(0);" class="text-body">Purchased Radhikas Trade International Admin Template</a>
                                 <p class="mb-0 text-muted"><small>Today</small></p>
                             </div>
                             <div class="col-auto">

@@ -14,7 +14,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">Notifications</h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Base UI</a></li>
                         <li class="breadcrumb-item active">Notifications</li>
                     </ol>
@@ -43,8 +43,8 @@
 
                                     <div class="toast fade show" role="alert" aria-live="assertive" aria-atomic="true">
                                         <div class="toast-header">
-                                            <img src="/images/logo-sm.png" alt="brand-logo" height="16" class="me-1" />
-                                            <strong class="me-auto">Jidox</strong>
+                                            <span class="logo-sm-text" style="font-weight: bold; font-size: 16px;">RTI</span>
+                                            <strong class="me-auto">Radhikas Trade International</strong>
                                             <small>11 mins ago</small>
                                             <button type="button" class="ms-2 btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
                                         </div>
@@ -66,8 +66,8 @@
                                 <div class="p-3 bg-light">
                                     <div class="toast fade show" role="alert" aria-live="assertive" aria-atomic="true">
                                         <div class="toast-header">
-                                            <img src="/images/logo-sm.png" alt="brand-logo" height="16" class="me-1" />
-                                            <strong class="me-auto">Jidox</strong>
+                                            <span class="logo-sm-text" style="font-weight: bold; font-size: 16px;">RTI</span>
+                                            <strong class="me-auto">Radhikas Trade International</strong>
                                             <small>11 mins ago</small>
                                             <button type="button" class="ms-2 btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
                                         </div>
@@ -94,8 +94,8 @@
                                             <!-- Then put toasts within -->
                                             <div class="toast fade show" role="alert" aria-live="assertive" aria-atomic="true">
                                                 <div class="toast-header">
-                                                    <img src="/images/logo-sm.png" alt="brand-logo" height="16" class="me-1" />
-                                                    <strong class="me-auto">Jidox</strong>
+                                                    <span class="logo-sm-text" style="font-weight: bold; font-size: 16px;">RTI</span>
+                                                    <strong class="me-auto">Radhikas Trade International</strong>
                                                     <small class="text-muted">just now</small>
                                                     <button type="button" class="ms-2 btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
                                                 </div>
@@ -107,8 +107,8 @@
 
                                             <div class="toast fade show" role="alert" aria-live="assertive" aria-atomic="true">
                                                 <div class="toast-header">
-                                                    <img src="/images/logo-sm.png" alt="brand-logo" height="16" class="me-1" />
-                                                    <strong class="me-auto">Jidox</strong>
+                                                    <span class="logo-sm-text" style="font-weight: bold; font-size: 16px;">RTI</span>
+                                                    <strong class="me-auto">Radhikas Trade International</strong>
                                                     <small class="text-muted">2 seconds ago</small>
                                                     <button type="button" class="ms-2 btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
                                                 </div>
@@ -134,8 +134,8 @@
                                         <!-- Then put toasts within -->
                                         <div class="toast fade show" role="alert" aria-live="assertive" aria-atomic="true" data-bs-toggle="toast">
                                             <div class="toast-header">
-                                                <img src="/images/logo-sm.png" alt="brand-logo" height="16" class="me-1" />
-                                                <strong class="me-auto">Jidox</strong>
+                                                <span class="logo-sm-text" style="font-weight: bold; font-size: 16px;">RTI</span>
+                                                <strong class="me-auto">Radhikas Trade International</strong>
                                                 <small>11 mins ago</small>
                                                 <button type="button" class="ms-2 btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
                                             </div>
@@ -241,8 +241,8 @@
                             <div class="toast-container position-absolute p-3" id="toastPlacement">
                                 <div class="toast show">
                                     <div class="toast-header">
-                                        <img src="/images/logo-sm.png" alt="brand-logo" height="16" class="me-1" />
-                                        <strong class="me-auto">Jidox</strong>
+                                        <span class="logo-sm-text" style="font-weight: bold; font-size: 16px;">RTI</span>
+                                        <strong class="me-auto">Radhikas Trade International</strong>
                                         <small>11 mins ago</small>
                                     </div>
                                     <div class="toast-body">

@@ -44,10 +44,10 @@
                         <div class="card-header pt-4 text-center">
                             <div class="auth-brand mb-0">
                                 <a href="/" class="logo-dark">
-                                    <span><img src="/images/logo-dark.png" alt="dark logo" height="28"></span>
+                                    <span><span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span></span>
                                 </a>
                                 <a href="/" class="logo-light">
-                                    <span><img src="/images/logo.png" alt="logo" height="28"></span>
+                                    <span><span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span></span>
                                 </a>
                             </div>
                         </div>
@@ -80,7 +80,7 @@
         <span class="text-white-50">
             <script>
                 document.write(new Date().getFullYear())
-            </script> © Jidox - Coderthemes.com
+            </script> © Radhikas Trade International - Coderthemes.com
         </span>
     </footer>
 

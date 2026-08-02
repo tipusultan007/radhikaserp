@@ -83,7 +83,7 @@
     <!-- end page -->
 
     <footer class="footer footer-alt">
-        <span class="text-white-50"><script>document.write(new Date().getFullYear())</script> © Jidox - Coderthemes.com</span>
+        <span class="text-white-50"><script>document.write(new Date().getFullYear())</script> © Radhikas Trade International - Coderthemes.com</span>
     </footer>
     
     <!-- App js -->

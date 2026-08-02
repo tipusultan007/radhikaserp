@@ -42,13 +42,10 @@
                             <!-- Logo -->
                             <div class="card-header pt-4 text-center">
                                 <div class="auth-brand mb-0">
-                                    <a href="/" class="logo-dark">
-                                        <span><img src="/images/logo-dark.png" alt="dark logo" height="28"></span>
-                                    </a>
-                                    <a href="/" class="logo-light">
-                                        <span><img src="/images/logo.png" alt="logo" height="28"></span>
-                                    </a>
-                                </div>
+                                <a href="/" class="text-decoration-none">
+                                    <h3 class="mb-0 text-dark">Radhikas Trade International</h3>
+                                </a>
+                            </div>
                             </div>
 
                             <div class="card-body p-4">
@@ -90,7 +87,7 @@
         <!-- end page -->
 
         <footer class="footer footer-alt fw-medium">
-            <span class="text-white-50"><script>document.write(new Date().getFullYear())</script> © Jidox - Coderthemes.com</span>
+            <span class="text-white-50"><script>document.write(new Date().getFullYear())</script> © Radhikas Trade International - Coderthemes.com</span>
         </footer>
 
     @vite(['resources/js/app.js'])
@@ -98,4 +95,5 @@
 </body>
 
 </html>
+
 

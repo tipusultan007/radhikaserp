@@ -10,7 +10,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">Timeline</h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Pages</a></li>
                         <li class="breadcrumb-item active">Timeline</li>
                     </ol>
@@ -146,7 +146,7 @@
                             <div class="timeline-box">
                                 <span class="arrow-alt"></span>
                                 <span class="timeline-icon bg-info-subtle"><i class="ri-record-circle-fill text-info"></i></span>
-                                <h4 class="mt-0 mb-1 fs-16">First release of Jidox admin dashboard template</h4>
+                                <h4 class="mt-0 mb-1 fs-16">First release of Radhikas Trade International admin dashboard template</h4>
                                 <p class="text-muted"><small>05 May, 2023</small></p>
                                 <p>Outdoor visit at California State Route 85 with John Boltana &
                                     Harry Piterson regarding to setup a new show room.</p>

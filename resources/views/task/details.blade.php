@@ -13,7 +13,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">Task Detail</h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Tasks</a></li>
                         <li class="breadcrumb-item active">Task Detail</li>
                     </ol>
@@ -303,7 +303,7 @@
                                         </div>
                                     </div>
                                     <div class="col ps-0">
-                                        <a href="javascript:void(0);" class="text-muted fw-bold">Jidox-sketch-design.zip</a>
+                                        <a href="javascript:void(0);" class="text-muted fw-bold">Radhikas Trade International-sketch-design.zip</a>
                                         <p class="mb-0">2.3 MB</p>
                                     </div>
                                     <div class="col-auto">

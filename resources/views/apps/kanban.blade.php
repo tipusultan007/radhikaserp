@@ -9,7 +9,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-lg-center flex-lg-row flex-column">     
                     <h4 class="page-title">Kanban Board <a href="#" data-bs-toggle="modal" data-bs-target="#add-new-task-modal" class="btn btn-success btn-sm ms-3">Add New</a></h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Tasks</a></li>
                         <li class="breadcrumb-item active">Kanban Board</li>
                     </ol>
@@ -101,7 +101,7 @@
                                     <p class="mb-0">
                                         <span class="pe-2 text-nowrap mb-2 d-inline-block">
                                             <i class="ri-briefcase-2-line text-muted"></i>
-                                            Jidox
+                                            Radhikas Trade International
                                         </span>
                                         <span class="text-nowrap mb-2 d-inline-block">
                                             <i class="ri-discuss-line text-muted"></i>
@@ -214,7 +214,7 @@
                                     <p class="mb-0">
                                         <span class="pe-2 text-nowrap mb-2 d-inline-block">
                                             <i class="ri-briefcase-2-line text-muted"></i>
-                                            Jidox
+                                            Radhikas Trade International
                                         </span>
                                         <span class="text-nowrap mb-2 d-inline-block">
                                             <i class="ri-discuss-line text-muted"></i>
@@ -551,7 +551,7 @@
                                     <p class="mb-0">
                                         <span class="pe-2 text-nowrap mb-2 d-inline-block">
                                             <i class="ri-briefcase-2-line text-muted"></i>
-                                            Jidox
+                                            Radhikas Trade International
                                         </span>
                                         <span class="text-nowrap mb-2 d-inline-block">
                                             <i class="ri-discuss-line text-muted"></i>

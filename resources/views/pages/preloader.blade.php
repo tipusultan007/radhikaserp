@@ -36,20 +36,20 @@
                         <!-- Logo light -->
                         <a href="/" class="logo-light">
                             <span class="logo-lg">
-                                <img src="/images/logo.png" alt="logo">
+                                <span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span>
                             </span>
                             <span class="logo-sm">
-                                <img src="/images/logo-sm.png" alt="small logo">
+                                <span class="logo-sm-text" style="font-weight: bold; font-size: 16px;">RTI</span>
                             </span>
                         </a>
 
                         <!-- Logo Dark -->
                         <a href="/" class="logo-dark">
                             <span class="logo-lg">
-                                <img src="/images/logo-dark.png" alt="dark logo">
+                                <span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span>
                             </span>
                             <span class="logo-sm">
-                                <img src="/images/logo-sm.png" alt="small logo">
+                                <span class="logo-sm-text" style="font-weight: bold; font-size: 16px;">RTI</span>
                             </span>
                         </a>
                     </div>
@@ -437,20 +437,20 @@
             <!-- Brand Logo Light -->
             <a href="/" class="logo logo-light">
                 <span class="logo-lg">
-                    <img src="/images/logo.png" alt="logo">
+                    <span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span>
                 </span>
                 <span class="logo-sm">
-                    <img src="/images/logo-sm.png" alt="small logo">
+                    <span class="logo-sm-text" style="font-weight: bold; font-size: 16px;">RTI</span>
                 </span>
             </a>
 
             <!-- Brand Logo Dark -->
             <a href="/" class="logo logo-dark">
                 <span class="logo-lg">
-                    <img src="/images/logo-dark.png" alt="logo">
+                    <span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span>
                 </span>
                 <span class="logo-sm">
-                    <img src="/images/logo-sm.png" alt="small logo">
+                    <span class="logo-sm-text" style="font-weight: bold; font-size: 16px;">RTI</span>
                 </span>
             </a>
 
@@ -1675,7 +1675,7 @@
                         <div class="col-md-6">
                             <script>
                                 document.write(new Date().getFullYear())
-                            </script> © Jidox - Coderthemes.com
+                            </script> © Radhikas Trade International - Coderthemes.com
                         </div>
                         <div class="col-md-6">
                             <div class="text-md-end footer-links d-none d-md-block">

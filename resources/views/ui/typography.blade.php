@@ -13,7 +13,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">Typography</h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Base UI</a></li>
                         <li class="breadcrumb-item active">Typography</li>
                     </ol>
@@ -391,7 +391,7 @@
                 <div class="card">
                     <div class="card-body">
                         <h4 class="header-title">Blockquotes</h4>
-                        <p class="text-muted fs-14">For quoting blocks of content from another source within your document. Wrap <code>&lt;blockquote class="blockquote"&gt;</code> around any <abbr title="JidoxText Markup Language">HTML</abbr> as the quote.</p>
+                        <p class="text-muted fs-14">For quoting blocks of content from another source within your document. Wrap <code>&lt;blockquote class="blockquote"&gt;</code> around any <abbr title="Radhikas Trade InternationalText Markup Language">HTML</abbr> as the quote.</p>
         
                         <blockquote class="blockquote">
                             <p class="mb-0">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante.</p>

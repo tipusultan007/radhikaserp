@@ -52,10 +52,10 @@
                 <!-- Logo -->
                 <div class="auth-brand text-center text-lg-start">
                     <a href="/" class="logo-dark">
-                        <span><img src="/images/logo-dark.png" alt="dark logo" height="24"></span>
+                        <span><span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span></span>
                     </a>
                     <a href="/" class="logo-light">
-                        <span><img src="/images/logo.png" alt="logo" height="24"></span>
+                        <span><span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span></span>
                     </a>
                 </div>
 
@@ -99,3 +99,4 @@
 </body>
 
 </html>
+

@@ -13,7 +13,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">Form Wizard</h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Forms</a></li>
                         <li class="breadcrumb-item active">Form Wizard</li>
                     </ol>
@@ -60,7 +60,7 @@
                                                 <div class="row mb-3">
                                                     <label class="col-md-3 col-form-label" for="userName">User name</label>
                                                     <div class="col-md-9">
-                                                        <input type="text" class="form-control" id="userName" name="userName" value="Jidox">
+                                                        <input type="text" class="form-control" id="userName" name="userName" value="Radhikas Trade International">
                                                     </div>
                                                 </div>
                                                 <div class="row mb-3">
@@ -195,7 +195,7 @@
                                             <div class="row mb-3">
                                                 <label class="col-md-3 col-form-label" for="userName2">User name</label>
                                                 <div class="col-md-9">
-                                                    <input type="text" class="form-control" id="userName2" name="userName2" value="Jidox">
+                                                    <input type="text" class="form-control" id="userName2" name="userName2" value="Radhikas Trade International">
                                                 </div>
                                             </div>
                                             <div class="row mb-3">
@@ -326,7 +326,7 @@
                                                 <div class="row mb-3">
                                                     <label class="col-md-3 col-form-label" for="userName1">User name</label>
                                                     <div class="col-md-9">
-                                                        <input type="text" class="form-control" id="userName1" name="userName1" value="Jidox">
+                                                        <input type="text" class="form-control" id="userName1" name="userName1" value="Radhikas Trade International">
                                                     </div>
                                                 </div>
                                                 <div class="row mb-3">

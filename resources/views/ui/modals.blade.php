@@ -13,7 +13,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">Modals</h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Base UI</a></li>
                         <li class="breadcrumb-item active">Modals</li>
                     </ol>
@@ -198,10 +198,10 @@
                                     <div class="modal-body">
                                         <div class="auth-brand text-center mt-2 mb-4 position-relative top-0">
                                             <a href="index.html" class="logo-dark">
-                                                <span><img src="/images/logo-dark.png" alt="dark logo" height="22"></span>
+                                                <span><span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span></span>
                                             </a>
                                             <a href="index.html" class="logo-light">
-                                                <span><img src="/images/logo.png" alt="logo" height="22"></span>
+                                                <span><span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span></span>
                                             </a>
                                         </div>
 
@@ -248,10 +248,10 @@
                                     <div class="modal-body">
                                         <div class="auth-brand text-center mt-2 mb-4 position-relative top-0">
                                             <a href="index.html" class="logo-dark">
-                                                <span><img src="/images/logo-dark.png" alt="dark logo" height="22"></span>
+                                                <span><span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span></span>
                                             </a>
                                             <a href="index.html" class="logo-light">
-                                                <span><img src="/images/logo.png" alt="logo" height="22"></span>
+                                                <span><span class="logo-text" style="font-weight: bold; font-size: 16px; white-space: normal; line-height: 1.2;">Radhikas Trade International</span></span>
                                             </a>
                                         </div>
 

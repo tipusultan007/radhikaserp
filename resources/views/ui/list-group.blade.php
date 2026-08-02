@@ -13,7 +13,7 @@
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                     <h4 class="page-title">List Group </h4>
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript: void(0);">Jidox</a></li>
+                        <li class="breadcrumb-item"><a href="javascript: void(0);">Radhikas Trade International</a></li>
                         <li class="breadcrumb-item"><a href="javascript: void(0);">Base UI</a></li>
                         <li class="breadcrumb-item active">List Group </li>
                     </ol>
@@ -366,15 +366,15 @@
                         <ol class="list-group list-group-numbered">
                             <li class="list-group-item d-flex justify-content-between align-items-start">
                                 <div class="ms-2 me-auto">
-                                    <div class="fw-bold">Jidox Admin</div>
-                                    Jidox Admin
+                                    <div class="fw-bold">Radhikas Trade International Admin</div>
+                                    Radhikas Trade International Admin
                                 </div>
                                 <span class="badge bg-primary rounded-pill">865</span>
                             </li>
                             <li class="list-group-item d-flex justify-content-between align-items-start">
                                 <div class="ms-2 me-auto">
-                                    <div class="fw-bold">Jidox React Admin</div>
-                                    Jidox React Admin
+                                    <div class="fw-bold">Radhikas Trade International React Admin</div>
+                                    Radhikas Trade International React Admin
                                 </div>
                                 <span class="badge bg-primary rounded-pill">140</span>
                             </li>
