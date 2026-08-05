@@ -338,7 +338,7 @@ class AdminApiController extends Controller
             }
 
             $deliveryType = $validated['delivery_type'] ?? 1; // Default to point delivery
-            if ($request->input('delivery_method') === 'steadfast' && $deliveryType == 1) {
+            if ($request->input('delivery_method') === 'steadfast' && $deliveryType == 0) {
                 $deliveryCharge = max(1, ceil($grandTotalWeight)) * 20;
             }
 
@@ -541,7 +541,7 @@ class AdminApiController extends Controller
             $deliveryCharge = $validated['delivery_charge'] ?? 0;
             $deliveryType = $validated['delivery_type'] ?? $sale->delivery_type ?? 1;
 
-            if ($request->input('delivery_method', $sale->delivery_method) === 'steadfast' && $deliveryType == 1) {
+            if ($request->input('delivery_method', $sale->delivery_method) === 'steadfast' && $deliveryType == 0) {
                 $deliveryCharge = max(1, ceil($grandTotalWeight)) * 20;
             }
 

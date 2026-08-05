@@ -62,7 +62,7 @@ class CustomerApiController extends Controller
             $deliveryType = $request->input('delivery_type', 1); // Default to point delivery
             $deliveryCharge = 0;
 
-            if ($deliveryMethod === 'steadfast' && $deliveryType == 1) {
+            if ($deliveryMethod === 'steadfast' && $deliveryType == 0) {
                 $grandTotalWeight = 0;
                 foreach ($request->items as $item) {
                     $variant = \App\Models\ProductVariant::find($item['product_variant_id']);

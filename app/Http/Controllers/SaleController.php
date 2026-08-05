@@ -296,7 +296,7 @@ class SaleController extends Controller
             }
 
             $deliveryType = $validated['delivery_type'] ?? 1; // Default to point delivery
-            if (($validated['delivery_method'] ?? null) === 'steadfast' && $deliveryType == 1) {
+            if (($validated['delivery_method'] ?? null) === 'steadfast' && $deliveryType == 0) {
                 $deliveryCharge = max(1, ceil($grandTotalWeight)) * 20;
             } else {
                 $deliveryCharge = $validated['delivery_charge'] ?? 0;
@@ -564,7 +564,7 @@ class SaleController extends Controller
             }
 
             $deliveryType = $validated['delivery_type'] ?? 1; // Default to point delivery
-            if (($validated['delivery_method'] ?? null) === 'steadfast' && $deliveryType == 1) {
+            if (($validated['delivery_method'] ?? null) === 'steadfast' && $deliveryType == 0) {
                 $deliveryCharge = max(1, ceil($grandTotalWeight)) * 20;
             } else {
                 $deliveryCharge = $validated['delivery_charge'] ?? 0;

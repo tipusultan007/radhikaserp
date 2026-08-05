@@ -40,113 +40,11 @@
                 </div>
             </button>
 
-            <!-- Topbar Search Form -->
-            <div class="app-search dropdown d-none d-lg-block">
-                <form>
-                    <div class="input-group">
-                        <input type="search" class="form-control dropdown-toggle" placeholder="Search..." id="top-search">
-                        <span class="ri-search-line search-icon"></span>
-                    </div>
-                </form>
-
-                <div class="dropdown-menu dropdown-menu-animated dropdown-lg" id="search-dropdown">
-                    <!-- item-->
-                    <div class="dropdown-header noti-title">
-                        <h5 class="text-overflow mb-1">Found <b class="text-decoration-underline">08</b> results</h5>
-                    </div>
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item notify-item">
-                        <i class="ri-file-chart-line fs-16 me-1"></i>
-                        <span>Analytics Report</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item notify-item">
-                        <i class="ri-lifebuoy-line fs-16 me-1"></i>
-                        <span>How can I help you?</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item notify-item">
-                        <i class="ri-user-settings-line fs-16 me-1"></i>
-                        <span>User profile settings</span>
-                    </a>
-
-                    <!-- item-->
-                    <div class="dropdown-header noti-title">
-                        <h6 class="text-overflow mt-2 mb-1 text-uppercase">Users</h6>
-                    </div>
-
-                    <div class="notification-list">
-                        <!-- item-->
-                        <a href="javascript:void(0);" class="dropdown-item notify-item">
-                            <div class="d-flex">
-                                <img class="d-flex me-2 rounded-circle" src="/images/users/avatar-2.jpg" alt="Generic placeholder image" height="32">
-                                <div class="w-100">
-                                    <h5 class="m-0 fs-14">Erwin Brown</h5>
-                                    <span class="fs-12 mb-0">UI Designer</span>
-                                </div>
-                            </div>
-                        </a>
-
-                        <!-- item-->
-                        <a href="javascript:void(0);" class="dropdown-item notify-item">
-                            <div class="d-flex">
-                                <img class="d-flex me-2 rounded-circle" src="/images/users/avatar-5.jpg" alt="Generic placeholder image" height="32">
-                                <div class="w-100">
-                                    <h5 class="m-0 fs-14">Jacob Deo</h5>
-                                    <span class="fs-12 mb-0">Developer</span>
-                                </div>
-                            </div>
-                        </a>
-                    </div>
-                </div>
-            </div>
+           
         </div>
 
         <ul class="topbar-menu d-flex align-items-center gap-3">
-            <li class="dropdown d-lg-none">
-                <a class="nav-link dropdown-toggle arrow-none" data-bs-toggle="dropdown" href="#" role="button" aria-haspopup="false" aria-expanded="false">
-                    <i class="ri-search-line fs-22"></i>
-                </a>
-                <div class="dropdown-menu dropdown-menu-animated dropdown-lg p-0">
-                    <form class="p-3">
-                        <input type="search" class="form-control" placeholder="Search ..." aria-label="Recipient's username">
-                    </form>
-                </div>
-            </li>
-
-            <li class="dropdown">
-                <a class="nav-link dropdown-toggle arrow-none" data-bs-toggle="dropdown" href="#" role="button" aria-haspopup="false" aria-expanded="false">
-                    <img src="/images/flags/us.jpg" alt="user-image" class="me-0 me-sm-1" height="12">
-                    <span class="align-middle d-none d-lg-inline-block">English</span> <i class="ri-arrow-down-s-line d-none d-sm-inline-block align-middle"></i>
-                </a>
-                <div class="dropdown-menu dropdown-menu-end dropdown-menu-animated">
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item">
-                        <img src="/images/flags/germany.jpg" alt="user-image" class="me-1" height="12"> <span class="align-middle">German</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item">
-                        <img src="/images/flags/italy.jpg" alt="user-image" class="me-1" height="12"> <span class="align-middle">Italian</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item">
-                        <img src="/images/flags/spain.jpg" alt="user-image" class="me-1" height="12"> <span class="align-middle">Spanish</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item">
-                        <img src="/images/flags/russia.jpg" alt="user-image" class="me-1" height="12"> <span class="align-middle">Russian</span>
-                    </a>
-
-                </div>
-            </li>
-
+        
             <li class="dropdown notification-list">
                 <a class="nav-link dropdown-toggle arrow-none" data-bs-toggle="dropdown" href="#" role="button" aria-haspopup="false" aria-expanded="false">
                     <i class="ri-notification-3-fill fs-22"></i>
@@ -220,65 +118,7 @@
                 });
             </script>
 
-            <li class="dropdown d-none d-sm-inline-block">
-                <a class="nav-link dropdown-toggle arrow-none" data-bs-toggle="dropdown" href="#" role="button" aria-haspopup="false" aria-expanded="false">
-                    <i class="ri-apps-2-fill fs-22"></i>
-                </a>
-                <div class="dropdown-menu dropdown-menu-end dropdown-menu-animated dropdown-lg p-0">
-
-                    <div class="p-2">
-                        <div class="row g-0">
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="/images/brands/github.png" alt="Github">
-                                    <span>GitHub</span>
-                                </a>
-                            </div>
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="/images/brands/bitbucket.png" alt="bitbucket">
-                                    <span>Bitbucket</span>
-                                </a>
-                            </div>
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="/images/brands/dropbox.png" alt="dropbox">
-                                    <span>Dropbox</span>
-                                </a>
-                            </div>
-                        </div>
-
-                        <div class="row g-0">
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="/images/brands/slack.png" alt="slack">
-                                    <span>Slack</span>
-                                </a>
-                            </div>
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="/images/brands/dribbble.png" alt="dribbble">
-                                    <span>Dribbble</span>
-                                </a>
-                            </div>
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="/images/brands/behance.png" alt="Behance">
-                                    <span>Behance</span>
-                                </a>
-                            </div>
-                        </div> <!-- end row-->
-                    </div>
-
-                </div>
-            </li>
-
-            <li class="d-none d-sm-inline-block">
-                <a class="nav-link" data-bs-toggle="offcanvas" href="#theme-settings-offcanvas">
-                    <i class="ri-settings-3-fill fs-22"></i>
-                </a>
-            </li>
-
+        
             <li class="d-none d-sm-inline-block">
                 <div class="nav-link" id="light-dark-mode" data-bs-toggle="tooltip" data-bs-placement="left" title="Theme Mode">
                     <i class="ri-moon-fill fs-22"></i>
@@ -286,11 +126,7 @@
             </li>
 
 
-            <li class="d-none d-md-inline-block">
-                <a class="nav-link" href="" data-toggle="fullscreen">
-                    <i class="ri-fullscreen-line fs-22"></i>
-                </a>
-            </li>
+            
 
             <li class="dropdown">
                 <a class="nav-link dropdown-toggle arrow-none nav-user px-2" data-bs-toggle="dropdown" href="#" role="button" aria-haspopup="false" aria-expanded="false">

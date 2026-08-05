@@ -34,7 +34,7 @@
                         <div class="d-flex justify-content-between">
                             <div class="flex-grow-1 overflow-hidden">
                                 <h5 class="text-muted text-uppercase fs-13 mt-0" title="Total Sales">Total Sales</h5>
-                                <h3 class="my-3">${{ number_format($totalSales ?? 0, 0) }}</h3>
+                                <h3 class="my-3">{{ number_format($totalSales ?? 0, 0) }}</h3>
                                 <p class="mb-0 text-muted text-truncate">
                                     <span class="badge bg-success me-1"><i class="ri-arrow-up-line"></i></span>
                                     <span>All-time revenue</span>  
@@ -56,7 +56,7 @@
                         <div class="d-flex justify-content-between">
                             <div class="flex-grow-1 overflow-hidden">
                                 <h5 class="text-muted text-uppercase fs-13 mt-0" title="Total Expenses">Total Expenses</h5>
-                                <h3 class="my-3">${{ number_format($totalExpenses ?? 0, 0) }}</h3>
+                                <h3 class="my-3">{{ number_format($totalExpenses ?? 0, 0) }}</h3>
                                 <p class="mb-0 text-muted text-truncate">
                                     <span class="badge bg-danger me-1"><i class="ri-arrow-down-line"></i></span>
                                     <span>All-time expenses</span>
@@ -78,7 +78,7 @@
                         <div class="d-flex justify-content-between">
                             <div class="flex-grow-1 overflow-hidden">
                                 <h5 class="text-muted text-uppercase fs-13 mt-0" title="Cash Balance">Cash Balance</h5>
-                                <h3 class="my-3">${{ number_format($cashBalance ?? 0, 0) }}</h3>
+                                <h3 class="my-3">{{ number_format($cashBalance ?? 0, 0) }}</h3>
                                 <p class="mb-0 text-muted text-truncate">
                                     <span class="badge bg-primary me-1"><i class="ri-wallet-3-line"></i></span>
                                     <span>Current Cash Flow</span>
@@ -157,7 +157,7 @@
                                         <td>{{ $sale->invoice_no }}</td>
                                         <td>{{ $sale->date->format('M d, Y') }}</td>
                                         <td>{{ $sale->customer->name ?? 'Walk-in' }}</td>
-                                        <td class="text-success fw-bold">${{ number_format($sale->total, 0) }}</td>
+                                        <td class="text-success fw-bold">{{ number_format($sale->total, 0) }}</td>
                                     </tr>
                                     @endforeach
                                 </tbody>
@@ -191,7 +191,7 @@
                                         <td>{{ $purchase->purchase_no }}</td>
                                         <td>{{ $purchase->date->format('M d, Y') }}</td>
                                         <td>{{ $purchase->supplier->name ?? 'N/A' }}</td>
-                                        <td class="text-danger fw-bold">${{ number_format($purchase->total_cost, 0) }}</td>
+                                        <td class="text-danger fw-bold">{{ number_format($purchase->total_cost, 0) }}</td>
                                         @endcan
                                     </tr>
                                     @endforeach
@@ -262,7 +262,7 @@
                 data: {
                     labels: {!! $dates->reverse()->values()->toJson() !!},
                     datasets: [{
-                        label: 'Revenue ($)',
+                        label: 'Revenue',
                         data: {!! $salesData->reverse()->values()->toJson() !!},
                         borderColor: '#17a497',
                         backgroundColor: 'rgba(23, 164, 151, 0.1)',
@@ -270,7 +270,7 @@
                         tension: 0.3,
                         fill: true
                     }, {
-                        label: 'Expenses ($)',
+                        label: 'Expenses',
                         data: {!! $expensesData->reverse()->values()->toJson() !!},
                         borderColor: '#fa5c7c',
                         backgroundColor: 'rgba(250, 92, 124, 0.1)',
