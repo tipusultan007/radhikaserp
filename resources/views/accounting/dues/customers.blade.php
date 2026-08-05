@@ -129,9 +129,9 @@
                                             <b>N/A</b>
                                         @endif
                                     </td>
-                                    <td class="fw-bold text-success">${{ number_format($amount, 0) }}</td>
-                                    <td class="fw-bold text-warning">${{ number_format($walletUsed, 0) }}</td>
-                                    <td class="fw-bold text-info">${{ number_format($addedToWallet, 0) }}</td>
+                                    <td class="fw-bold text-success">{{ number_format($amount, 0) }}</td>
+                                    <td class="fw-bold text-warning">{{ number_format($walletUsed, 0) }}</td>
+                                    <td class="fw-bold text-info">{{ number_format($addedToWallet, 0) }}</td>
                                     <td><span class="badge bg-secondary">{{ $method }}</span></td>
                                     <td><small>{{ Str::limit($payment->notes, 30) }}</small></td>
                                     <td class="text-end">
@@ -183,12 +183,12 @@
                             <select name="customer_id" id="customer_select" class="form-select select2" data-toggle="select2" required>
                                 <option value="" data-wallet="0">Select Customer...</option>
                                 @foreach($customersList as $c)
-                                    <option value="{{ $c->id }}" data-wallet="{{ $c->wallet_balance }}">{{ $c->name }} (Due: ${{ number_format($c->total_due, 0) }}, Wallet: ${{ number_format($c->wallet_balance, 0) }})</option>
+                                    <option value="{{ $c->id }}" data-wallet="{{ $c->wallet_balance }}">{{ $c->name }} (Due: {{ number_format($c->total_due, 0) }}, Wallet: {{ number_format($c->wallet_balance, 0) }})</option>
                                 @endforeach
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Total Payment Amount ($)</label>
+                            <label class="form-label">Total Payment Amount (৳)</label>
                             <input type="number" step="1" name="amount" class="form-control" required>
                             <small class="text-muted d-block mt-1">If the customer has a <strong>Wallet Balance</strong>, it will be automatically deducted first.</small>
                         </div>
