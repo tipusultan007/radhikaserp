@@ -60,7 +60,7 @@
                                              <td>{{ $purchase->date->format('Y-m-d') }}</td>
                                              <td>{{ $purchase->supplier->name ?? 'N/A' }}</td>
                                              <td>{{ $purchase->warehouse->name ?? 'N/A' }}</td>
-                                             <td>${{ number_format($purchase->total_cost, 0) }}</td>
+                                             <td>{{ number_format($purchase->total_cost, 0) }}</td>
                                              <td>
                                                  <a href="{{ route('purchases.show', $purchase->id) }}" class="action-icon text-info" title="View"> <i class="ri-eye-fill"></i></a>
                                                  @canany(['edit purchases', 'manage purchases'])

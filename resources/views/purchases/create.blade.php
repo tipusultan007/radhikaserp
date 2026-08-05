@@ -163,12 +163,12 @@
                                                     </td>
                                                     <td>
                                                         <div class="input-group input-group-sm">
-                                                            <span class="input-group-text">$</span>
+                                                            
                                                             <input type="number" step="any" min="0" name="items[{{ $index }}][unit_cost]" class="form-control item-cost" placeholder="0.00" value="{{ $oldItem['unit_cost'] ?? 0 }}">
                                                         </div>
                                                     </td>
                                                     <td class="text-end align-middle">
-                                                        <span class="fw-bold row-subtotal">$0.00</span>
+                                                        <span class="fw-bold row-subtotal">0.00</span>
                                                     </td>
                                                     <td class="text-center align-middle">
                                                         <button type="button" class="btn btn-sm btn-soft-danger remove-row" {{ count($oldItems) == 1 ? 'disabled' : '' }}>
@@ -195,12 +195,12 @@
                                                 </td>
                                                 <td>
                                                     <div class="input-group input-group-sm">
-                                                        <span class="input-group-text">$</span>
+                                                        
                                                         <input type="number" step="any" min="0" name="items[0][unit_cost]" class="form-control item-cost" placeholder="0.00" value="0">
                                                     </div>
                                                 </td>
                                                 <td class="text-end align-middle">
-                                                    <span class="fw-bold row-subtotal">$0.00</span>
+                                                    <span class="fw-bold row-subtotal">0.00</span>
                                                 </td>
                                                 <td class="text-center align-middle">
                                                     <button type="button" class="btn btn-sm btn-soft-danger remove-row" disabled>
@@ -213,7 +213,7 @@
                                     <tfoot>
                                         <tr class="table-light">
                                             <td colspan="3" class="text-end fw-bold">Grand Total:</td>
-                                            <td class="text-end fw-bold text-success fs-4" id="grandTotal">$0.00</td>
+                                            <td class="text-end fw-bold text-success fs-4" id="grandTotal">0.00</td>
                                             <td></td>
                                         </tr>
                                     </tfoot>
@@ -251,9 +251,9 @@
                          <div id="local-cost-container" class="card-body" style="{{ $selectedType == 'local' ? '' : 'display: none;' }}">
                              <div class="row">
                                  <div class="col-md-4">
-                                     <label class="form-label fw-semibold">Delivery Cost ($ / ৳)</label>
+                                     <label class="form-label fw-semibold">Delivery Cost ( / ৳)</label>
                                      <div class="input-group">
-                                         <span class="input-group-text">$</span>
+                                         
                                          <input type="number" step="any" min="0" name="delivery_cost" id="delivery_cost" class="form-control" placeholder="0.00" value="{{ old('delivery_cost', '0') }}">
                                      </div>
                                  </div>
@@ -374,10 +374,10 @@ $(document).ready(function() {
             let qty = parseFloat($(this).find('.item-qty').val()) || 0;
             let cost = parseFloat($(this).find('.item-cost').val()) || 0;
             let subtotal = qty * cost;
-            $(this).find('.row-subtotal').text('$' + subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            $(this).find('.row-subtotal').text('' + subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
             grandTotal += subtotal;
         });
-        $('#grandTotal').text('$' + grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        $('#grandTotal').text('' + grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
         // Disable remove button if only one row left
         let rowCount = $('.item-row').length;
@@ -413,12 +413,12 @@ $(document).ready(function() {
             </td>
             <td>
                 <div class="input-group input-group-sm">
-                    <span class="input-group-text">$</span>
+                    
                     <input type="number" step="any" min="0" name="items[${rowIdx}][unit_cost]" class="form-control item-cost" placeholder="0.00" value="0">
                 </div>
             </td>
             <td class="text-end align-middle">
-                <span class="fw-bold row-subtotal">$0.00</span>
+                <span class="fw-bold row-subtotal">0.00</span>
             </td>
             <td class="text-center align-middle">
                 <button type="button" class="btn btn-sm btn-soft-danger remove-row">

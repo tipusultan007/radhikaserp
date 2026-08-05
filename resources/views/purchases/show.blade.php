@@ -92,7 +92,7 @@
                              <h6 class="text-uppercase text-muted fs-12 fw-bold mb-3">Local Purchase Expenses</h6>
                              <div class="p-3 bg-light rounded mb-4 d-flex justify-content-between align-items-center">
                                  <span class="fw-semibold text-dark fs-14"><i class="ri-truck-line me-1 text-primary"></i> Delivery Cost</span>
-                                 <span class="fw-bold fs-15 text-dark">${{ number_format($purchase->delivery_cost, 2) }}</span>
+                                 <span class="fw-bold fs-15 text-dark">{{ number_format($purchase->delivery_cost, 2) }}</span>
                              </div>
                          @elseif(!empty($purchase->cost_breakdown))
                              <h6 class="text-uppercase text-muted fs-12 fw-bold mb-3">Imported Landed Cost Breakdown</h6>
@@ -150,8 +150,8 @@
                                              <td class="text-end">
                                                  <span class="badge bg-primary-subtle text-primary px-2 py-1 fs-13">{{ number_format($item->qty, 3) }} {{ $item->product && $item->product->unit ? $item->product->unit->short_name : 'Unit' }}</span>
                                              </td>
-                                             <td class="text-end">${{ number_format($item->unit_cost, 0) }}</td>
-                                             <td class="text-end fw-semibold">${{ number_format($item->total_cost, 0) }}</td>
+                                             <td class="text-end">{{ number_format($item->unit_cost, 0) }}</td>
+                                             <td class="text-end fw-semibold">{{ number_format($item->total_cost, 0) }}</td>
                                          </tr>
                                      @endforeach
                                  </tbody>
@@ -180,7 +180,7 @@
                                              <td>{{ $payment->date->format('Y-m-d') }}</td>
                                              <td><span class="fw-semibold">{{ $payment->journal_no }}</span></td>
                                              <td>{{ $payment->notes }}</td>
-                                             <td class="text-end fw-semibold text-success">${{ number_format($amount, 2) }}</td>
+                                             <td class="text-end fw-semibold text-success">{{ number_format($amount, 2) }}</td>
                                          </tr>
                                      @empty
                                          <tr>
@@ -204,13 +204,13 @@
                              </div>
                              <div class="col-sm-6 text-end">
                                  <div class="mt-3 mt-sm-0">
-                                     <p class="mb-2 fs-15">Items Total Cost: <span class="fw-semibold ms-2">${{ number_format($purchase->total_cost, 2) }}</span></p>
+                                     <p class="mb-2 fs-15">Items Total Cost: <span class="fw-semibold ms-2">{{ number_format($purchase->total_cost, 2) }}</span></p>
                                      @if($purchase->purchase_type === 'local' && $purchase->delivery_cost > 0)
-                                         <p class="mb-2 fs-15">Delivery Cost: <span class="fw-semibold ms-2">${{ number_format($purchase->delivery_cost, 2) }}</span></p>
+                                         <p class="mb-2 fs-15">Delivery Cost: <span class="fw-semibold ms-2">{{ number_format($purchase->delivery_cost, 2) }}</span></p>
                                      @elseif($purchase->purchase_type === 'imported' && $purchase->total_landed_cost > 0)
                                          <p class="mb-2 fs-15">Landed Expenses: <span class="fw-semibold ms-2">৳{{ number_format($purchase->total_landed_cost, 2) }}</span></p>
                                      @endif
-                                     <h3 class="fw-bold mt-3 mb-0 text-success">Grand Total: ${{ number_format($purchase->total_cost, 2) }}</h3>
+                                     <h3 class="fw-bold mt-3 mb-0 text-success">Grand Total: {{ number_format($purchase->total_cost, 2) }}</h3>
                                  </div>
                              </div>
                          </div>
