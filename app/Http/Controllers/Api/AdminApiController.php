@@ -3582,6 +3582,47 @@ class AdminApiController extends Controller
         ]);
     }
 
+    public function warehouseStocks(Request $request)
+    {
+        $stocks = \App\Models\WarehouseStock::with([
+            'warehouse', 
+            'productVariant.product', 
+            'productVariant.unit',
+            'productVariant.product.unit'
+        ])
+        ->where('stock', '>', 0)
+        ->get();
+
+        $batches = \App\Models\Batch::whereHas('product', function($q) {
+            $q->whereIn('type', ['raw', 'standalone']);
+        })->whereNull('product_variant_id')
+        ->with(['product.unit', 'warehouse'])
+        ->where('remaining_qty', '>', 0)
+        ->get();
+
+        $merged = [];
+        foreach ($stocks as $s) {
+            $merged[] = [
+                'type' => 'variant',
+                'warehouse' => $s->warehouse,
+                'stock' => $s->stock,
+                'product_variant' => $s->productVariant
+            ];
+        }
+
+        foreach ($batches as $b) {
+            $merged[] = [
+                'type' => 'batch',
+                'warehouse' => $b->warehouse,
+                'stock' => $b->remaining_qty,
+                'product' => $b->product,
+                'batch_no' => $b->batch_no
+            ];
+        }
+
+        return response()->json(['stocks' => $merged]);
+    }
+
     public function cashbook(Request $request)
     {
         $date = $request->filled('date') ? $request->date : now()->toDateString();
