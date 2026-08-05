@@ -282,6 +282,10 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::get('journals', [App\Http\Controllers\JournalController::class, 'index'])->name('journals.index');
         Route::get('journals/{journal}', [App\Http\Controllers\JournalController::class, 'show'])->name('journals.show');
         Route::get('/batches', [App\Http\Controllers\BatchController::class, 'index'])->name('batches.index');
+        Route::get('/batches/{batch}', [App\Http\Controllers\BatchController::class, 'show'])->name('batches.show');
+        Route::get('/batches/{batch}/edit', [App\Http\Controllers\BatchController::class, 'edit'])->name('batches.edit');
+        Route::put('/batches/{batch}', [App\Http\Controllers\BatchController::class, 'update'])->name('batches.update');
+        Route::delete('/batches/{batch}', [App\Http\Controllers\BatchController::class, 'destroy'])->name('batches.destroy');
         Route::get('/inventory-transactions', [\App\Http\Controllers\InventoryTransactionController::class, 'index'])->name('inventory-transactions.index');
     });
     Route::group(['middleware' => ['permission:edit journals']], function () {
