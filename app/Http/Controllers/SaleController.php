@@ -496,14 +496,14 @@ class SaleController extends Controller
 
     public function print(Sale $sale)
     {
-        $sale->load(['items.productVariant.product', 'customer', 'warehouse']);
-        return view('sales.print', compact('sale'));
+        $sale->load(['items.productVariant.product', 'items.productVariant.unit', 'customer', 'warehouse', 'creator']);
+        return view('sales.invoice', compact('sale'));
     }
 
     public function pdf(Sale $sale)
     {
-        $sale->load(['items.productVariant.product', 'customer', 'warehouse']);
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('sales.print', compact('sale'));
+        $sale->load(['items.productVariant.product', 'items.productVariant.unit', 'customer', 'warehouse', 'creator']);
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('sales.invoice', compact('sale'));
         return $pdf->download('Invoice_' . $sale->invoice_no . '.pdf');
     }
 
