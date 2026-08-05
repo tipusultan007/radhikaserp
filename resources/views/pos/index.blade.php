@@ -42,7 +42,7 @@
                                          <select name="customer_id" id="customer_id" class="form-control select2" data-toggle="select2" required style="width: 100%;">
                                              <option value="">Walk-in / Select Customer</option>
                                              @foreach($customers as $customer)
-                                                 <option value="{{ $customer->id }}" data-customer-type="{{ $customer->customer_type }}">{{ $customer->name }} (Wallet: ${{ $customer->wallet_balance }}, Due: ${{ $customer->total_due }})</option>
+                                                 <option value="{{ $customer->id }}" data-customer-type="{{ $customer->customer_type }}">{{ $customer->name }} (Wallet: {{ $customer->wallet_balance }}, Due: {{ $customer->total_due }})</option>
                                              @endforeach
                                          </select>
                                          <button type="button" class="btn btn-primary ms-1" data-bs-toggle="modal" data-bs-target="#addCustomerModal"><i class="ri-add-line"></i></button>
@@ -68,8 +68,8 @@
                                          <tr>
                                              <th>Product Variant</th>
                                              <th width="15%">Qty</th>
-                                             <th width="20%">Unit Price ($)</th>
-                                             <th width="20%">Subtotal ($)</th>
+                                             <th width="20%">Unit Price ()</th>
+                                             <th width="20%">Subtotal ()</th>
                                          </tr>
                                      </thead>
                                      <tbody id="cart-items">
@@ -113,12 +113,12 @@
                              <hr>
                              
                              <div class="mb-3">
-                                 <label class="form-label">Delivery Charge ($)</label>
+                                 <label class="form-label">Delivery Charge ()</label>
                                  <input type="number" step="1" name="delivery_charge" class="form-control" value="0">
                              </div>
 
                              <div class="mb-3">
-                                 <label class="form-label">Discount ($)</label>
+                                 <label class="form-label">Discount ()</label>
                                  <input type="number" step="1" name="discount" class="form-control" value="0">
                              </div>
                              
@@ -159,7 +159,7 @@
 
                              <hr>
                              <div class="mb-3 text-end">
-                                 <h3 class="text-danger m-0">Grand Total: $<span id="grandTotalDisplay">0.00</span></h3>
+                                 <h3 class="text-danger m-0">Grand Total: <span id="grandTotalDisplay">0.00</span></h3>
                              </div>
                              <hr>
 
@@ -169,7 +169,7 @@
                              </div>
 
                              <div class="mb-3">
-                                 <label class="form-label text-success"><strong>Amount Paid Now ($)</strong></label>
+                                 <label class="form-label text-success"><strong>Amount Paid Now ()</strong></label>
                                  <input type="number" step="1" name="paid_amount" id="paidAmount" class="form-control" value="0">
                                  <small class="text-muted d-block mt-1">If the customer has a <strong>Wallet Balance</strong>, it will be automatically applied to any remaining due. Overpayments will be added to the Wallet.</small>
                              </div>
@@ -542,7 +542,7 @@
                 if(data.success) {
                     const customer = data.customer;
                     // Add to select2
-                    const newOption = new Option(customer.name + ' (Wallet: $0, Due: $0)', customer.id, true, true);
+                    const newOption = new Option(customer.name + ' (Wallet: 0, Due: 0)', customer.id, true, true);
                     newOption.dataset.customerType = customer.customer_type || 'customer';
                     $('#customer_id').append(newOption).trigger('change');
                     

@@ -214,10 +214,10 @@
                                                      <span class="badge bg-light text-muted">No</span>
                                                  @endif
                                              </td>
-                                             <td>${{ number_format($sale->total, 0) }}</td>
+                                             <td>{{ number_format($sale->total, 0) }}</td>
                                              <td>{{ number_format($sale->total_weight, 3) }} kg</td>
-                                             <td>${{ number_format($sale->paid_amount, 0) }}</td>
-                                             <td class="text-danger">${{ number_format($sale->due_amount, 0) }}</td>
+                                             <td>{{ number_format($sale->paid_amount, 0) }}</td>
+                                             <td class="text-danger">{{ number_format($sale->due_amount, 0) }}</td>
                                              <td>
                                                  @if($sale->payment_status == 'paid')
                                                      <span class="badge bg-success">Paid</span>

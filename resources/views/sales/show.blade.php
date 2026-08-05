@@ -264,7 +264,7 @@
                  <div class="card">
                      <div class="card-header bg-light d-flex justify-content-between align-items-center">
                          <h4 class="card-title mb-0">Add Payment</h4>
-                         <span class="badge bg-danger rounded-pill">Due: ${{ number_format($sale->due_amount, 0) }}</span>
+                         <span class="badge bg-danger rounded-pill">Due: {{ number_format($sale->due_amount, 0) }}</span>
                      </div>
                      <div class="card-body">
                          @if($sale->due_amount > 0)

@@ -44,7 +44,7 @@
                                          <select name="customer_id" id="customer_id" class="form-control select2" data-toggle="select2" required style="width: 100%;">
                                              <option value="">Walk-in / Select Customer</option>
                                              @foreach($customers as $customer)
-                                                 <option value="{{ $customer->id }}" {{ $sale->customer_id == $customer->id ? 'selected' : '' }}>{{ $customer->name }} (Credit: ${{ $customer->credit_limit }})</option>
+                                                 <option value="{{ $customer->id }}" {{ $sale->customer_id == $customer->id ? 'selected' : '' }}>{{ $customer->name }} (Credit: {{ $customer->credit_limit }})</option>
                                              @endforeach
                                          </select>
                                          <button type="button" class="btn btn-primary ms-1" data-bs-toggle="modal" data-bs-target="#addCustomerModal"><i class="ri-add-line"></i></button>
@@ -369,7 +369,7 @@
                 if(data.success) {
                     const customer = data.customer;
                     // Add to select2
-                    const newOption = new Option(customer.name + ' (Credit: $0)', customer.id, true, true);
+                    const newOption = new Option(customer.name + ' (Credit: 0)', customer.id, true, true);
                     $('#customer_id').append(newOption).trigger('change');
                     
                     // Close modal
