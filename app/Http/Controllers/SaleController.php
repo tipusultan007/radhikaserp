@@ -823,9 +823,15 @@ class SaleController extends Controller
             $this->reverseSale($sale);
             $sale->delete();
             DB::commit();
+            if (request()->expectsJson()) {
+                return response()->json(['success' => true, 'message' => 'Sale deleted and reversed successfully.']);
+            }
             return redirect()->route('sales.index')->with('success', 'Sale deleted and reversed successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
+            if (request()->expectsJson()) {
+                return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
+            }
             return back()->withErrors(['error' => 'Failed to delete sale: ' . $e->getMessage()]);
         }
     }

@@ -65,7 +65,7 @@
                                  <tbody>
                                      @forelse($customers as $customer)
                                          <tr>
-                                             <td>{{ $customer->name }}</td>
+                                             <td><a href="{{ route('customers.show', $customer->id) }}" class="text-body fw-semibold">{{ $customer->name }}</a></td>
                                              <td>{{ $customer->phone }}</td>
                                              <td>{{ Str::limit($customer->address, 30) }}</td>
                                              <td>{{ number_format($customer->credit_limit, 0) }}</td>

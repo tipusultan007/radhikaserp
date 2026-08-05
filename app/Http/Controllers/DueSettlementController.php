@@ -250,10 +250,16 @@ class DueSettlementController extends Controller
             $journal->delete();
 
             DB::commit();
+            if (request()->expectsJson()) {
+                return response()->json(['success' => true, 'message' => 'Payment reversed and deleted successfully.']);
+            }
             return redirect()->back()->with('success', 'Payment reversed and deleted successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
             \Illuminate\Support\Facades\Log::error('Failed to delete payment: ' . $e->getMessage(), ['exception' => $e]);
+            if (request()->expectsJson()) {
+                return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
+            }
             return redirect()->back()->with('error', 'Failed to delete payment: ' . $e->getMessage());
         }
     }

@@ -207,6 +207,15 @@
                                                     </button>
                                                     <ul class="dropdown-menu">
                                                         <li><a class="dropdown-item" href="{{ route('sales.show', $sale->id) }}"><i class="ri-eye-line me-1"></i> View</a></li>
+                                                        <li>
+                                                            <a href="javascript:void(0);" class="dropdown-item text-danger" onclick="confirmDeleteSale({{ $sale->id }})">
+                                                                <i class="ri-delete-bin-line me-1"></i> Delete
+                                                            </a>
+                                                            <form id="delete-sale-form-{{ $sale->id }}" action="{{ route('sales.destroy', $sale->id) }}" method="POST" class="d-none">
+                                                                @csrf
+                                                                @method('DELETE')
+                                                            </form>
+                                                        </li>
                                                         <!-- Add future actions here like Download PDF -->
                                                     </ul>
                                                 </div>
@@ -237,10 +246,78 @@
             showCancelButton: true,
             confirmButtonColor: '#d33',
             cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Yes, delete it!'
+            confirmButtonText: 'Yes, delete it!',
+            showLoaderOnConfirm: true,
+            preConfirm: () => {
+                return fetch('/customer-dues/' + id, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(response.statusText)
+                    }
+                    return response.json()
+                })
+                .catch(error => {
+                    Swal.showValidationMessage(`Request failed: ${error}`)
+                })
+            },
+            allowOutsideClick: () => !Swal.isLoading()
         }).then((result) => {
             if (result.isConfirmed) {
-                document.getElementById('delete-form-' + id).submit();
+                Swal.fire({
+                    title: 'Deleted!',
+                    text: 'The payment has been successfully deleted.',
+                    icon: 'success'
+                }).then(() => {
+                    location.reload();
+                });
+            }
+        })
+    }
+    
+    function confirmDeleteSale(id) {
+        Swal.fire({
+            title: 'Delete Sale?',
+            text: "This will delete the sale, all its items, and reverse all balances/stock. This cannot be undone!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, delete sale!',
+            showLoaderOnConfirm: true,
+            preConfirm: () => {
+                return fetch('/sales/' + id, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(response.statusText)
+                    }
+                    return response.json()
+                })
+                .catch(error => {
+                    Swal.showValidationMessage(`Request failed: ${error}`)
+                })
+            },
+            allowOutsideClick: () => !Swal.isLoading()
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    title: 'Deleted!',
+                    text: 'The sale has been successfully deleted.',
+                    icon: 'success'
+                }).then(() => {
+                    location.reload();
+                });
             }
         })
     }
