@@ -21,7 +21,7 @@
                     <h4 class="header-title mb-3">Account Overview</h4>
                     <p><strong>Name:</strong> {{ $account->name }}</p>
                     <p><strong>Type:</strong> <span class="badge bg-primary text-uppercase">{{ $account->type }}</span></p>
-                    <p><strong>Opening Balance:</strong> ${{ number_format($account->opening_balance, 0) }}</p>
+                    <p><strong>Opening Balance:</strong> ৳ {{ number_format($account->opening_balance, 0) }}</p>
                     <p><strong>Is Payment Method:</strong> {!! $account->is_payment_method ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>' !!}</p>
 
                     <div class="d-flex gap-2 mt-3">
@@ -89,8 +89,8 @@
                                         </a>
                                     </td>
                                     <td>{{ $entry->journal->notes }}</td>
-                                    <td class="text-success">{{ $entry->type === 'debit' ? '$' . number_format($entry->amount, 0) : '-' }}</td>
-                                    <td class="text-danger">{{ $entry->type === 'credit' ? '$' . number_format($entry->amount, 0) : '-' }}</td>
+                                    <td class="text-success">{{ $entry->type === 'debit' ? '৳ ' . number_format($entry->amount, 0) : '-' }}</td>
+                                    <td class="text-danger">{{ $entry->type === 'credit' ? '৳ ' . number_format($entry->amount, 0) : '-' }}</td>
                                 </tr>
                                 @endforeach
                             </tbody>

@@ -62,7 +62,7 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="amount" class="form-label">Amount ($) <span class="text-danger">*</span></label>
+                            <label for="amount" class="form-label">Amount (৳) <span class="text-danger">*</span></label>
                             <input type="number" step="1" class="form-control" id="amount" name="amount" value="{{ old('amount', $expense->amount) }}" required>
                         </div>
 

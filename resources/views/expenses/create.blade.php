@@ -45,7 +45,7 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label class="form-label">Amount ($)</label>
+                                    <label class="form-label">Amount (৳)</label>
                                     <input type="number" step="1" name="amount" class="form-control" required>
                                 </div>
                             </div>

@@ -71,7 +71,7 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="amount" class="form-label">Amount ($) <span class="text-danger">*</span></label>
+                            <label for="amount" class="form-label">Amount (৳) <span class="text-danger">*</span></label>
                             <input type="number" step="1" class="form-control" id="amount" name="amount" placeholder="0.00" value="{{ old('amount') }}" required>
                         </div>
 
@@ -145,7 +145,7 @@
                                     <tr>
                                         <td>{{ \Carbon\Carbon::parse($expense->date)->format('Y-m-d') }}</td>
                                         <td><span class="badge bg-secondary-lighten text-secondary">{{ $expense->category->name ?? 'Uncategorized' }}</span></td>
-                                        <td class="text-danger fw-semibold">${{ number_format($expense->amount, 0) }}</td>
+                                        <td class="text-danger fw-semibold">৳{{ number_format($expense->amount, 0) }}</td>
                                         <td>{{ $expense->paymentMethod->name ?? 'Cash' }}</td>
                                         <td>{{ Str::limit($expense->notes ?? '-', 20) }}</td>
                                         <td>
