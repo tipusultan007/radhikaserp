@@ -28,7 +28,7 @@ class PurchaseController extends Controller
     {
         $suppliers = Supplier::all();
         $warehouses = Warehouse::all();
-        $products = Product::where('type', 'raw')->get();
+        $products = Product::whereIn('type', ['raw', 'finished'])->get();
         return view('purchases.create', compact('suppliers', 'warehouses', 'products'));
     }
 

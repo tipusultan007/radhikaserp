@@ -102,7 +102,7 @@
                                     <td class="text-success">{{ $txn->qty_in > 0 ? number_format($txn->qty_in, 3) : '-' }}</td>
                                     <td class="text-danger">{{ $txn->qty_out > 0 ? number_format($txn->qty_out, 3) : '-' }}</td>
                                     <td>
-                                        @if($txn->reference_type && $txn->reference)
+                                        @if($txn->reference_type && $txn->reference_id)
                                             <span class="badge bg-light text-dark border">{{ class_basename($txn->reference_type) }} #{{ $txn->reference_id }}</span>
                                         @else
                                             -

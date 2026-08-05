@@ -11,7 +11,7 @@ class InventoryTransactionController extends Controller
 {
     public function index(Request $request)
     {
-        $query = InventoryTransaction::with(['warehouse', 'product', 'productVariant', 'batch', 'creator', 'reference']);
+        $query = InventoryTransaction::with(['warehouse', 'product', 'productVariant', 'batch', 'creator']);
 
         if ($request->filled('start_date')) {
             $query->whereDate('date', '>=', $request->start_date);
