@@ -6,10 +6,13 @@
         <div class="col-12">
             <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
                 <h4 class="page-title">Customer Payments</h4>
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="{{ route('home') }}">ERP</a></li>
-                    <li class="breadcrumb-item active">Customer Dues</li>
-                </ol>
+                <div class="d-flex align-items-center gap-2">
+                    <a href="{{ route('customer-dues.export', request()->all()) }}" class="btn btn-success btn-sm"><i class="ri-file-excel-2-line me-1"></i> Export CSV</a>
+                    <ol class="breadcrumb m-0">
+                        <li class="breadcrumb-item"><a href="{{ route('home') }}">ERP</a></li>
+                        <li class="breadcrumb-item active">Customer Payments</li>
+                    </ol>
+                </div>
             </div>
         </div>
     </div>

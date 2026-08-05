@@ -254,19 +254,19 @@
             <li class="side-nav-item">
                 <a data-bs-toggle="collapse" href="#sidebarDues" aria-expanded="false" aria-controls="sidebarDues" class="side-nav-link">
                     <i class="ri-money-dollar-box-fill"></i>
-                    <span> Due Management </span>
+                    <span> Payments </span>
                     <span class="menu-arrow"></span>
                 </a>
                 <div class="collapse" id="sidebarDues">
                     <ul class="side-nav-second-level">
                         @canany(['view settlements', 'settle customer dues'])
                         <li>
-                            <a href="{{ route('customer-dues.index') }}">Customer Dues</a>
+                            <a href="{{ route('customer-dues.index') }}">Customer Payments</a>
                         </li>
                         @endcanany
                         @canany(['view settlements', 'settle supplier payables'])
                         <li>
-                            <a href="{{ route('supplier-payables.index') }}">Supplier Payables</a>
+                            <a href="{{ route('supplier-payables.index') }}">Supplier Payments</a>
                         </li>
                         @endcanany
                     </ul>

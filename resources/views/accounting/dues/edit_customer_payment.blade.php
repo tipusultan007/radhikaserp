@@ -8,7 +8,7 @@
                 <h4 class="page-title">Edit Customer Payment</h4>
                 <ol class="breadcrumb m-0">
                     <li class="breadcrumb-item"><a href="{{ route('home') }}">ERP</a></li>
-                    <li class="breadcrumb-item"><a href="{{ route('customer-dues.index') }}">Customer Dues</a></li>
+                    <li class="breadcrumb-item"><a href="{{ route('customer-dues.index') }}">Customer Payments</a></li>
                     <li class="breadcrumb-item active">Edit</li>
                 </ol>
             </div>

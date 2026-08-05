@@ -300,7 +300,9 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     // ─── Settlements ────────────────────────────────────────────────────────────
     Route::group(['middleware' => ['permission:view settlements']], function () {
         Route::get('/customer-dues', [App\Http\Controllers\DueSettlementController::class, 'customers'])->name('customer-dues.index');
+        Route::get('/customer-dues/export', [App\Http\Controllers\DueSettlementController::class, 'exportCustomerPayments'])->name('customer-dues.export');
         Route::get('/supplier-payables', [App\Http\Controllers\DueSettlementController::class, 'suppliers'])->name('supplier-payables.index');
+        Route::get('/supplier-payables/export', [App\Http\Controllers\DueSettlementController::class, 'exportSupplierPayments'])->name('supplier-payables.export');
     });
     Route::group(['middleware' => ['permission:settle customer dues']], function () {
         Route::post('/customer-dues/pay', [App\Http\Controllers\DueSettlementController::class, 'payCustomer'])->name('customer-dues.pay');

@@ -8,7 +8,7 @@
                 <h4 class="page-title">Edit Supplier Payment</h4>
                 <ol class="breadcrumb m-0">
                     <li class="breadcrumb-item"><a href="{{ route('home') }}">ERP</a></li>
-                    <li class="breadcrumb-item"><a href="{{ route('supplier-payables.index') }}">Supplier Payables</a></li>
+                    <li class="breadcrumb-item"><a href="{{ route('supplier-payables.index') }}">Supplier Payments</a></li>
                     <li class="breadcrumb-item active">Edit</li>
                 </ol>
             </div>

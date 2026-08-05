@@ -570,5 +570,152 @@ class DueSettlementController extends Controller
             return redirect()->back()->with('error', 'Failed to delete payment.');
         }
     }
+
+    public function exportCustomerPayments(Request $request)
+    {
+        $query = Journal::with(['reference', 'entries.account'])
+            ->where('reference_type', Customer::class)
+            ->whereHas('entries', function($q) {
+                $q->whereHas('account', function($sq) {
+                    $sq->whereIn('name', ['Cash', 'Accounts Receivable', 'Customer Advance', 'Bank', 'Mobile Money']);
+                });
+            })
+            ->orderBy('date', 'desc')
+            ->orderBy('id', 'desc');
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('date', [$request->start_date, $request->end_date]);
+        } elseif ($request->filled('start_date')) {
+            $query->whereDate('date', '>=', $request->start_date);
+        } elseif ($request->filled('end_date')) {
+            $query->whereDate('date', '<=', $request->end_date);
+        }
+
+        if ($request->filled('customer_id')) {
+            $query->where('reference_id', $request->customer_id);
+        }
+
+        if ($request->filled('payment_method')) {
+            $methodId = $request->payment_method;
+            $query->whereHas('entries', function($q) use ($methodId) {
+                $q->where('account_id', $methodId);
+            });
+        }
+
+        $payments = $query->get();
+
+        $headers = [
+            "Content-type"        => "text/csv",
+            "Content-Disposition" => "attachment; filename=customer_payments_" . date('Y-m-d_H-i-s') . ".csv",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
+        ];
+
+        $callback = function() use ($payments) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['Date', 'Journal No', 'Customer Name', 'Customer Phone', 'Cash Paid', 'Wallet Used', 'Added to Wallet', 'Payment Method', 'Notes']);
+
+            foreach ($payments as $payment) {
+                $cashEntry = $payment->entries->where('type', 'debit')->first(function($e) { return $e->account->name !== 'Customer Advance'; });
+                $amount = $cashEntry ? $cashEntry->amount : 0;
+                $method = $cashEntry ? $cashEntry->account->name : 'N/A';
+
+                $walletDebit = $payment->entries->first(function($entry) {
+                    return $entry->type === 'debit' && $entry->account->name === 'Customer Advance';
+                });
+                $walletUsed = $walletDebit ? $walletDebit->amount : 0;
+
+                $advEntry = $payment->entries->first(function($entry) {
+                    return $entry->type === 'credit' && $entry->account->name === 'Customer Advance';
+                });
+                $addedToWallet = $advEntry ? $advEntry->amount : 0;
+
+                fputcsv($file, [
+                    $payment->date ? \Carbon\Carbon::parse($payment->date)->format('Y-m-d') : '',
+                    $payment->journal_no,
+                    $payment->reference ? $payment->reference->name : 'N/A',
+                    $payment->reference ? $payment->reference->phone : '',
+                    $amount,
+                    $walletUsed,
+                    $addedToWallet,
+                    $method,
+                    $payment->notes ?? ''
+                ]);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    public function exportSupplierPayments(Request $request)
+    {
+        $query = Journal::with(['reference', 'entries.account'])
+            ->where('reference_type', Supplier::class)
+            ->whereHas('entries', function($q) {
+                $q->whereHas('account', function($sq) {
+                    $sq->whereIn('name', ['Cash', 'Accounts Payable', 'Supplier Advance', 'Bank', 'Mobile Money']);
+                });
+            })
+            ->orderBy('date', 'desc')
+            ->orderBy('id', 'desc');
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('date', [$request->start_date, $request->end_date]);
+        } elseif ($request->filled('start_date')) {
+            $query->whereDate('date', '>=', $request->start_date);
+        } elseif ($request->filled('end_date')) {
+            $query->whereDate('date', '<=', $request->end_date);
+        }
+
+        if ($request->filled('supplier_id')) {
+            $query->where('reference_id', $request->supplier_id);
+        }
+
+        if ($request->filled('payment_method')) {
+            $methodId = $request->payment_method;
+            $query->whereHas('entries', function($q) use ($methodId) {
+                $q->where('account_id', $methodId);
+            });
+        }
+
+        $payments = $query->get();
+
+        $headers = [
+            "Content-type"        => "text/csv",
+            "Content-Disposition" => "attachment; filename=supplier_payments_" . date('Y-m-d_H-i-s') . ".csv",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
+        ];
+
+        $callback = function() use ($payments) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['Date', 'Journal No', 'Supplier Name', 'Supplier Phone', 'Amount Paid', 'Payment Method', 'Notes']);
+
+            foreach ($payments as $payment) {
+                $cashEntry = $payment->entries->where('type', 'credit')->first(function($e) { return $e->account->name !== 'Accounts Payable'; });
+                if (!$cashEntry) {
+                    $cashEntry = $payment->entries->first();
+                }
+                $amount = $cashEntry ? $cashEntry->amount : 0;
+                $method = $cashEntry ? $cashEntry->account->name : 'N/A';
+
+                fputcsv($file, [
+                    $payment->date ? \Carbon\Carbon::parse($payment->date)->format('Y-m-d') : '',
+                    $payment->journal_no,
+                    $payment->reference ? $payment->reference->name : 'N/A',
+                    $payment->reference ? $payment->reference->phone : '',
+                    $amount,
+                    $method,
+                    $payment->notes ?? ''
+                ]);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
 }
 
