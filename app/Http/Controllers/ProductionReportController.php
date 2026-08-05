@@ -69,8 +69,8 @@ class ProductionReportController extends Controller
 
     public function costPerBatch(Request $request)
     {
-        // We only care about internally produced batches (where import_id is null)
-        $batches = Batch::whereNull('import_id')
+        // We only care about internally produced batches (where purchase_id is null)
+        $batches = Batch::whereNull('purchase_id')
             ->whereHas('product', function($q) {
                 // Focus on finished goods that were produced
                 $q->where('type', 'finished');

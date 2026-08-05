@@ -234,7 +234,7 @@ class RepackagingController extends Controller
                     'product_id' => $outItem['product_id'],
                     'product_variant_id' => $outItem['variant_id'],
                     'warehouse_id' => $warehouseId,
-                    'import_id' => null,
+                    'purchase_id' => null,
                     'qty_in' => $outItem['qty'],
                     'qty_out' => 0,
                     'remaining_qty' => $outItem['qty'],
@@ -474,7 +474,7 @@ class RepackagingController extends Controller
                 'product_id' => $productId, // Linked to Master Product
                 'product_variant_id' => $variantId,
                 'warehouse_id' => $warehouseId,
-                'import_id' => null, // Produced internally
+                'purchase_id' => null, // Produced internally
                 'qty_in' => $validated['output_qty'],
                 'qty_out' => 0,
                 'remaining_qty' => $validated['output_qty'],
