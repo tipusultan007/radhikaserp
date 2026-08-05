@@ -40,16 +40,25 @@ class ReportController extends Controller
         $query = JournalEntry::whereIn('account_id', $cashAccs)->with('journal');
 
         $date = $request->has('date') ? $request->date : now()->format('Y-m-d');
+        
+        $openingBalance = 0;
 
         if (!empty($date)) {
             $query->whereHas('journal', function($q) use ($date) {
                 $q->whereDate('date', $date);
             });
+            
+            $openingBalance = JournalEntry::whereIn('account_id', $cashAccs)
+                ->whereHas('journal', function($q) use ($date) {
+                    $q->whereDate('date', '<', $date);
+                })
+                ->selectRaw('SUM(CASE WHEN type = "debit" THEN amount ELSE -amount END) as balance')
+                ->value('balance') ?? 0;
         }
 
         $entries = $query->latest()->get();
         
-        return view('reports.cashbook', compact('entries', 'date'));
+        return view('reports.cashbook', compact('entries', 'date', 'openingBalance'));
     }
 
     public function cashbookPrint(Request $request)
@@ -59,16 +68,25 @@ class ReportController extends Controller
         $query = JournalEntry::whereIn('account_id', $cashAccs)->with('journal');
 
         $date = $request->has('date') ? $request->date : now()->format('Y-m-d');
+        
+        $openingBalance = 0;
 
         if (!empty($date)) {
             $query->whereHas('journal', function($q) use ($date) {
                 $q->whereDate('date', $date);
             });
+            
+            $openingBalance = JournalEntry::whereIn('account_id', $cashAccs)
+                ->whereHas('journal', function($q) use ($date) {
+                    $q->whereDate('date', '<', $date);
+                })
+                ->selectRaw('SUM(CASE WHEN type = "debit" THEN amount ELSE -amount END) as balance')
+                ->value('balance') ?? 0;
         }
 
         $entries = $query->latest()->get();
         
-        return view('reports.cashbook_print', compact('entries', 'date'));
+        return view('reports.cashbook_print', compact('entries', 'date', 'openingBalance'));
     }
 
     public function profitAndLoss()

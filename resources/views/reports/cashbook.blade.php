@@ -44,8 +44,8 @@
                             $debits = $entries->where('type', 'debit')->sortBy('journal.date')->values();
                             $credits = $entries->where('type', 'credit')->sortBy('journal.date')->values();
                             $maxRows = max($debits->count(), $credits->count());
-                            $totalDebit = $debits->sum('amount');
-                            $totalCredit = $credits->sum('amount');
+                            $totalDebit = $debits->sum('amount') + ($openingBalance > 0 ? $openingBalance : 0);
+                            $totalCredit = $credits->sum('amount') + ($openingBalance < 0 ? abs($openingBalance) : 0);
                             $closingBalance = $totalDebit - $totalCredit;
                         @endphp
                         
@@ -65,6 +65,22 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                @if(isset($openingBalance) && $openingBalance != 0)
+                                    <tr class="bg-light">
+                                        @if($openingBalance > 0)
+                                            <td class="fw-bold">{{ \Carbon\Carbon::parse($date)->format('d M, Y') }}</td>
+                                            <td class="fw-bold">To Balance b/d</td>
+                                            <td class="border-end text-end text-success fw-bold">{{ number_format($openingBalance, 0) }}</td>
+                                            <td></td><td></td><td></td>
+                                        @else
+                                            <td></td><td></td><td class="border-end"></td>
+                                            <td class="fw-bold">{{ \Carbon\Carbon::parse($date)->format('d M, Y') }}</td>
+                                            <td class="fw-bold">By Balance b/d</td>
+                                            <td class="text-end text-danger fw-bold">{{ number_format(abs($openingBalance), 0) }}</td>
+                                        @endif
+                                    </tr>
+                                @endif
+                                
                                 @for($i = 0; $i < $maxRows; $i++)
                                     <tr>
                                         {{-- Debit Side --}}
@@ -91,13 +107,13 @@
                                 @if($closingBalance > 0)
                                     <tr class="bg-light">
                                         <td></td><td></td><td class="border-end"></td>
-                                        <td class="fw-bold">{{ date('d M, Y') }}</td>
+                                        <td class="fw-bold">{{ !empty($date) ? \Carbon\Carbon::parse($date)->format('d M, Y') : date('d M, Y') }}</td>
                                         <td class="fw-bold text-end">By Balance c/d</td>
                                         <td class="text-end text-danger fw-bold">{{ number_format($closingBalance, 0) }}</td>
                                     </tr>
                                 @elseif($closingBalance < 0)
                                     <tr class="bg-light">
-                                        <td class="fw-bold">{{ date('d M, Y') }}</td>
+                                        <td class="fw-bold">{{ !empty($date) ? \Carbon\Carbon::parse($date)->format('d M, Y') : date('d M, Y') }}</td>
                                         <td class="fw-bold text-end">To Balance c/d</td>
                                         <td class="border-end text-end text-success fw-bold">{{ number_format(abs($closingBalance), 0) }}</td>
                                         <td></td><td></td><td></td>
