@@ -201,7 +201,7 @@
                                      <div class="mb-3">
                                          <label class="form-label fw-semibold">Repackaging Expenses (Labor/Packing) - Optional</label>
                                          <div class="input-group">
-                                             <span class="input-group-text">$</span>
+                                             
                                              <input type="number" step="1" min="0" name="expenses" class="form-control" value="0.00">
                                          </div>
                                          <small class="text-muted mt-1 d-block"><i class="ri-information-line"></i> This cost will be capitalized into the finished stock value.</small>
