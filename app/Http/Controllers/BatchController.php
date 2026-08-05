@@ -9,7 +9,7 @@ class BatchController extends Controller
 {
     public function index()
     {
-        $batches = Batch::with(['product', 'warehouse', 'import'])->latest('id')->get();
+        $batches = Batch::with(['product', 'warehouse', 'purchase'])->latest('id')->get();
         return view('batches.index', compact('batches'));
     }
 }
