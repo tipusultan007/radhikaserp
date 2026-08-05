@@ -1,6 +1,6 @@
-@extends('layouts.vertical', ['title' => 'Profit & Margins Report'])
+@extends('layouts.report', ['title' => 'Profit & Margins Report'])
 
-@section('content')
+@section('report_content')
 <div class="row">
     <div class="col-12">
         <div class="page-title-box">

@@ -1,6 +1,6 @@
-@extends('layouts.vertical', ['title' => 'Batch Movement'])
+@extends('layouts.report', ['title' => 'Batch Movement'])
 
-@section('content')
+@section('report_content')
 <div class="row">
     <div class="col-12">
         <div class="page-title-box">

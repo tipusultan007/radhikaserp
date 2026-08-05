@@ -1,6 +1,6 @@
-@extends('layouts.vertical', ['title' => 'Repackaging Yield Report'])
+@extends('layouts.report', ['title' => 'Repackaging Yield Report'])
 
-@section('content')
+@section('report_content')
 <div class="row">
     <div class="col-12">
         <div class="page-title-box">

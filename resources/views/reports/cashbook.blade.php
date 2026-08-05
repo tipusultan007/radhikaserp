@@ -1,6 +1,6 @@
-@extends('layouts.vertical', ['page_title' => 'Cashbook (T-Format)', 'mode' => $mode ?? '', 'demo' => $demo ?? ''])
+@extends('layouts.report', ['page_title' => 'Cashbook (T-Format)', 'mode' => $mode ?? '', 'demo' => $demo ?? ''])
 
-@section('content')
+@section('report_content')
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">

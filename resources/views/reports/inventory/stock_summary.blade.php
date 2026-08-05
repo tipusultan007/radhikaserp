@@ -1,6 +1,6 @@
-@extends('layouts.vertical', ['title' => 'Stock Summary'])
+@extends('layouts.report', ['title' => 'Stock Summary'])
 
-@section('content')
+@section('report_content')
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-flex justify-content-between align-items-center">

@@ -1,6 +1,6 @@
-@extends('layouts.vertical', ['title' => 'Monthly Sales Report'])
+@extends('layouts.report', ['title' => 'Monthly Sales Report'])
 
-@section('content')
+@section('report_content')
 <div class="row">
     <div class="col-12">
         <div class="page-title-box">

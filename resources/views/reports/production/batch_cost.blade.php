@@ -1,6 +1,6 @@
-@extends('layouts.vertical', ['title' => 'Cost per Batch (Internally Produced)'])
+@extends('layouts.report', ['title' => 'Cost per Batch (Internally Produced)'])
 
-@section('content')
+@section('report_content')
 <div class="row">
     <div class="col-12">
         <div class="page-title-box">
