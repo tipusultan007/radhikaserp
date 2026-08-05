@@ -202,13 +202,10 @@ class CustomerController extends Controller
                 $q->where('reference_type', Customer::class)->where('reference_id', $customer->id);
             })->orWhere(function($q) use ($customer) {
                 $q->where('reference_type', Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
-            })->orWhere(function($q) use ($customer) {
-                $q->where('reference_type', \App\Models\SalePayment::class)->whereIn('reference_id', \App\Models\SalePayment::whereIn('sale_id', $customer->sales()->pluck('id'))->pluck('id'));
             })
-            ->get()
-            ->sortBy(function($journal) {
-                return $journal->date . '_' . str_pad($journal->id, 10, '0', STR_PAD_LEFT);
-            })->values();
+            ->get();
+            
+        $salePayments = \App\Models\SalePayment::whereIn('sale_id', $customer->sales()->pluck('id'))->get();
 
         $ledgerEntries = collect();
         $runningBalance = 0;
@@ -235,10 +232,21 @@ class CustomerController extends Controller
                     ]);
                 }
 
-                // Payment during Sale (Credit)
-                if ($sale->paid_amount > 0) {
-                    $runningBalance -= $sale->paid_amount;
-                    $totalCredit += $sale->paid_amount;
+                // Initial POS Payment (Credit) - fallback for old sales without journals
+                $initialPaymentAmount = \App\Models\SalePayment::where('sale_id', $sale->id)
+                    ->where(function($q) {
+                        $q->whereNull('reference')
+                          ->orWhereIn('reference', ['POS Payment', 'Wallet Payment']);
+                    })
+                    ->sum('amount');
+
+                $hasJournal = $journals->contains(function($j) use ($sale) {
+                    return str_contains($j->notes, 'Payment for POS Sale ' . $sale->invoice_no);
+                });
+
+                if ($initialPaymentAmount > 0 && !$hasJournal) {
+                    $runningBalance -= $initialPaymentAmount;
+                    $totalCredit += $initialPaymentAmount;
                     $paymentJournal = clone $journal;
                     $paymentJournal->notes = 'Payment for ' . $sale->invoice_no;
                     
@@ -246,7 +254,7 @@ class CustomerController extends Controller
                         'id' => $journal->id . '_pay',
                         'journal' => $paymentJournal,
                         'debit' => 0,
-                        'credit' => $sale->paid_amount,
+                        'credit' => $initialPaymentAmount,
                         'running_balance' => $runningBalance,
                     ]);
                 }
@@ -261,8 +269,32 @@ class CustomerController extends Controller
                 }
             }
 
-            if ($debit == 0 && $credit == 0 && $journal->notes != 'Opening Balance') {
+            $internalTransferAmount = 0;
+            // Net out debit and credit so we only show the net change on the running balance
+            if ($debit > 0 && $credit > 0) {
+                $internalTransferAmount = min($debit, $credit);
+                
+                if ($debit > $credit) {
+                    $debit = $debit - $credit;
+                    $credit = 0;
+                } else if ($credit > $debit) {
+                    $credit = $credit - $debit;
+                    $debit = 0;
+                } else {
+                    $debit = 0;
+                    $credit = 0;
+                }
+            }
+
+            // If it was a pure internal transfer (0 net change), we still want to show it in the ledger so it's not confusingly hidden!
+            if ($debit == 0 && $credit == 0 && $internalTransferAmount == 0 && $journal->notes != 'Opening Balance') {
                 continue;
+            }
+
+            // Append the wallet usage to the notes so the user knows exactly what happened!
+            if ($internalTransferAmount > 0) {
+                $journal = clone $journal;
+                $journal->notes .= " (Wallet Used: ৳" . number_format($internalTransferAmount, 0) . ")";
             }
 
             $runningBalance += $debit;
@@ -285,7 +317,17 @@ class CustomerController extends Controller
         $finalRunningBalance = $runningBalance;
 
         $ledgerEntries = $ledgerEntries->sortByDesc(function($entry) {
-            return $entry->journal->date . '_' . str_pad($entry->id, 10, '0', STR_PAD_LEFT);
+            $parts = explode('_', $entry->id);
+            $journalId = str_pad($parts[0], 10, '0', STR_PAD_LEFT);
+            $subSeq = isset($parts[1]) ? $parts[1] : '0';
+            
+            $seqMap = [
+                'sale' => '1',
+                'pay' => '2',
+            ];
+            $seq = $seqMap[$subSeq] ?? '0';
+
+            return $entry->journal->date . '_' . $journalId . '_' . $seq;
         })->values();
 
         $paymentMethods = ChartOfAccount::where('is_payment_method', true)->get();
@@ -383,34 +425,20 @@ class CustomerController extends Controller
             })
             ->get();
 
-        $totalDebit = 0;
-        $totalCredit = 0;
+        $arDebit = $customer->sales()->sum('total') + $customer->opening_balance;
+        $arCredit = \App\Models\SalePayment::whereIn('sale_id', $customer->sales()->pluck('id'))->sum('amount');
+        
         $advCredit = 0;
         $advDebit = 0;
 
         foreach ($journals as $journal) {
-            if ($journal->reference_type == Sale::class) {
-                $sale = $journal->reference;
-                if ($sale->total >= 0) {
-                    $totalDebit += $sale->total;
-                }
-                if ($sale->paid_amount > 0) {
-                    $totalCredit += $sale->paid_amount;
-                }
-            } else {
-                if ($journal->notes == 'Opening Balance') {
-                    $totalDebit += $customer->opening_balance;
-                } else {
-                    $totalCredit += $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'credit')->sum('amount');
-                    $totalDebit += $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'debit')->sum('amount');
-                    
-                    $advCredit += $journal->entries->where('account_id', $advId)->where('type', 'credit')->sum('amount');
-                    $advDebit += $journal->entries->where('account_id', $advId)->where('type', 'debit')->sum('amount');
-                }
+            if ($journal->notes != 'Opening Balance') {
+                $advCredit += $journal->entries->where('account_id', $advId)->where('type', 'credit')->sum('amount');
+                $advDebit += $journal->entries->where('account_id', $advId)->where('type', 'debit')->sum('amount');
             }
         }
 
-        $calculatedDue = $totalDebit - $totalCredit;
+        $calculatedDue = $arDebit - $arCredit;
         $calculatedWallet = $advCredit - $advDebit;
 
         $customer->total_due = $calculatedDue;

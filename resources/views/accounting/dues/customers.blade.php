@@ -137,14 +137,18 @@
                                                 <i class="ri-settings-3-line"></i> Actions
                                             </button>
                                             <ul class="dropdown-menu dropdown-menu-end">
-                                                <li><a class="dropdown-item text-primary" href="{{ route('customer-dues.edit', $payment->id) }}"><i class="ri-edit-box-line me-2"></i> Edit</a></li>
-                                                <li>
-                                                    <form id="delete-form-{{ $payment->id }}" action="{{ route('customer-dues.destroy', $payment->id) }}" method="POST" class="d-inline">
-                                                        @csrf
-                                                        @method('DELETE')
-                                                        <button type="button" class="dropdown-item text-danger" onclick="confirmDelete('{{ $payment->id }}')"><i class="ri-delete-bin-line me-2"></i> Delete</button>
-                                                    </form>
-                                                </li>
+                                                @if(str_contains($payment->notes, 'Sale'))
+                                                    <li><span class="dropdown-item text-muted"><i class="ri-information-line me-2"></i> Manage via Sale page</span></li>
+                                                @else
+                                                    <li><a class="dropdown-item text-primary" href="{{ route('customer-dues.edit', $payment->id) }}"><i class="ri-edit-box-line me-2"></i> Edit</a></li>
+                                                    <li>
+                                                        <form id="delete-form-{{ $payment->id }}" action="{{ route('customer-dues.destroy', $payment->id) }}" method="POST" class="d-inline">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button type="button" class="dropdown-item text-danger" onclick="confirmDelete('{{ $payment->id }}')"><i class="ri-delete-bin-line me-2"></i> Delete</button>
+                                                        </form>
+                                                    </li>
+                                                @endif
                                             </ul>
                                         </div>
                                     </td>

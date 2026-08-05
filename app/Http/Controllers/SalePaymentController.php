@@ -62,8 +62,8 @@ class SalePaymentController extends Controller
             $journal = Journal::create([
                 'journal_no' => 'PAY-' . strtoupper(Str::random(6)),
                 'date' => now()->toDateString(),
-                'reference_type' => SalePayment::class,
-                'reference_id' => $payment->id,
+                'reference_type' => Customer::class,
+                'reference_id' => $sale->customer_id ?? null,
                 'notes' => 'Payment for Sale ' . $sale->invoice_no,
                 'created_by' => auth()->id() ?? 1,
             ]);
@@ -132,8 +132,8 @@ class SalePaymentController extends Controller
             $journal = Journal::create([
                 'journal_no' => 'ADJ-' . strtoupper(Str::random(6)),
                 'date' => now()->toDateString(),
-                'reference_type' => SalePayment::class,
-                'reference_id' => $payment->id,
+                'reference_type' => Customer::class,
+                'reference_id' => $sale->customer_id ?? null,
                 'notes' => 'Payment adjustment for Sale ' . $sale->invoice_no,
                 'created_by' => auth()->id() ?? 1,
             ]);
@@ -182,8 +182,8 @@ class SalePaymentController extends Controller
             $journal = Journal::create([
                 'journal_no' => 'REV-' . strtoupper(Str::random(6)),
                 'date' => now()->toDateString(),
-                'reference_type' => SalePayment::class,
-                'reference_id' => $payment->id,
+                'reference_type' => Customer::class,
+                'reference_id' => $customer->id ?? null,
                 'notes' => 'Payment reversed for Sale ' . $sale->invoice_no,
                 'created_by' => auth()->id() ?? 1,
             ]);

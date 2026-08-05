@@ -341,7 +341,7 @@ class SaleController extends Controller
                 'delivery_charge' => $deliveryCharge,
                 'is_promotional' => $isPromotional,
                 'total' => $total,
-                'paid_amount' => $paidAmount,
+                'paid_amount' => $paidAmount + $walletUsed,
                 'due_amount' => $dueAmount,
                 'payment_status' => $paymentStatus,
                 'payment_method' => $isPromotional ? null : ($validated['payment_method'] ?? null),
@@ -369,6 +369,15 @@ class SaleController extends Controller
                     'method' => 'cash', // simple default for now
                     'date' => $validated['date'],
                     'reference' => 'POS Payment',
+                ]);
+            }
+            if (!$isPromotional && $walletUsed > 0) {
+                SalePayment::create([
+                    'sale_id' => $sale->id,
+                    'amount' => $walletUsed,
+                    'method' => 'wallet',
+                    'date' => $validated['date'],
+                    'reference' => 'Wallet Payment',
                 ]);
             }
 
@@ -422,7 +431,7 @@ class SaleController extends Controller
 
             $advAcc = ChartOfAccount::firstOrCreate(['name' => 'Customer Advance', 'type' => 'liability']);
 
-            // 1. Revenue & Payment
+            // 1. Revenue
             if ($isPromotional) {
                 JournalEntry::create([
                     'journal_id' => $journal->id,
@@ -431,9 +440,35 @@ class SaleController extends Controller
                     'amount' => $total,
                 ]);
             } else {
+                JournalEntry::create([
+                    'journal_id' => $journal->id,
+                    'account_id' => $arAcc->id,
+                    'type' => 'debit',
+                    'amount' => $total,
+                ]);
+            }
+
+            JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $salesRevAcc->id,
+                'type' => 'credit',
+                'amount' => $total,
+            ]);
+
+            // 1.5. Payment Journal (if paid amount or wallet used)
+            if (!$isPromotional && ($paidAmount > 0 || $walletUsed > 0)) {
+                $paymentJournal = Journal::create([
+                    'journal_no' => 'PAY-' . strtoupper(Str::random(6)),
+                    'date' => $validated['date'],
+                    'reference_type' => Customer::class,
+                    'reference_id' => $customer->id ?? null,
+                    'notes' => 'Payment for POS Sale ' . $sale->invoice_no,
+                    'created_by' => auth()->id() ?? 1,
+                ]);
+
                 if ($paidAmount > 0) {
                     JournalEntry::create([
-                        'journal_id' => $journal->id,
+                        'journal_id' => $paymentJournal->id,
                         'account_id' => $cashAcc->id,
                         'type' => 'debit',
                         'amount' => $paidAmount,
@@ -441,27 +476,22 @@ class SaleController extends Controller
                 }
                 if ($walletUsed > 0) {
                     JournalEntry::create([
-                        'journal_id' => $journal->id,
+                        'journal_id' => $paymentJournal->id,
                         'account_id' => $advAcc->id,
                         'type' => 'debit',
                         'amount' => $walletUsed,
                     ]);
                 }
-                if ($dueAmount > 0) {
-                    JournalEntry::create([
-                        'journal_id' => $journal->id,
-                        'account_id' => $arAcc->id,
-                        'type' => 'debit',
-                        'amount' => $dueAmount,
-                    ]);
-                }
+                
+                // Credit AR for the total payment made
+                JournalEntry::create([
+                    'journal_id' => $paymentJournal->id,
+                    'account_id' => $arAcc->id,
+                    'type' => 'credit',
+                    'amount' => $paidAmount + $walletUsed,
+                ]);
             }
-            JournalEntry::create([
-                'journal_id' => $journal->id,
-                'account_id' => $salesRevAcc->id,
-                'type' => 'credit',
-                'amount' => $total,
-            ]);
+
             if (!$isPromotional && $newAdvance > 0) {
                 JournalEntry::create([
                     'journal_id' => $journal->id,
@@ -606,7 +636,7 @@ class SaleController extends Controller
                 'delivery_charge' => $deliveryCharge,
                 'is_promotional' => $isPromotional,
                 'total' => $total,
-                'paid_amount' => $paidAmount,
+                'paid_amount' => $paidAmount + $walletUsed,
                 'due_amount' => $dueAmount,
                 'payment_status' => $paymentStatus,
                 'payment_method' => $isPromotional ? null : ($validated['payment_method'] ?? null),
@@ -635,6 +665,15 @@ class SaleController extends Controller
                     'method' => 'cash',
                     'date' => $validated['date'],
                     'reference' => 'POS Payment',
+                ]);
+            }
+            if (!$isPromotional && $walletUsed > 0) {
+                SalePayment::create([
+                    'sale_id' => $sale->id,
+                    'amount' => $walletUsed,
+                    'method' => 'wallet',
+                    'date' => $validated['date'],
+                    'reference' => 'Wallet Payment',
                 ]);
             }
 
@@ -695,30 +734,12 @@ class SaleController extends Controller
                     'amount' => $total,
                 ]);
             } else {
-                if ($paidAmount > 0) {
-                    JournalEntry::create([
-                        'journal_id' => $journal->id,
-                        'account_id' => $cashAcc->id,
-                        'type' => 'debit',
-                        'amount' => $paidAmount,
-                    ]);
-                }
-                if ($walletUsed > 0) {
-                    JournalEntry::create([
-                        'journal_id' => $journal->id,
-                        'account_id' => $advAcc->id,
-                        'type' => 'debit',
-                        'amount' => $walletUsed,
-                    ]);
-                }
-                if ($dueAmount > 0) {
-                    JournalEntry::create([
-                        'journal_id' => $journal->id,
-                        'account_id' => $arAcc->id,
-                        'type' => 'debit',
-                        'amount' => $dueAmount,
-                    ]);
-                }
+                JournalEntry::create([
+                    'journal_id' => $journal->id,
+                    'account_id' => $arAcc->id,
+                    'type' => 'debit',
+                    'amount' => $total,
+                ]);
             }
             JournalEntry::create([
                 'journal_id' => $journal->id,
@@ -726,6 +747,44 @@ class SaleController extends Controller
                 'type' => 'credit',
                 'amount' => $total,
             ]);
+            
+            // Payment Journal (if paid amount or wallet used)
+            if (!$isPromotional && ($paidAmount > 0 || $walletUsed > 0)) {
+                $paymentJournal = Journal::create([
+                    'journal_no' => 'PAY-' . strtoupper(Str::random(6)),
+                    'date' => $validated['date'],
+                    'reference_type' => Customer::class,
+                    'reference_id' => $customer->id ?? null,
+                    'notes' => 'Payment for POS Sale ' . $sale->invoice_no,
+                    'created_by' => auth()->id() ?? 1,
+                ]);
+
+                if ($paidAmount > 0) {
+                    JournalEntry::create([
+                        'journal_id' => $paymentJournal->id,
+                        'account_id' => $cashAcc->id,
+                        'type' => 'debit',
+                        'amount' => $paidAmount,
+                    ]);
+                }
+                if ($walletUsed > 0) {
+                    JournalEntry::create([
+                        'journal_id' => $paymentJournal->id,
+                        'account_id' => $advAcc->id,
+                        'type' => 'debit',
+                        'amount' => $walletUsed,
+                    ]);
+                }
+                
+                // Credit AR for the total payment made
+                JournalEntry::create([
+                    'journal_id' => $paymentJournal->id,
+                    'account_id' => $arAcc->id,
+                    'type' => 'credit',
+                    'amount' => $paidAmount + $walletUsed,
+                ]);
+            }
+            
             if (!$isPromotional && $newAdvance > 0) {
                 JournalEntry::create([
                     'journal_id' => $journal->id,

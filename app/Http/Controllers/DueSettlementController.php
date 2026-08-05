@@ -58,13 +58,12 @@ class DueSettlementController extends Controller
         $customer = Customer::findOrFail($validated['customer_id']);
 
         $totalPayment = (float) $validated['amount'];
-        $walletAmount = min($totalPayment, $customer->wallet_balance);
-        $amount = $totalPayment - $walletAmount;
-
-        $totalPayment = $amount + $walletAmount;
+        $amount = $totalPayment; // This is a new cash payment, so the entire amount is cash
+        $walletAmount = 0; // We don't deduct from the wallet when receiving a cash payment
+        
         $duePayment = min($totalPayment, $customer->total_due);
         $newAdvance = max(0, $totalPayment - $customer->total_due);
-        $netAdvance = $newAdvance - $walletAmount;
+        $netAdvance = $newAdvance; // Any excess goes straight to the wallet
 
         try {
             DB::beginTransaction();
@@ -224,13 +223,12 @@ class DueSettlementController extends Controller
         $customer = Customer::findOrFail($validated['customer_id']);
 
         $totalPayment = (float) $validated['amount'];
-        $walletAmount = min($totalPayment, $customer->wallet_balance);
-        $amount = $totalPayment - $walletAmount;
+        $amount = $totalPayment; // This is a new cash payment
+        $walletAmount = 0; // We don't deduct from the wallet
 
-        $totalPayment = $amount + $walletAmount;
         $duePayment = min($totalPayment, $customer->total_due);
         $newAdvance = max(0, $totalPayment - $customer->total_due);
-        $netAdvance = $newAdvance - $walletAmount;
+        $netAdvance = $newAdvance;
 
         if ($duePayment > 0) {
             $customer->decrement('total_due', $duePayment);

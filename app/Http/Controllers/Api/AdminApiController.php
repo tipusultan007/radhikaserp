@@ -3165,74 +3165,148 @@ class AdminApiController extends Controller
         }]);
 
         $arAcc = \App\Models\ChartOfAccount::where('name', 'Accounts Receivable')->first();
-        
-        if (!$arAcc) {
-            return response()->json(['ledger' => ['data' => []], 'total_due' => 0]);
-        }
+        $advAcc = \App\Models\ChartOfAccount::where('name', 'Customer Advance')->first();
+        $arId = $arAcc ? $arAcc->id : 0;
+        $advId = $advAcc ? $advAcc->id : 0;
 
-        $customerJournalIds = \App\Models\Journal::where(function($q) use ($customer) {
-            $q->where('reference_type', \App\Models\Customer::class)->where('reference_id', $customer->id);
-        })->orWhere(function($q) use ($customer) {
-            $q->where('reference_type', \App\Models\Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
-        })->pluck('id');
+        $journals = \App\Models\Journal::with(['entries', 'reference'])
+            ->where(function($q) use ($customer) {
+                $q->where('reference_type', \App\Models\Customer::class)->where('reference_id', $customer->id);
+            })->orWhere(function($q) use ($customer) {
+                $q->where('reference_type', \App\Models\Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
+            })
+            ->get();
 
-        // Build the base query for ledger entries
-        $query = \App\Models\JournalEntry::with('journal')
-            ->whereIn('journal_id', $customerJournalIds)
-            ->where('account_id', $arAcc->id)
-            ->orderBy('id', 'asc'); // Must be chronological for running balance
+        $ledgerEntries = collect();
+        $runningBalance = 0;
 
-        // Execute pagination
-        $paginatedEntries = $query->paginate(20);
+        foreach ($journals as $journal) {
+            $debit = 0;
+            $credit = 0;
 
-        // If not on the first page, calculate the sum of all prior debits and credits
-        $initialBalance = 0;
-        if ($paginatedEntries->currentPage() > 1 && $paginatedEntries->first()) {
-            $firstEntryIdOnPage = $paginatedEntries->first()->id;
-            
-            $priorDebits = \App\Models\JournalEntry::whereIn('journal_id', $customerJournalIds)
-                ->where('account_id', $arAcc->id)
-                ->where('id', '<', $firstEntryIdOnPage)
-                ->where('type', 'debit')
-                ->sum('amount');
-                
-            $priorCredits = \App\Models\JournalEntry::whereIn('journal_id', $customerJournalIds)
-                ->where('account_id', $arAcc->id)
-                ->where('id', '<', $firstEntryIdOnPage)
-                ->where('type', 'credit')
-                ->sum('amount');
-                
-            $initialBalance = $priorDebits - $priorCredits;
-        }
+            if ($journal->reference_type == \App\Models\Sale::class) {
+                $sale = $journal->reference;
+                if ($sale && $sale->total >= 0) {
+                    $runningBalance += $sale->total;
+                    $ledgerEntries->push((object)[
+                        'id' => $journal->id . '_sale',
+                        'journal' => $journal,
+                        'debit' => $sale->total,
+                        'credit' => 0,
+                        'running_balance' => $runningBalance,
+                    ]);
+                }
 
-        $formattedLedger = [];
-        $runningBalance = $initialBalance;
+                $initialPaymentAmount = \App\Models\SalePayment::where('sale_id', $sale->id)
+                    ->where(function($q) {
+                        $q->whereNull('reference')
+                          ->orWhereIn('reference', ['POS Payment', 'Wallet Payment']);
+                    })
+                    ->sum('amount');
 
-        foreach ($paginatedEntries as $entry) {
-            $journal = $entry->journal;
-            $debit = $entry->type === 'debit' ? $entry->amount : 0;
-            $credit = $entry->type === 'credit' ? $entry->amount : 0;
-            $runningBalance = $runningBalance + $debit - $credit;
+                $hasJournal = $journals->contains(function($j) use ($sale) {
+                    return str_contains($j->notes, 'Payment for POS Sale ' . $sale->invoice_no);
+                });
 
-            $formattedLedger[] = [
-                'id' => $entry->id,
-                'date' => $journal->date ?? $journal->created_at->toDateString(),
-                'description' => $journal->description ?? 'Transaction',
+                if ($initialPaymentAmount > 0 && !$hasJournal) {
+                    $runningBalance -= $initialPaymentAmount;
+                    $paymentJournal = clone $journal;
+                    $paymentJournal->notes = 'Payment for ' . $sale->invoice_no;
+                    
+                    $ledgerEntries->push((object)[
+                        'id' => $journal->id . '_pay',
+                        'journal' => $paymentJournal,
+                        'debit' => 0,
+                        'credit' => $initialPaymentAmount,
+                        'running_balance' => $runningBalance,
+                    ]);
+                }
+                continue;
+            } else {
+                if ($journal->notes == 'Opening Balance') {
+                    $debit = $customer->opening_balance;
+                } else {
+                    $credit = $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'credit')->sum('amount');
+                    $debit = $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'debit')->sum('amount');
+                }
+            }
+
+            $internalTransferAmount = 0;
+            if ($debit > 0 && $credit > 0) {
+                $internalTransferAmount = min($debit, $credit);
+                if ($debit > $credit) {
+                    $debit = $debit - $credit;
+                    $credit = 0;
+                } else if ($credit > $debit) {
+                    $credit = $credit - $debit;
+                    $debit = 0;
+                } else {
+                    $debit = 0;
+                    $credit = 0;
+                }
+            }
+
+            if ($debit == 0 && $credit == 0 && $internalTransferAmount == 0 && $journal->notes != 'Opening Balance') {
+                continue;
+            }
+
+            if ($internalTransferAmount > 0) {
+                $journal = clone $journal;
+                $journal->notes .= " (Wallet Used: ৳" . number_format($internalTransferAmount, 0) . ")";
+            }
+
+            $runningBalance += $debit;
+            $runningBalance -= $credit;
+
+            $ledgerEntries->push((object)[
+                'id' => $journal->id,
+                'journal' => $journal,
                 'debit' => $debit,
                 'credit' => $credit,
-                'balance' => $runningBalance
+                'running_balance' => $runningBalance,
+            ]);
+        }
+
+        $ledgerEntries = $ledgerEntries->sortByDesc(function($entry) {
+            $parts = explode('_', (string)$entry->id);
+            $journalId = str_pad($parts[0], 10, '0', STR_PAD_LEFT);
+            $subSeq = isset($parts[1]) ? $parts[1] : '0';
+            
+            $seqMap = [
+                'sale' => '1',
+                'pay' => '2',
+            ];
+            $seq = $seqMap[$subSeq] ?? '0';
+
+            return $entry->journal->date . '_' . $journalId . '_' . $seq;
+        })->values();
+
+        $perPage = (int) $request->get('per_page', 20);
+        $page = (int) $request->get('page', 1);
+        $total = $ledgerEntries->count();
+        $offset = ($page - 1) * $perPage;
+        $itemsForPage = $ledgerEntries->slice($offset, $perPage)->values();
+
+        $formattedLedger = [];
+        foreach ($itemsForPage as $entry) {
+            $formattedLedger[] = [
+                'id' => $entry->id,
+                'date' => $entry->journal->date ? \Carbon\Carbon::parse($entry->journal->date)->format('Y-m-d') : ($entry->journal->created_at ? $entry->journal->created_at->toDateString() : ''),
+                'description' => $entry->journal->notes ?? 'Transaction',
+                'debit' => $entry->debit,
+                'credit' => $entry->credit,
+                'balance' => $entry->running_balance
             ];
         }
 
-        // Return a custom paginated structure
         return response()->json([
             'ledger' => [
-                'current_page' => $paginatedEntries->currentPage(),
-                'data' => array_reverse($formattedLedger), // Return newest first on this page for UI
-                'last_page' => $paginatedEntries->lastPage(),
-                'total' => $paginatedEntries->total()
+                'current_page' => $page,
+                'data' => $formattedLedger,
+                'last_page' => (int) ceil($total / max(1, $perPage)),
+                'total' => $total
             ],
-            'total_due' => $customer->total_due, // Provide current overall due
+            'total_due' => $customer->total_due,
             'wallet_balance' => $customer->wallet_balance
         ]);
     }

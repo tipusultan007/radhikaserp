@@ -281,48 +281,138 @@ class CustomerApiController extends Controller
         }]);
 
         $arAcc = \App\Models\ChartOfAccount::where('name', 'Accounts Receivable')->first();
-        
-        if ($arAcc) {
-            $customerJournalIds = \App\Models\Journal::where(function($q) use ($customer) {
+        $advAcc = \App\Models\ChartOfAccount::where('name', 'Customer Advance')->first();
+        $arId = $arAcc ? $arAcc->id : 0;
+        $advId = $advAcc ? $advAcc->id : 0;
+
+        $journals = \App\Models\Journal::with(['entries', 'reference'])
+            ->where(function($q) use ($customer) {
                 $q->where('reference_type', \App\Models\Customer::class)->where('reference_id', $customer->id);
             })->orWhere(function($q) use ($customer) {
                 $q->where('reference_type', \App\Models\Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
-            })->pluck('id');
+            })
+            ->get();
 
-            $ledgerEntries = \App\Models\JournalEntry::with('journal')
-                ->whereIn('journal_id', $customerJournalIds)
-                ->where('account_id', $arAcc->id)
-                ->orderBy('id', 'asc') // Ensure chronological order for running balance
-                ->get();
-        } else {
-            $ledgerEntries = collect();
-        }
-
-        $formattedLedger = [];
+        $ledgerEntries = collect();
         $runningBalance = 0;
 
-        foreach ($ledgerEntries as $entry) {
-            $journal = $entry->journal;
-            $debit = $entry->type === 'debit' ? $entry->amount : 0;
-            $credit = $entry->type === 'credit' ? $entry->amount : 0;
-            $runningBalance = $runningBalance + $debit - $credit;
+        foreach ($journals as $journal) {
+            $debit = 0;
+            $credit = 0;
 
-            $formattedLedger[] = [
-                'id' => $entry->id,
-                'date' => $journal->date ?? $journal->created_at->toDateString(),
-                'description' => $journal->description ?? 'Transaction',
+            if ($journal->reference_type == \App\Models\Sale::class) {
+                $sale = $journal->reference;
+                if ($sale && $sale->total >= 0) {
+                    $runningBalance += $sale->total;
+                    $ledgerEntries->push((object)[
+                        'id' => $journal->id . '_sale',
+                        'journal' => $journal,
+                        'debit' => $sale->total,
+                        'credit' => 0,
+                        'running_balance' => $runningBalance,
+                    ]);
+                }
+
+                $initialPaymentAmount = \App\Models\SalePayment::where('sale_id', $sale->id)
+                    ->where(function($q) {
+                        $q->whereNull('reference')
+                          ->orWhereIn('reference', ['POS Payment', 'Wallet Payment']);
+                    })
+                    ->sum('amount');
+
+                $hasJournal = $journals->contains(function($j) use ($sale) {
+                    return str_contains($j->notes, 'Payment for POS Sale ' . $sale->invoice_no);
+                });
+
+                if ($initialPaymentAmount > 0 && !$hasJournal) {
+                    $runningBalance -= $initialPaymentAmount;
+                    $paymentJournal = clone $journal;
+                    $paymentJournal->notes = 'Payment for ' . $sale->invoice_no;
+                    
+                    $ledgerEntries->push((object)[
+                        'id' => $journal->id . '_pay',
+                        'journal' => $paymentJournal,
+                        'debit' => 0,
+                        'credit' => $initialPaymentAmount,
+                        'running_balance' => $runningBalance,
+                    ]);
+                }
+                continue;
+            } else {
+                if ($journal->notes == 'Opening Balance') {
+                    $debit = $customer->opening_balance;
+                } else {
+                    $credit = $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'credit')->sum('amount');
+                    $debit = $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'debit')->sum('amount');
+                }
+            }
+
+            $internalTransferAmount = 0;
+            if ($debit > 0 && $credit > 0) {
+                $internalTransferAmount = min($debit, $credit);
+                if ($debit > $credit) {
+                    $debit = $debit - $credit;
+                    $credit = 0;
+                } else if ($credit > $debit) {
+                    $credit = $credit - $debit;
+                    $debit = 0;
+                } else {
+                    $debit = 0;
+                    $credit = 0;
+                }
+            }
+
+            if ($debit == 0 && $credit == 0 && $internalTransferAmount == 0 && $journal->notes != 'Opening Balance') {
+                continue;
+            }
+
+            if ($internalTransferAmount > 0) {
+                $journal = clone $journal;
+                $journal->notes .= " (Wallet Used: ৳" . number_format($internalTransferAmount, 0) . ")";
+            }
+
+            $runningBalance += $debit;
+            $runningBalance -= $credit;
+
+            $ledgerEntries->push((object)[
+                'id' => $journal->id,
+                'journal' => $journal,
                 'debit' => $debit,
                 'credit' => $credit,
-                'balance' => $runningBalance
+                'running_balance' => $runningBalance,
+            ]);
+        }
+
+        $ledgerEntries = $ledgerEntries->sortByDesc(function($entry) {
+            $parts = explode('_', (string)$entry->id);
+            $journalId = str_pad($parts[0], 10, '0', STR_PAD_LEFT);
+            $subSeq = isset($parts[1]) ? $parts[1] : '0';
+            
+            $seqMap = [
+                'sale' => '1',
+                'pay' => '2',
+            ];
+            $seq = $seqMap[$subSeq] ?? '0';
+
+            return $entry->journal->date . '_' . $journalId . '_' . $seq;
+        })->values();
+
+        $formattedLedger = [];
+        foreach ($ledgerEntries as $entry) {
+            $formattedLedger[] = [
+                'id' => $entry->id,
+                'date' => $entry->journal->date ? \Carbon\Carbon::parse($entry->journal->date)->format('Y-m-d') : ($entry->journal->created_at ? $entry->journal->created_at->toDateString() : ''),
+                'description' => $entry->journal->notes ?? 'Transaction',
+                'debit' => $entry->debit,
+                'credit' => $entry->credit,
+                'balance' => $entry->running_balance
             ];
         }
-        
-        // Reverse so newest are at the top, or keep ascending. Let's return descending for the app.
-        $formattedLedger = array_reverse($formattedLedger);
 
         return response()->json([
             'ledger' => $formattedLedger,
-            'total_due' => $runningBalance // Should match $customer->total_due
+            'total_due' => $customer->total_due,
+            'wallet_balance' => $customer->wallet_balance
         ]);
     }
 }
