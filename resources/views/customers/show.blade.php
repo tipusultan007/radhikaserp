@@ -25,10 +25,10 @@
                     <p><strong>Phone:</strong> {{ $customer->phone }}</p>
                     <p><strong>Address:</strong> {{ $customer->address ?: 'N/A' }}</p>
                     <hr>
-                    <p><strong>Credit Limit:</strong> <span class="text-success">${{ number_format($customer->credit_limit, 0) }}</span></p>
-                    <p><strong>Opening Balance:</strong> ${{ number_format($customer->opening_balance, 0) }}</p>
-                    <p><strong>Wallet Balance:</strong> <span class="text-success fw-bold">${{ number_format($customer->wallet_balance, 0) }}</span></p>
-                    <p><strong>Total Due (Current):</strong> <span class="text-danger fw-bold fs-4">${{ number_format($customer->total_due, 0) }}</span></p>
+                    <p><strong>Credit Limit:</strong> <span class="text-success">৳{{ number_format($customer->credit_limit, 0) }}</span></p>
+                    <p><strong>Opening Balance:</strong> ৳{{ number_format($customer->opening_balance, 0) }}</p>
+                    <p><strong>Wallet Balance:</strong> <span class="text-success fw-bold">৳{{ number_format($customer->wallet_balance, 0) }}</span></p>
+                    <p><strong>Total Due (Current):</strong> <span class="text-danger fw-bold fs-4">৳{{ number_format($customer->total_due, 0) }}</span></p>
                     <div class="mt-3 d-flex gap-2">
                         <a href="{{ route('customers.edit', $customer->id) }}" class="btn btn-warning btn-sm">Edit Customer</a>
                     </div>
@@ -44,10 +44,10 @@
                         <input type="hidden" name="customer_id" value="{{ $customer->id }}">
                         
                         <div class="mb-3">
-                            <label class="form-label">Total Payment Amount ($)</label>
+                            <label class="form-label">Total Payment Amount (৳)</label>
                             <input type="number" step="1" name="amount" class="form-control" required>
                             @if($customer->wallet_balance > 0)
-                                <small class="text-success d-block mt-1">Customer has a wallet balance of <strong>${{ number_format($customer->wallet_balance, 0) }}</strong>. It will be deducted first.</small>
+                                <small class="text-success d-block mt-1">Customer has a wallet balance of <strong>৳{{ number_format($customer->wallet_balance, 0) }}</strong>. It will be deducted first.</small>
                             @else
                                 <small class="text-muted d-block mt-1">If the customer has a <strong>Wallet Balance</strong>, it will be automatically deducted first.</small>
                             @endif
@@ -111,23 +111,14 @@
                                             <th>Date</th>
                                             <th>Journal Ref</th>
                                             <th>Notes</th>
-                                            <th class="text-end text-danger">Debit (Due Increase)</th>
-                                            <th class="text-end text-success">Credit (Due Decrease)</th>
+                                            <th class="text-end text-danger">Debit</th>
+                                            <th class="text-end text-success">Credit</th>
                                             <th class="text-end">Running Balance</th>
                                             <th class="text-end">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @php $runningBalance = 0; @endphp
                                         @forelse($ledgerEntries as $entry)
-                                            @php
-                                                // Debit increases Accounts Receivable, Credit decreases it
-                                                if($entry->type == 'debit') {
-                                                    $runningBalance += $entry->amount;
-                                                } else {
-                                                    $runningBalance -= $entry->amount;
-                                                }
-                                            @endphp
                                             <tr>
                                                 <td>{{ \Carbon\Carbon::parse($entry->journal->date)->format('d M, Y') }}</td>
                                                 <td>
@@ -138,9 +129,9 @@
                                                     @endif
                                                 </td>
                                                 <td>{{ $entry->journal->notes }}</td>
-                                                <td class="text-end text-danger">{{ $entry->type == 'debit' ? number_format($entry->amount, 0) : '-' }}</td>
-                                                <td class="text-end text-success">{{ $entry->type == 'credit' ? number_format($entry->amount, 0) : '-' }}</td>
-                                                <td class="text-end fw-bold">{{ number_format($runningBalance, 0) }}</td>
+                                                <td class="text-end text-danger">{{ $entry->debit > 0 ? '৳' . number_format($entry->debit, 0) : '-' }}</td>
+                                                <td class="text-end text-success">{{ $entry->credit > 0 ? '৳' . number_format($entry->credit, 0) : '-' }}</td>
+                                                <td class="text-end fw-bold">৳{{ number_format($entry->running_balance, 0) }}</td>
                                                 <td class="text-end">
                                                     @if($entry->journal->reference_type == 'App\Models\Customer' && $entry->journal->notes != 'Opening Balance' && $entry->journal->notes != 'Sale Invoice Generated')
                                                         <div class="dropdown">
@@ -168,7 +159,7 @@
                                     <tfoot>
                                         <tr class="table-light">
                                             <th colspan="5" class="text-end">Final Due Balance:</th>
-                                            <th class="text-end text-danger fs-4">${{ number_format($runningBalance, 0) }}</th>
+                                            <th class="text-end text-danger fs-4">৳ {{ number_format($finalRunningBalance, 0) }}</th>
                                             <th></th>
                                         </tr>
                                     </tfoot>
@@ -197,9 +188,9 @@
                                         <tr>
                                             <td>{{ \Carbon\Carbon::parse($sale->date)->format('Y-m-d') }}</td>
                                             <td><a href="{{ route('sales.show', $sale->id) }}">{{ $sale->invoice_no }}</a></td>
-                                            <td>${{ number_format($sale->total, 0) }}</td>
-                                            <td class="text-success">${{ number_format($sale->paid_amount, 0) }}</td>
-                                            <td class="text-danger">${{ number_format($sale->due_amount, 0) }}</td>
+                                            <td>৳{{ number_format($sale->total, 0) }}</td>
+                                            <td class="text-success">৳{{ number_format($sale->paid_amount, 0) }}</td>
+                                            <td class="text-danger">৳{{ number_format($sale->due_amount, 0) }}</td>
                                             <td>
                                                 @if($sale->payment_status == 'paid')
                                                     <span class="badge bg-success">Paid</span>

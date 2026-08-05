@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\Journal;
 use App\Models\JournalEntry;
 use App\Models\ChartOfAccount;
+use App\Models\Sale;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -192,26 +193,95 @@ class CustomerController extends Controller
         }]);
 
         $arAcc = ChartOfAccount::where('name', 'Accounts Receivable')->first();
+        $advAcc = ChartOfAccount::where('name', 'Customer Advance')->first();
+        $arId = $arAcc ? $arAcc->id : 0;
+        $advId = $advAcc ? $advAcc->id : 0;
         
-        if ($arAcc) {
-            $customerJournalIds = Journal::where(function($q) use ($customer) {
+        $journals = Journal::with(['entries', 'reference'])
+            ->where(function($q) use ($customer) {
                 $q->where('reference_type', Customer::class)->where('reference_id', $customer->id);
             })->orWhere(function($q) use ($customer) {
                 $q->where('reference_type', Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
-            })->pluck('id');
+            })
+            ->get()
+            ->sortBy(function($journal) {
+                return $journal->date . '_' . str_pad($journal->id, 10, '0', STR_PAD_LEFT);
+            })->values();
 
-            $ledgerEntries = JournalEntry::with('journal')
-                ->whereIn('journal_id', $customerJournalIds)
-                ->where('account_id', $arAcc->id)
-                ->get()
-                ->sortBy('id');
-        } else {
-            $ledgerEntries = collect();
+        $ledgerEntries = collect();
+        $runningBalance = 0;
+
+        foreach ($journals as $journal) {
+            $debit = 0;
+            $credit = 0;
+
+            if ($journal->reference_type == Sale::class) {
+                $sale = $journal->reference;
+                
+                // Sale (Debit)
+                if ($sale->total > 0) {
+                    $runningBalance += $sale->total;
+                    $ledgerEntries->push((object)[
+                        'id' => $journal->id . '_sale',
+                        'journal' => $journal,
+                        'debit' => $sale->total,
+                        'credit' => 0,
+                        'running_balance' => $runningBalance,
+                    ]);
+                }
+
+                // Payment during Sale (Credit)
+                if ($sale->paid_amount > 0) {
+                    $runningBalance -= $sale->paid_amount;
+                    $paymentJournal = clone $journal;
+                    $paymentJournal->notes = 'Payment for ' . $sale->invoice_no;
+                    
+                    $ledgerEntries->push((object)[
+                        'id' => $journal->id . '_pay',
+                        'journal' => $paymentJournal,
+                        'debit' => 0,
+                        'credit' => $sale->paid_amount,
+                        'running_balance' => $runningBalance,
+                    ]);
+                }
+                
+                continue;
+            } else {
+                if ($journal->notes == 'Opening Balance') {
+                    $debit = $customer->opening_balance;
+                } else {
+                    $credit = $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'credit')->sum('amount');
+                    $debit = $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'debit')->sum('amount');
+                }
+            }
+
+            if ($debit == 0 && $credit == 0 && $journal->notes != 'Opening Balance') {
+                continue;
+            }
+
+            $runningBalance += $debit;
+            $runningBalance -= $credit;
+
+            $ledgerEntries->push((object)[
+                'id' => $journal->id,
+                'journal' => $journal,
+                'debit' => $debit,
+                'credit' => $credit,
+                'running_balance' => $runningBalance,
+            ]);
         }
+
+        // The final running balance might differ from DB if older journals were deleted.
+        // But we show the running balance of the actual remaining statements.
+        $finalRunningBalance = $runningBalance;
+
+        $ledgerEntries = $ledgerEntries->sortByDesc(function($entry) {
+            return $entry->journal->date . '_' . str_pad($entry->id, 10, '0', STR_PAD_LEFT);
+        })->values();
 
         $paymentMethods = ChartOfAccount::where('is_payment_method', true)->get();
 
-        return view('customers.show', compact('customer', 'ledgerEntries', 'paymentMethods'));
+        return view('customers.show', compact('customer', 'ledgerEntries', 'paymentMethods', 'finalRunningBalance'));
     }
 
     public function edit(Customer $customer)

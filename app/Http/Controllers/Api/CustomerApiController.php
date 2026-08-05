@@ -102,6 +102,38 @@ class CustomerApiController extends Controller
                 SaleItem::create($itemData);
             }
 
+            // Create Journal for Sale
+            $journal = \App\Models\Journal::create([
+                'journal_no' => 'JNL-' . strtoupper(\Illuminate\Support\Str::random(6)),
+                'date' => $sale->date,
+                'reference_type' => Sale::class,
+                'reference_id' => $sale->id,
+                'notes' => 'Customer App Order ' . $sale->invoice_no,
+            ]);
+            
+            $arAcc = \App\Models\ChartOfAccount::where('name', 'Accounts Receivable')->first();
+            $salesAcc = \App\Models\ChartOfAccount::where('name', 'Sales Revenue')->first();
+
+            if ($arAcc && $salesAcc) {
+                // AR Debit
+                \App\Models\JournalEntry::create([
+                    'journal_id' => $journal->id,
+                    'account_id' => $arAcc->id,
+                    'description' => 'Customer App Order ' . $sale->invoice_no,
+                    'type' => 'debit',
+                    'amount' => $total,
+                ]);
+
+                // Sales Revenue Credit
+                \App\Models\JournalEntry::create([
+                    'journal_id' => $journal->id,
+                    'account_id' => $salesAcc->id,
+                    'description' => 'Customer App Order ' . $sale->invoice_no,
+                    'type' => 'credit',
+                    'amount' => $total,
+                ]);
+            }
+
             // Update customer total due
             $customer->total_due += $total;
             $customer->save();
