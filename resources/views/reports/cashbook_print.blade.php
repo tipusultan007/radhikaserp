@@ -96,8 +96,8 @@
         <p class="company-address">123 Business Avenue, Enterprise City, Country</p>
         <h2 class="report-title">Cashbook (T-Format Ledger)</h2>
         <p class="report-meta">
-            @if(request('date'))
-                For Date: {{ \Carbon\Carbon::parse(request('date'))->format('M d, Y') }}
+            @if(!empty($date))
+                For Date: {{ \Carbon\Carbon::parse($date)->format('M d, Y') }}
             @endif
             | Generated on: {{ \Carbon\Carbon::now()->format('F d, Y h:i A') }}
         </p>
@@ -121,10 +121,10 @@
             <tr>
                 <th style="width: 15%;">Date</th>
                 <th style="width: 20%;">Particulars</th>
-                <th style="width: 15%;" class="border-end text-end">Amount ($)</th>
+                <th style="width: 15%;" class="border-end text-end">Amount</th>
                 <th style="width: 15%;">Date</th>
                 <th style="width: 20%;">Particulars</th>
-                <th style="width: 15%;" class="text-end">Amount ($)</th>
+                <th style="width: 15%;" class="text-end">Amount</th>
             </tr>
         </thead>
         <tbody>
@@ -173,9 +173,9 @@
             @endphp
             <tr style="border-top: 2px solid #000; border-bottom: 2px double #000;">
                 <td colspan="2" class="text-end fw-bold">Total:</td>
-                <td class="border-end text-end fw-bold">${{ number_format($grandTotal, 2) }}</td>
+                <td class="border-end text-end fw-bold">{{ number_format($grandTotal, 2) }}</td>
                 <td colspan="2" class="text-end fw-bold">Total:</td>
-                <td class="text-end fw-bold">${{ number_format($grandTotal, 2) }}</td>
+                <td class="text-end fw-bold">{{ number_format($grandTotal, 2) }}</td>
             </tr>
         </tfoot>
     </table>

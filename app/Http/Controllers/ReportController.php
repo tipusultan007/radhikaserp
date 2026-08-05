@@ -39,15 +39,17 @@ class ReportController extends Controller
         
         $query = JournalEntry::whereIn('account_id', $cashAccs)->with('journal');
 
-        if ($request->filled('date')) {
-            $query->whereHas('journal', function($q) use ($request) {
-                $q->whereDate('date', $request->date);
+        $date = $request->has('date') ? $request->date : now()->format('Y-m-d');
+
+        if (!empty($date)) {
+            $query->whereHas('journal', function($q) use ($date) {
+                $q->whereDate('date', $date);
             });
         }
 
         $entries = $query->latest()->get();
         
-        return view('reports.cashbook', compact('entries'));
+        return view('reports.cashbook', compact('entries', 'date'));
     }
 
     public function cashbookPrint(Request $request)
@@ -56,15 +58,17 @@ class ReportController extends Controller
         
         $query = JournalEntry::whereIn('account_id', $cashAccs)->with('journal');
 
-        if ($request->filled('date')) {
-            $query->whereHas('journal', function($q) use ($request) {
-                $q->whereDate('date', $request->date);
+        $date = $request->has('date') ? $request->date : now()->format('Y-m-d');
+
+        if (!empty($date)) {
+            $query->whereHas('journal', function($q) use ($date) {
+                $q->whereDate('date', $date);
             });
         }
 
         $entries = $query->latest()->get();
         
-        return view('reports.cashbook_print', compact('entries'));
+        return view('reports.cashbook_print', compact('entries', 'date'));
     }
 
     public function profitAndLoss()

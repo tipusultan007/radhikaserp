@@ -23,14 +23,14 @@
                                 <div class="row gy-2 gx-2 align-items-end">
                                     <div class="col-md-3">
                                         <label class="form-label mb-1">Date</label>
-                                        <input type="text" class="form-control flatpickr-date" name="date" value="{{ request('date') }}" placeholder="YYYY-MM-DD">
+                                        <input type="text" class="form-control flatpickr-date" name="date" value="{{ $date }}" placeholder="YYYY-MM-DD">
                                     </div>
                                     <div class="col-md-2">
                                         <button type="submit" class="btn btn-primary w-100"><i class="ri-search-line me-1"></i> Filter</button>
                                     </div>
                                     <div class="col-md-7 text-end">
-                                        @if(request()->filled('date'))
-                                            <a href="{{ route('reports.cashbook') }}" class="btn btn-danger"><i class="ri-refresh-line me-1"></i> Clear</a>
+                                        @if(!empty($date))
+                                            <a href="{{ route('reports.cashbook', ['date' => '']) }}" class="btn btn-danger"><i class="ri-refresh-line me-1"></i> Clear</a>
                                         @endif
                                     </div>
                                 </div>
@@ -58,10 +58,10 @@
                                 <tr>
                                     <th style="width: 15%;">Date</th>
                                     <th style="width: 20%;">Particulars</th>
-                                    <th style="width: 15%;" class="border-end text-end">Amount ($)</th>
+                                    <th style="width: 15%;" class="border-end text-end">Amount</th>
                                     <th style="width: 15%;">Date</th>
                                     <th style="width: 20%;">Particulars</th>
-                                    <th style="width: 15%;" class="text-end">Amount ($)</th>
+                                    <th style="width: 15%;" class="text-end">Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -110,9 +110,9 @@
                                 @endphp
                                 <tr class="table-active fw-bolder fs-4">
                                     <td colspan="2" class="text-end border-bottom-0">Total:</td>
-                                    <td class="border-end text-end border-bottom-0 text-success">${{ number_format($grandTotal, 0) }}</td>
+                                    <td class="border-end text-end border-bottom-0 text-success">{{ number_format($grandTotal, 0) }}</td>
                                     <td colspan="2" class="text-end border-bottom-0">Total:</td>
-                                    <td class="text-end border-bottom-0 text-danger">${{ number_format($grandTotal, 0) }}</td>
+                                    <td class="text-end border-bottom-0 text-danger">{{ number_format($grandTotal, 0) }}</td>
                                 </tr>
                             </tfoot>
                         </table>
