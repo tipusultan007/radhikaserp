@@ -202,6 +202,8 @@ class CustomerController extends Controller
                 $q->where('reference_type', Customer::class)->where('reference_id', $customer->id);
             })->orWhere(function($q) use ($customer) {
                 $q->where('reference_type', Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
+            })->orWhere(function($q) use ($customer) {
+                $q->where('reference_type', \App\Models\SalePayment::class)->whereIn('reference_id', \App\Models\SalePayment::whereIn('sale_id', $customer->sales()->pluck('id'))->pluck('id'));
             })
             ->get()
             ->sortBy(function($journal) {
@@ -219,7 +221,7 @@ class CustomerController extends Controller
                 $sale = $journal->reference;
                 
                 // Sale (Debit)
-                if ($sale->total > 0) {
+                if ($sale->total >= 0) {
                     $runningBalance += $sale->total;
                     $ledgerEntries->push((object)[
                         'id' => $journal->id . '_sale',

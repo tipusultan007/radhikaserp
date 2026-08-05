@@ -27,6 +27,8 @@ foreach ($customers as $customer) {
         $q->where('reference_type', Customer::class)->where('reference_id', $customer->id);
     })->orWhere(function($q) use ($customer) {
         $q->where('reference_type', Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
+    })->orWhere(function($q) use ($customer) {
+        $q->where('reference_type', \App\Models\SalePayment::class)->whereIn('reference_id', \App\Models\SalePayment::whereIn('sale_id', $customer->sales()->pluck('id'))->pluck('id'));
     })->pluck('id');
 
     // AR Balance (Total Due) = Debits - Credits
