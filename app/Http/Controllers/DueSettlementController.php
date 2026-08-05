@@ -17,7 +17,8 @@ class DueSettlementController extends Controller
     {
         $query = Journal::with(['reference', 'entries.account', 'creator'])
                         ->where('reference_type', Customer::class)
-                        ->orderByDesc('date');
+                        ->orderByDesc('date')
+                        ->orderByDesc('id');
         
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $query->whereBetween('date', [$request->start_date, $request->end_date]);
@@ -392,7 +393,8 @@ class DueSettlementController extends Controller
     {
         $query = Journal::with(['reference', 'entries.account', 'creator'])
                         ->where('reference_type', Supplier::class)
-                        ->orderByDesc('date');
+                        ->orderByDesc('date')
+                        ->orderByDesc('id');
         
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $query->whereBetween('date', [$request->start_date, $request->end_date]);
