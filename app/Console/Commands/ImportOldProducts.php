@@ -129,9 +129,9 @@ class ImportOldProducts extends Command
                     'product_variant_id' => $varId,
                     'warehouse_id' => 1, // Default Storage warehouse
                     'purchase_id' => null,
-                    'qty_in' => 10000.00,
+                    'qty_in' => 0.00,
                     'qty_out' => 0.00,
-                    'remaining_qty' => 10000.00,
+                    'remaining_qty' => 0.00,
                     'cost_per_unit' => 0.00,
                     'expiry_date' => null,
                     'created_at' => $b->created_at ?? now(),
