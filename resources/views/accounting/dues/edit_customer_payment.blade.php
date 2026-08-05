@@ -21,10 +21,6 @@
                 <div class="card-body">
                     <h4 class="header-title mb-3">Edit Payment ({{ $journal->journal_no }})</h4>
                     
-                    <div class="alert alert-warning">
-                        <strong>Warning:</strong> Updating a customer payment that has already settled invoices is highly complex and may cause invoice mismatch errors. It is recommended to <strong>Delete</strong> this payment entirely (which automatically un-pays the invoices) and record a new payment instead.
-                    </div>
-
                     @if (session('error'))
                         <div class="alert alert-danger">{{ session('error') }}</div>
                     @endif
@@ -79,7 +75,7 @@
                         </div>
                         <div class="d-flex justify-content-between">
                             <a href="{{ route('customer-dues.index') }}" class="btn btn-light">Cancel</a>
-                            <button type="submit" class="btn btn-primary">Attempt Update</button>
+                            <button type="submit" class="btn btn-primary">Update Payment</button>
                         </div>
                     </form>
                 </div>

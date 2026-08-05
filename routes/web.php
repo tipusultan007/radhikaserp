@@ -133,6 +133,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::get('customers/{customer}/edit', [CustomerController::class, 'edit'])->name('customers.edit');
         Route::put('customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
         Route::patch('customers/{customer}', [CustomerController::class, 'update']);
+        Route::post('customers/{customer}/recalculate', [CustomerController::class, 'recalculateBalances'])->name('customers.recalculate');
     });
     Route::group(['middleware' => ['permission:delete customers']], function () {
         Route::delete('customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');

@@ -196,58 +196,184 @@ class DueSettlementController extends Controller
 
     public function updateCustomerPayment(Request $request, Journal $journal)
     {
-        // Updating a customer payment that affects invoices is highly complex and prone to edge cases.
-        // The safest approach is to force the user to delete it (which runs our reverse logic) and recreate it.
-        return redirect()->back()->with('error', 'To maintain invoice accuracy, please Delete this payment and create a new one instead of updating it.');
+        $validated = $request->validate([
+            'customer_id' => 'required|exists:customers,id',
+            'amount' => 'required|numeric|min:1',
+            'payment_method' => 'nullable|exists:chart_of_accounts,id',
+            'date' => 'required|date',
+            'reference' => 'nullable|string',
+            'notes' => 'nullable|string',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $this->_reverseCustomerPayment($journal);
+            $this->_processCustomerPayment($validated);
+
+            DB::commit();
+            return redirect()->route('customer-dues.index')->with('success', 'Payment updated successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['error' => 'Failed to update payment: ' . $e->getMessage()]);
+        }
+    }
+
+    private function _processCustomerPayment(array $validated)
+    {
+        $customer = Customer::findOrFail($validated['customer_id']);
+
+        $totalPayment = (float) $validated['amount'];
+        $walletAmount = min($totalPayment, $customer->wallet_balance);
+        $amount = $totalPayment - $walletAmount;
+
+        $totalPayment = $amount + $walletAmount;
+        $duePayment = min($totalPayment, $customer->total_due);
+        $newAdvance = max(0, $totalPayment - $customer->total_due);
+        $netAdvance = $newAdvance - $walletAmount;
+
+        if ($duePayment > 0) {
+            $customer->decrement('total_due', $duePayment);
+        }
+        
+        if ($netAdvance > 0) {
+            $customer->increment('wallet_balance', $netAdvance);
+        } elseif ($netAdvance < 0) {
+            $customer->decrement('wallet_balance', abs($netAdvance));
+        }
+
+        $cashAcc = isset($validated['payment_method']) ? ChartOfAccount::find($validated['payment_method']) : ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
+        $arAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Receivable', 'type' => 'asset']);
+        $advAcc = ChartOfAccount::firstOrCreate(['name' => 'Customer Advance', 'type' => 'liability']);
+
+        $notes = $validated['notes'] ?? ('Payment received from Customer: ' . $customer->name . ($validated['reference'] ? ' (Ref: ' . $validated['reference'] . ')' : ''));
+
+        $journal = Journal::create([
+            'journal_no' => 'RCV-' . strtoupper(Str::random(6)),
+            'date' => $validated['date'],
+            'reference_type' => Customer::class,
+            'reference_id' => $customer->id,
+            'notes' => $notes,
+            'created_by' => auth()->id() ?? 1,
+        ]);
+
+        if ($amount > 0) {
+            JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $cashAcc->id,
+                'type' => 'debit',
+                'amount' => $amount,
+            ]);
+        }
+
+        if ($walletAmount > 0) {
+            JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $advAcc->id,
+                'type' => 'debit',
+                'amount' => $walletAmount,
+            ]);
+        }
+
+        if ($duePayment > 0) {
+            JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $arAcc->id,
+                'type' => 'credit',
+                'amount' => $duePayment,
+            ]);
+
+            $unpaidSales = \App\Models\Sale::where('customer_id', $customer->id)
+                ->where('due_amount', '>', 0)
+                ->orderBy('date', 'asc')
+                ->orderBy('id', 'asc')
+                ->lockForUpdate()
+                ->get();
+
+            $remainingPayment = $duePayment;
+            foreach ($unpaidSales as $sale) {
+                if ($remainingPayment <= 0) break;
+
+                $payThisSale = min($sale->due_amount, $remainingPayment);
+                
+                $sale->paid_amount += $payThisSale;
+                $sale->due_amount -= $payThisSale;
+                $sale->payment_status = $sale->due_amount > 0 ? 'partial' : 'paid';
+                $sale->save();
+
+                \App\Models\SalePayment::create([
+                    'sale_id' => $sale->id,
+                    'amount' => $payThisSale,
+                    'method' => 'cash',
+                    'date' => $validated['date'],
+                    'reference' => 'Due Settlement ' . ($validated['reference'] ?? ''),
+                ]);
+
+                $remainingPayment -= $payThisSale;
+            }
+        }
+
+        if ($newAdvance > 0) {
+            JournalEntry::create([
+                'journal_id' => $journal->id,
+                'account_id' => $advAcc->id,
+                'type' => 'credit',
+                'amount' => $newAdvance,
+            ]);
+        }
+    }
+
+    private function _reverseCustomerPayment(Journal $journal)
+    {
+        $arEntry = $journal->entries()->where('type', 'credit')->whereHas('account', function($q) { $q->where('name', 'Accounts Receivable'); })->first();
+        $duePayment = $arEntry ? $arEntry->amount : 0;
+        
+        $advCredit = $journal->entries()->where('type', 'credit')->whereHas('account', function($q) { $q->where('name', 'Customer Advance'); })->sum('amount');
+        $advDebit = $journal->entries()->where('type', 'debit')->whereHas('account', function($q) { $q->where('name', 'Customer Advance'); })->sum('amount');
+        $netAdvance = $advCredit - $advDebit;
+
+        $customer = $journal->reference;
+        if ($customer && $customer instanceof Customer) {
+            if ($netAdvance > 0) {
+                $customer->decrement('wallet_balance', $netAdvance);
+            } elseif ($netAdvance < 0) {
+                $customer->increment('wallet_balance', abs($netAdvance));
+            }
+            if ($duePayment > 0) {
+                $customer->increment('total_due', $duePayment);
+                
+                $ref = '';
+                if (preg_match('/\(Ref: (.*?)\)/', $journal->notes, $matches)) {
+                    $ref = $matches[1];
+                }
+                $salePaymentRef = 'Due Settlement ' . $ref;
+                
+                $salePayments = \App\Models\SalePayment::where('date', $journal->date)
+                    ->where('reference', $salePaymentRef)
+                    ->whereHas('sale', function($q) use ($customer) {
+                        $q->where('customer_id', $customer->id);
+                    })->get();
+                    
+                foreach($salePayments as $sp) {
+                    $sale = $sp->sale;
+                    $sale->paid_amount -= $sp->amount;
+                    $sale->due_amount += $sp->amount;
+                    $sale->payment_status = $sale->paid_amount == 0 ? 'due' : 'partial';
+                    $sale->save();
+                    $sp->delete();
+                }
+            }
+        }
+
+        $journal->entries()->delete();
+        $journal->delete();
     }
 
     public function deleteCustomerPayment(Journal $journal)
     {
         DB::beginTransaction();
         try {
-            $arEntry = $journal->entries()->where('type', 'credit')->whereHas('account', function($q) { $q->where('name', 'Accounts Receivable'); })->first();
-            $duePayment = $arEntry ? $arEntry->amount : 0;
-            
-            $advCredit = $journal->entries()->where('type', 'credit')->whereHas('account', function($q) { $q->where('name', 'Customer Advance'); })->sum('amount');
-            $advDebit = $journal->entries()->where('type', 'debit')->whereHas('account', function($q) { $q->where('name', 'Customer Advance'); })->sum('amount');
-            $netAdvance = $advCredit - $advDebit;
-
-            $customer = $journal->reference;
-            if ($customer && $customer instanceof Customer) {
-                if ($netAdvance > 0) {
-                    $customer->decrement('wallet_balance', $netAdvance);
-                } elseif ($netAdvance < 0) {
-                    $customer->increment('wallet_balance', abs($netAdvance));
-                }
-                if ($duePayment > 0) {
-                    $customer->increment('total_due', $duePayment);
-                    
-                    // Attempt to reverse SalePayments
-                    $ref = '';
-                    if (preg_match('/\(Ref: (.*?)\)/', $journal->notes, $matches)) {
-                        $ref = $matches[1];
-                    }
-                    $salePaymentRef = 'Due Settlement ' . $ref;
-                    
-                    $salePayments = \App\Models\SalePayment::where('date', $journal->date)
-                        ->where('reference', $salePaymentRef)
-                        ->whereHas('sale', function($q) use ($customer) {
-                            $q->where('customer_id', $customer->id);
-                        })->get();
-                        
-                    foreach($salePayments as $sp) {
-                        $sale = $sp->sale;
-                        $sale->paid_amount -= $sp->amount;
-                        $sale->due_amount += $sp->amount;
-                        $sale->payment_status = $sale->paid_amount == 0 ? 'due' : 'partial';
-                        $sale->save();
-                        $sp->delete();
-                    }
-                }
-            }
-
-            $journal->entries()->delete();
-            $journal->delete();
+            $this->_reverseCustomerPayment($journal);
 
             DB::commit();
             if (request()->expectsJson()) {

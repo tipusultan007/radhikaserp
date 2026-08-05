@@ -212,6 +212,8 @@ class CustomerController extends Controller
 
         $ledgerEntries = collect();
         $runningBalance = 0;
+        $totalDebit = 0;
+        $totalCredit = 0;
 
         foreach ($journals as $journal) {
             $debit = 0;
@@ -223,6 +225,7 @@ class CustomerController extends Controller
                 // Sale (Debit)
                 if ($sale->total >= 0) {
                     $runningBalance += $sale->total;
+                    $totalDebit += $sale->total;
                     $ledgerEntries->push((object)[
                         'id' => $journal->id . '_sale',
                         'journal' => $journal,
@@ -235,6 +238,7 @@ class CustomerController extends Controller
                 // Payment during Sale (Credit)
                 if ($sale->paid_amount > 0) {
                     $runningBalance -= $sale->paid_amount;
+                    $totalCredit += $sale->paid_amount;
                     $paymentJournal = clone $journal;
                     $paymentJournal->notes = 'Payment for ' . $sale->invoice_no;
                     
@@ -263,6 +267,9 @@ class CustomerController extends Controller
 
             $runningBalance += $debit;
             $runningBalance -= $credit;
+            
+            $totalDebit += $debit;
+            $totalCredit += $credit;
 
             $ledgerEntries->push((object)[
                 'id' => $journal->id,
@@ -283,7 +290,7 @@ class CustomerController extends Controller
 
         $paymentMethods = ChartOfAccount::where('is_payment_method', true)->get();
 
-        return view('customers.show', compact('customer', 'ledgerEntries', 'paymentMethods', 'finalRunningBalance'));
+        return view('customers.show', compact('customer', 'ledgerEntries', 'paymentMethods', 'finalRunningBalance', 'totalDebit', 'totalCredit'));
     }
 
     public function edit(Customer $customer)
@@ -355,6 +362,62 @@ class CustomerController extends Controller
     {
         $customer->delete();
         return redirect()->route('customers.index')->with('success', 'Customer deleted successfully.');
+    }
+
+    public function recalculateBalances(Customer $customer)
+    {
+        $customer->load(['sales']);
+
+        $arAcc = ChartOfAccount::where('name', 'Accounts Receivable')->first();
+        $advAcc = ChartOfAccount::where('name', 'Customer Advance')->first();
+        $arId = $arAcc ? $arAcc->id : 0;
+        $advId = $advAcc ? $advAcc->id : 0;
+        
+        $journals = Journal::with(['entries', 'reference'])
+            ->where(function($q) use ($customer) {
+                $q->where('reference_type', Customer::class)->where('reference_id', $customer->id);
+            })->orWhere(function($q) use ($customer) {
+                $q->where('reference_type', Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
+            })->orWhere(function($q) use ($customer) {
+                $q->where('reference_type', \App\Models\SalePayment::class)->whereIn('reference_id', \App\Models\SalePayment::whereIn('sale_id', $customer->sales()->pluck('id'))->pluck('id'));
+            })
+            ->get();
+
+        $totalDebit = 0;
+        $totalCredit = 0;
+        $advCredit = 0;
+        $advDebit = 0;
+
+        foreach ($journals as $journal) {
+            if ($journal->reference_type == Sale::class) {
+                $sale = $journal->reference;
+                if ($sale->total >= 0) {
+                    $totalDebit += $sale->total;
+                }
+                if ($sale->paid_amount > 0) {
+                    $totalCredit += $sale->paid_amount;
+                }
+            } else {
+                if ($journal->notes == 'Opening Balance') {
+                    $totalDebit += $customer->opening_balance;
+                } else {
+                    $totalCredit += $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'credit')->sum('amount');
+                    $totalDebit += $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'debit')->sum('amount');
+                    
+                    $advCredit += $journal->entries->where('account_id', $advId)->where('type', 'credit')->sum('amount');
+                    $advDebit += $journal->entries->where('account_id', $advId)->where('type', 'debit')->sum('amount');
+                }
+            }
+        }
+
+        $calculatedDue = $totalDebit - $totalCredit;
+        $calculatedWallet = $advCredit - $advDebit;
+
+        $customer->total_due = $calculatedDue;
+        $customer->wallet_balance = $calculatedWallet;
+        $customer->save();
+
+        return redirect()->back()->with('success', 'Customer balances recalculated successfully!');
     }
 
     private function createOpeningBalanceJournal($customer)

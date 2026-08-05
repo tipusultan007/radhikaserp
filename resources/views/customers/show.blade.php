@@ -31,6 +31,12 @@
                     <p><strong>Total Due (Current):</strong> <span class="text-danger fw-bold fs-4">৳{{ number_format($customer->total_due, 0) }}</span></p>
                     <div class="mt-3 d-flex gap-2">
                         <a href="{{ route('customers.edit', $customer->id) }}" class="btn btn-warning btn-sm">Edit Customer</a>
+                        <form action="{{ route('customers.recalculate', $customer->id) }}" method="POST" class="d-inline">
+                            @csrf
+                            <button type="submit" class="btn btn-info btn-sm" onclick="return confirm('Are you sure you want to recalculate balances? This will sync the wallet and due balances from the ledger.')">
+                                <i class="ri-refresh-line"></i> Recalculate Balances
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -98,12 +104,24 @@
                                 <i class="ri-shopping-cart-2-line"></i> Sales History
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a href="#payments-tab" data-bs-toggle="tab" aria-expanded="false" class="nav-link">
+                                <i class="ri-bank-card-line"></i> Payments
+                            </a>
+                        </li>
                     </ul>
 
                     <div class="tab-content">
                         <!-- Ledger Tab -->
                         <div class="tab-pane show active" id="ledger-tab">
-                            <h4 class="header-title mb-3">Account Ledger</h4>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h4 class="header-title mb-0">Account Ledger</h4>
+                                <div class="text-end">
+                                    <span class="badge bg-danger-light text-danger fs-14 me-2">Total Debit: ৳{{ number_format($totalDebit, 0) }}</span>
+                                    <span class="badge bg-success-light text-success fs-14 me-2">Total Credit: ৳{{ number_format($totalCredit, 0) }}</span>
+                                    <span class="badge bg-primary-light text-primary fs-14">Calculated Due: ৳{{ number_format($totalDebit - $totalCredit, 0) }}</span>
+                                </div>
+                            </div>
                             <div class="table-responsive">
                                 <table class="table table-bordered table-sm align-middle">
                                     <thead class="table-light">
@@ -158,7 +176,9 @@
                                     </tbody>
                                     <tfoot>
                                         <tr class="table-light">
-                                            <th colspan="5" class="text-end">Final Due Balance:</th>
+                                            <th colspan="3" class="text-end">Total:</th>
+                                            <th class="text-end text-danger fs-5">৳ {{ number_format($totalDebit, 0) }}</th>
+                                            <th class="text-end text-success fs-5">৳ {{ number_format($totalCredit, 0) }}</th>
                                             <th class="text-end text-danger fs-4">৳ {{ number_format($finalRunningBalance, 0) }}</th>
                                             <th></th>
                                         </tr>
@@ -226,6 +246,69 @@
                                 </table>
                             </div>
                         </div>
+
+                        <!-- Payments Tab -->
+                        <div class="tab-pane" id="payments-tab">
+                            <h4 class="header-title mb-3">Payments History</h4>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Journal Ref</th>
+                                            <th>Notes</th>
+                                            <th class="text-end text-success">Amount (Credit)</th>
+                                            <th class="text-end">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @forelse($ledgerEntries->filter(function($entry) { return $entry->credit > 0; }) as $entry)
+                                            <tr>
+                                                <td>{{ \Carbon\Carbon::parse($entry->journal->date)->format('d M, Y') }}</td>
+                                                <td>
+                                                    @if($entry->journal->reference_type == 'App\Models\Sale')
+                                                        <a href="{{ route('sales.show', $entry->journal->reference_id) }}">{{ $entry->journal->journal_no }}</a>
+                                                    @else
+                                                        {{ $entry->journal->journal_no }}
+                                                    @endif
+                                                </td>
+                                                <td>{{ $entry->journal->notes }}</td>
+                                                <td class="text-end text-success">৳{{ number_format($entry->credit, 0) }}</td>
+                                                <td class="text-end">
+                                                    @if($entry->journal->reference_type == 'App\Models\Customer' && $entry->journal->notes != 'Opening Balance' && $entry->journal->notes != 'Sale Invoice Generated')
+                                                        <div class="dropdown">
+                                                            <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                                <i class="ri-settings-3-line"></i>
+                                                            </button>
+                                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                                <li><a class="dropdown-item text-primary" href="{{ route('customer-dues.edit', $entry->journal->id) }}"><i class="ri-edit-box-line me-2"></i> Edit</a></li>
+                                                                <li>
+                                                                    <form id="delete-form-payments-{{ $entry->journal->id }}" action="{{ route('customer-dues.destroy', $entry->journal->id) }}" method="POST" class="d-inline">
+                                                                        @csrf
+                                                                        @method('DELETE')
+                                                                        <button type="button" class="dropdown-item text-danger" onclick="confirmDelete('{{ $entry->journal->id }}')"><i class="ri-delete-bin-line me-2"></i> Delete</button>
+                                                                    </form>
+                                                                </li>
+                                                            </ul>
+                                                        </div>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr><td colspan="5" class="text-center">No payments found.</td></tr>
+                                        @endforelse
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="table-light">
+                                            <th colspan="3" class="text-end">Total Payments:</th>
+                                            <th class="text-end text-success fs-5">৳ {{ number_format($totalCredit, 0) }}</th>
+                                            <th></th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </div>
