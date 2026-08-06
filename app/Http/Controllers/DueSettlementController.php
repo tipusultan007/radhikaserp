@@ -719,5 +719,61 @@ class DueSettlementController extends Controller
 
         return response()->stream($callback, 200, $headers);
     }
+
+    public function dueList(Request $request)
+    {
+        $query = Customer::where('total_due', '>', 0)->orderByDesc('total_due');
+        
+        if ($request->filled('search')) {
+            $query->where(function($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->search . '%')
+                  ->orWhere('phone', 'like', '%' . $request->search . '%');
+            });
+        }
+
+        $customers = $query->paginate(20)->withQueryString();
+        
+        return view('accounting.dues.due_list', compact('customers'));
+    }
+
+    public function exportDueList(Request $request)
+    {
+        $query = Customer::where('total_due', '>', 0)->orderByDesc('total_due');
+        
+        if ($request->filled('search')) {
+            $query->where(function($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->search . '%')
+                  ->orWhere('phone', 'like', '%' . $request->search . '%');
+            });
+        }
+
+        $customers = $query->get();
+
+        $headers = [
+            "Content-type"        => "text/csv",
+            "Content-Disposition" => "attachment; filename=due_customers_" . date('Y-m-d_H-i-s') . ".csv",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
+        ];
+
+        $callback = function() use ($customers) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['Customer Name', 'Phone', 'Address', 'Total Due', 'Wallet Balance']);
+
+            foreach ($customers as $customer) {
+                fputcsv($file, [
+                    $customer->name,
+                    $customer->phone ?? 'N/A',
+                    $customer->address ?? 'N/A',
+                    $customer->total_due,
+                    $customer->wallet_balance
+                ]);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
 }
 

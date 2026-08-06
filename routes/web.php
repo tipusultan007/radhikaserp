@@ -278,6 +278,21 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::get('journals/create', [App\Http\Controllers\JournalController::class, 'create'])->name('journals.create');
         Route::post('journals', [App\Http\Controllers\JournalController::class, 'store'])->name('journals.store');
     });
+    
+    // Balance Transfers (using journal permissions)
+    Route::group(['middleware' => ['permission:view journals']], function () {
+        Route::get('balance-transfers', [App\Http\Controllers\BalanceTransferController::class, 'index'])->name('balance-transfers.index');
+    });
+    Route::group(['middleware' => ['permission:create journals']], function () {
+        Route::post('balance-transfers', [App\Http\Controllers\BalanceTransferController::class, 'store'])->name('balance-transfers.store');
+    });
+    Route::group(['middleware' => ['permission:edit journals']], function () {
+        Route::put('balance-transfers/{balance_transfer}', [App\Http\Controllers\BalanceTransferController::class, 'update'])->name('balance-transfers.update');
+        Route::patch('balance-transfers/{balance_transfer}', [App\Http\Controllers\BalanceTransferController::class, 'update']);
+    });
+    Route::group(['middleware' => ['permission:delete journals']], function () {
+        Route::delete('balance-transfers/{balance_transfer}', [App\Http\Controllers\BalanceTransferController::class, 'destroy'])->name('balance-transfers.destroy');
+    });
     Route::group(['middleware' => ['permission:view journals']], function () {
         Route::get('journals', [App\Http\Controllers\JournalController::class, 'index'])->name('journals.index');
         Route::get('journals/{journal}', [App\Http\Controllers\JournalController::class, 'show'])->name('journals.show');
@@ -301,6 +316,10 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     Route::group(['middleware' => ['permission:view settlements']], function () {
         Route::get('/customer-dues', [App\Http\Controllers\DueSettlementController::class, 'customers'])->name('customer-dues.index');
         Route::get('/customer-dues/export', [App\Http\Controllers\DueSettlementController::class, 'exportCustomerPayments'])->name('customer-dues.export');
+        
+        Route::get('/customer-due-list', [App\Http\Controllers\DueSettlementController::class, 'dueList'])->name('customer-dues.list');
+        Route::get('/customer-due-list/export', [App\Http\Controllers\DueSettlementController::class, 'exportDueList'])->name('customer-dues.list-export');
+        
         Route::get('/supplier-payables', [App\Http\Controllers\DueSettlementController::class, 'suppliers'])->name('supplier-payables.index');
         Route::get('/supplier-payables/export', [App\Http\Controllers\DueSettlementController::class, 'exportSupplierPayments'])->name('supplier-payables.export');
     });

@@ -239,6 +239,12 @@
                     <span> General Journal </span>
                 </a>
             </li>
+            <li class="side-nav-item">
+                <a href="{{ route('balance-transfers.index') }}" class="side-nav-link">
+                    <i class="ri-arrow-left-right-fill"></i>
+                    <span> Balance Transfers </span>
+                </a>
+            </li>
             @endcan
 
             @can('view cashbook')
@@ -262,6 +268,9 @@
                         @canany(['view settlements', 'settle customer dues'])
                         <li>
                             <a href="{{ route('customer-dues.index') }}">Customer Payments</a>
+                        </li>
+                        <li>
+                            <a href="{{ route('customer-dues.list') }}">Due Customers</a>
                         </li>
                         @endcanany
                         @canany(['view settlements', 'settle supplier payables'])
