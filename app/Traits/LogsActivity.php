@@ -40,8 +40,13 @@ trait LogsActivity
      */
     protected function logActivity($action, $description)
     {
+        $userId = auth()->id() ?? 1;
+        if (auth()->check() && !(auth()->user() instanceof \App\Models\User)) {
+            $userId = 1; // Fallback to admin ID 1 if a customer triggers this
+        }
+
         ActivityLog::create([
-            'user_id' => auth()->id() ?? 1,
+            'user_id' => $userId,
             'action' => $action,
             'reference_type' => static::class,
             'reference_id' => $this->id ?? 0,
