@@ -113,6 +113,7 @@ class CustomerApiController extends Controller
                 'reference_type' => Sale::class,
                 'reference_id' => $sale->id,
                 'notes' => 'Customer App Order ' . $sale->invoice_no,
+                'created_by' => \App\Models\User::first()->id ?? 1,
             ]);
             
             $arAcc = \App\Models\ChartOfAccount::where('name', 'Accounts Receivable')->first();
