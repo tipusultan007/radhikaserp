@@ -202,7 +202,10 @@ class CustomerController extends Controller
                 $q->where('reference_type', Customer::class)->where('reference_id', $customer->id);
             })->orWhere(function($q) use ($customer) {
                 $q->where('reference_type', Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
+            })->orWhere(function($q) use ($customer) {
+                $q->where('reference_type', \App\Models\SalePayment::class)->whereIn('reference_id', \App\Models\SalePayment::whereIn('sale_id', $customer->sales()->pluck('id'))->pluck('id'));
             })
+            ->orderBy('date', 'asc')->orderBy('id', 'asc')
             ->get();
             
         $salePayments = \App\Models\SalePayment::whereIn('sale_id', $customer->sales()->pluck('id'))->get();
@@ -425,9 +428,7 @@ class CustomerController extends Controller
             })
             ->get();
 
-        $arDebit = $customer->sales()->sum('total') + $customer->opening_balance;
-        $arCredit = \App\Models\SalePayment::whereIn('sale_id', $customer->sales()->pluck('id'))->sum('amount');
-        
+        $calculatedDue = $customer->opening_balance + $customer->sales()->sum('total');
         $advCredit = 0;
         $advDebit = 0;
 
@@ -436,9 +437,44 @@ class CustomerController extends Controller
                 $advCredit += $journal->entries->where('account_id', $advId)->where('type', 'credit')->sum('amount');
                 $advDebit += $journal->entries->where('account_id', $advId)->where('type', 'debit')->sum('amount');
             }
+            
+            // Subtract payments recorded via non-sale journals (like Customer or SalePayment)
+            if ($journal->reference_type != Sale::class && $journal->notes != 'Opening Balance') {
+                $credit = $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'credit')->sum('amount');
+                $debit = $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'debit')->sum('amount');
+                
+                if ($debit > 0 && $credit > 0) {
+                    if ($debit > $credit) { $debit = $debit - $credit; $credit = 0; }
+                    else if ($credit > $debit) { $credit = $credit - $debit; $debit = 0; }
+                    else { $debit = 0; $credit = 0; }
+                }
+
+                $calculatedDue -= $credit;
+                $calculatedDue += $debit;
+            }
         }
 
-        $calculatedDue = $arDebit - $arCredit;
+        // Subtract fallback POS payments for sales
+        $posPayments = 0;
+        foreach ($customer->sales as $sale) {
+            $initialPaymentAmount = \App\Models\SalePayment::where('sale_id', $sale->id)
+                ->where(function($q) {
+                    $q->whereNull('reference')
+                      ->orWhereIn('reference', ['POS Payment', 'Wallet Payment']);
+                })
+                ->sum('amount');
+                
+            $hasJournal = $journals->contains(function($j) use ($sale) {
+                return str_contains($j->notes, 'Payment for POS Sale ' . $sale->invoice_no);
+            });
+            
+            if ($initialPaymentAmount > 0 && !$hasJournal) {
+                $posPayments += $initialPaymentAmount;
+            }
+        }
+            
+        $calculatedDue -= $posPayments;
+
         $calculatedWallet = $advCredit - $advDebit;
 
         $customer->total_due = $calculatedDue;
