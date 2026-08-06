@@ -18,7 +18,7 @@ class CustomerApiController extends Controller
     public function products()
     {
         $products = Product::with(['variants' => function ($query) {
-            $query->where('status', true);
+            $query->where('status', true)->with('unit');
         }])->where('status', true)->get();
 
         return response()->json(['products' => $products]);
