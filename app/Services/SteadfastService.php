@@ -34,7 +34,7 @@ class SteadfastService
                 'recipient_name' => $data['recipient_name'],
                 'recipient_phone' => $data['recipient_phone'],
                 'recipient_address' => $data['recipient_address'] ?? 'N/A',
-                'cod_amount' => $data['cod_amount'],
+                'cod_amount' => 0,
                 'note' => $data['note'] ?? 'ERP Generated Order',
                 'delivery_type' => $data['delivery_type'] ?? 1, // 0 for Home Delivery, 1 for Point Delivery
             ]);
