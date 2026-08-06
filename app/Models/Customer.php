@@ -8,8 +8,10 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Notifications\Notifiable;
 
+use Illuminate\Foundation\Auth\User as Authenticatable;
+
 #[Fillable(['name', 'customer_type', 'email', 'password', 'phone', 'address', 'credit_limit', 'total_due', 'opening_balance', 'wallet_balance'])]
-class Customer extends Model
+class Customer extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
     use \App\Traits\LogsActivity;
