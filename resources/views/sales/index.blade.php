@@ -245,7 +245,7 @@
                                                  @endif
                                                  
                                                  @if($sale->delivery_method == 'steadfast' && !empty($sale->consignment_id))
-                                                     <div class="mt-1"><small class="text-muted">CID: {{ $sale->consignment_id }}</small></div>
+                                                     <div class="mt-1"><span class="badge bg-warning text-dark" style="font-size: 12px; font-weight: bold;">CID: {{ $sale->consignment_id }}</span></div>
                                                  @endif
                                              </td>
                                              <td>

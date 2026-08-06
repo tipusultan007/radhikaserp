@@ -69,7 +69,7 @@
                     <p style="margin: 2px 0;"><strong>Delivery:</strong> {{ ucfirst(str_replace('_', ' ', $sale->delivery_method)) }}</p>
                 @endif
                 @if($sale->delivery_method == 'steadfast' && !empty($sale->consignment_id))
-                    <p style="margin: 2px 0;"><strong>Consignment ID:</strong> {{ $sale->consignment_id }}</p>
+                    <p style="margin: 4px 0; font-size: 14px; font-weight: bold; background-color: #ffeb3b; padding: 2px 5px; display: inline-block; color: #000;">Consignment ID: {{ $sale->consignment_id }}</p>
                 @endif
             </td>
         </tr>

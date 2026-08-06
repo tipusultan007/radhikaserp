@@ -153,7 +153,7 @@
                     <strong>Status:</strong> {{ ucfirst($sale->payment_status) }}<br>
                     <strong>Delivery:</strong> {{ ucfirst(str_replace('_', ' ', $sale->delivery_method ?? 'None')) }}
                     @if($sale->delivery_method == 'steadfast' && !empty($sale->consignment_id))
-                        <br><strong>Consignment ID:</strong> {{ $sale->consignment_id }}
+                        <br><strong style="font-size: 14px; background-color: #ffeb3b; padding: 2px 5px; color: #000; display: inline-block; margin-top: 4px;">Consignment ID: {{ $sale->consignment_id }}</strong>
                     @endif
                 </td>
             </tr>
