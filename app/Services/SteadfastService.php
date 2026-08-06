@@ -15,7 +15,7 @@ class SteadfastService
      */
     public static function createOrder(array $data)
     {
-        $baseUrl = config('services.steadfast.url', 'https://portal.steadfast.com.bd/api/v1');
+        $baseUrl = config('services.steadfast.url', ' https://portal.packzy.com/api/v1');
         $apiKey = config('services.steadfast.api_key');
         $secretKey = config('services.steadfast.secret_key');
 

@@ -309,6 +309,10 @@
             if (deliveryMethod && deliveryMethod.value === 'steadfast') {
                 document.getElementById('deliveryTypeContainer').style.display = 'block';
                 if (deliveryType && deliveryType.value === '1') { // Point Delivery
+                    if (deliveryChargeInput) {
+                        deliveryChargeInput.value = 0;
+                    }
+                } else if (deliveryType && deliveryType.value === '0') { // Home Delivery
                     const autoCharge = Math.max(1, Math.ceil(totalWeight)) * 20;
                     if (deliveryChargeInput) {
                         deliveryChargeInput.value = autoCharge;
