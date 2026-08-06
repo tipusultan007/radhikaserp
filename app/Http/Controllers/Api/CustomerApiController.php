@@ -29,6 +29,7 @@ class CustomerApiController extends Controller
      */
     public function storeOrder(Request $request)
     {
+        \Illuminate\Support\Facades\Log::info('storeOrder payload:', $request->all());
         $request->validate([
             'items' => 'required|array|min:1',
             'items.*.product_variant_id' => 'required|exists:product_variants,id',
@@ -159,6 +160,7 @@ class CustomerApiController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+            \Illuminate\Support\Facades\Log::error('API storeOrder failed: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return response()->json([
                 'message' => 'Failed to create order.',
                 'error' => $e->getMessage()
