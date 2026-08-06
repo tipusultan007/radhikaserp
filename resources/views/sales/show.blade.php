@@ -112,6 +112,9 @@
                                      @endif
                                  </p>
                                  <p class="mb-1"><strong>Delivery Method:</strong> {{ ucfirst(str_replace('_', ' ', $sale->delivery_method ?? 'None')) }}</p>
+                                 @if($sale->delivery_method == 'steadfast' && !empty($sale->consignment_id))
+                                     <p class="mb-1"><strong>Consignment ID:</strong> {{ $sale->consignment_id }}</p>
+                                 @endif
                                  <p class="mb-0"><strong>Order Status:</strong> 
                                      @php
                                          $statusClass = 'bg-info';

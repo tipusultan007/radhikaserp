@@ -68,6 +68,9 @@
                 @if($sale->delivery_method)
                     <p style="margin: 2px 0;"><strong>Delivery:</strong> {{ ucfirst(str_replace('_', ' ', $sale->delivery_method)) }}</p>
                 @endif
+                @if($sale->delivery_method == 'steadfast' && !empty($sale->consignment_id))
+                    <p style="margin: 2px 0;"><strong>Consignment ID:</strong> {{ $sale->consignment_id }}</p>
+                @endif
             </td>
         </tr>
     </table>

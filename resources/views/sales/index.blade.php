@@ -243,6 +243,10 @@
                                                  @else
                                                      <span class="badge bg-secondary">N/A</span>
                                                  @endif
+                                                 
+                                                 @if($sale->delivery_method == 'steadfast' && !empty($sale->consignment_id))
+                                                     <div class="mt-1"><small class="text-muted">CID: {{ $sale->consignment_id }}</small></div>
+                                                 @endif
                                              </td>
                                              <td>
                                                  <div class="dropdown">

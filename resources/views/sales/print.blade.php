@@ -152,6 +152,9 @@
                     <div class="section-title">Payment Details:</div>
                     <strong>Status:</strong> {{ ucfirst($sale->payment_status) }}<br>
                     <strong>Delivery:</strong> {{ ucfirst(str_replace('_', ' ', $sale->delivery_method ?? 'None')) }}
+                    @if($sale->delivery_method == 'steadfast' && !empty($sale->consignment_id))
+                        <br><strong>Consignment ID:</strong> {{ $sale->consignment_id }}
+                    @endif
                 </td>
             </tr>
         </table>
