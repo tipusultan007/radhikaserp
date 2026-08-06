@@ -267,8 +267,8 @@ class CustomerController extends Controller
                 if ($journal->notes == 'Opening Balance') {
                     $debit = $customer->opening_balance;
                 } else {
-                    $credit = $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'credit')->sum('amount');
-                    $debit = $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'debit')->sum('amount');
+                    $credit = $journal->entries->where('account_id', $arId)->where('type', 'credit')->sum('amount');
+                    $debit = $journal->entries->where('account_id', $arId)->where('type', 'debit')->sum('amount');
                 }
             }
 
@@ -440,8 +440,8 @@ class CustomerController extends Controller
             
             // Subtract payments recorded via non-sale journals (like Customer or SalePayment)
             if ($journal->reference_type != Sale::class && $journal->notes != 'Opening Balance') {
-                $credit = $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'credit')->sum('amount');
-                $debit = $journal->entries->whereIn('account_id', [$arId, $advId])->where('type', 'debit')->sum('amount');
+                $credit = $journal->entries->where('account_id', $arId)->where('type', 'credit')->sum('amount');
+                $debit = $journal->entries->where('account_id', $arId)->where('type', 'debit')->sum('amount');
                 
                 if ($debit > 0 && $credit > 0) {
                     if ($debit > $credit) { $debit = $debit - $credit; $credit = 0; }
