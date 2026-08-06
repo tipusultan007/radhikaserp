@@ -73,6 +73,9 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::delete('/product-variants/{id}', [AdminApiController::class, 'destroyProductVariant'])
         ->middleware('permission:delete product variants');
 
+    // ── Districts ─────────────────────────────────────────────────────────────
+    Route::get('/districts', [AdminApiController::class, 'districts']);
+
     // ── Customers ─────────────────────────────────────────────────────────────
     Route::get('/customers', [AdminApiController::class, 'customers'])
         ->middleware('permission:view customers');

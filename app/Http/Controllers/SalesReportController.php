@@ -42,8 +42,13 @@ class SalesReportController extends Controller
         $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->input('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
 
-        $items = SaleItem::whereHas('sale', function($q) use ($startDate, $endDate) {
+        $customerId = $request->input('customer_id');
+
+        $items = SaleItem::whereHas('sale', function($q) use ($startDate, $endDate, $customerId) {
                 $q->whereBetween('date', [$startDate, $endDate]);
+                if ($customerId) {
+                    $q->where('customer_id', $customerId);
+                }
             })
             ->with(['batch.product', 'productVariant'])
             ->get();
@@ -69,7 +74,9 @@ class SalesReportController extends Controller
         // Sort by revenue descending
         usort($productData, fn($a, $b) => $b['revenue'] <=> $a['revenue']);
 
-        return view('reports.sales.products', compact('productData', 'startDate', 'endDate'));
+        $customers = \App\Models\Customer::orderBy('name')->get();
+
+        return view('reports.sales.products', compact('productData', 'startDate', 'endDate', 'customers', 'customerId'));
     }
 
     public function profitReport(Request $request)

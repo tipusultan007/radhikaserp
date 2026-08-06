@@ -1007,6 +1007,12 @@ class AdminApiController extends Controller
             return response()->json(['error' => 'Failed to update status: ' . $e->getMessage()], 400);
         }
     }
+    public function districts()
+    {
+        $districts = \App\Models\District::orderBy('name')->get(['id', 'name']);
+        return response()->json(['districts' => $districts]);
+    }
+
     public function customers(Request $request)
     {
         $query = Customer::orderBy('id', 'desc');
@@ -1017,6 +1023,10 @@ class AdminApiController extends Controller
                 $q->where('name', 'LIKE', "%{$search}%")
                   ->orWhere('phone', 'LIKE', "%{$search}%");
             });
+        }
+
+        if ($request->filled('district')) {
+            $query->where('district', $request->district);
         }
 
         if ($request->has('all')) {
@@ -1037,6 +1047,8 @@ class AdminApiController extends Controller
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
             'address' => 'nullable|string',
+            'district' => 'nullable|string|max:255',
+            'company' => 'nullable|string|max:255',
             'credit_limit' => 'nullable|numeric|min:0',
             'opening_balance' => 'nullable|numeric|min:0',
         ]);
@@ -1106,6 +1118,8 @@ class AdminApiController extends Controller
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
             'address' => 'nullable|string',
+            'district' => 'nullable|string|max:255',
+            'company' => 'nullable|string|max:255',
             'credit_limit' => 'nullable|numeric|min:0',
             'opening_balance' => 'nullable|numeric|min:0',
         ]);

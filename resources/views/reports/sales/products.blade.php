@@ -22,6 +22,15 @@
                         <label for="end_date">End Date</label>
                         <input type="date" class="form-control" id="end_date" name="end_date" value="{{ $endDate }}">
                     </div>
+                    <div class="col-4">
+                        <label for="customer_id">Customer</label>
+                        <select name="customer_id" id="customer_id" class="form-select" data-toggle="select2" data-allow-clear="true" data-placeholder="All Customers">
+                            <option value="">All Customers</option>
+                            @foreach($customers as $customer)
+                                <option value="{{ $customer->id }}" {{ $customerId == $customer->id ? 'selected' : '' }}>{{ $customer->name }} ({{ $customer->phone ?? 'N/A' }})</option>
+                            @endforeach
+                        </select>
+                    </div>
                     <div class="col-auto align-self-end">
                         <button type="submit" class="btn btn-primary">Filter</button>
                     </div>
@@ -43,7 +52,7 @@
                                 <td><strong>{{ $item['product_name'] }}</strong></td>
                                 <td>{{ $item['variant_name'] }}</td>
                                 <td>{{ number_format($item['qty_sold'], 0) }}</td>
-                                <td class="text-success fw-bold">${{ number_format($item['revenue'], 0) }}</td>
+                                <td class="text-success fw-bold">{{ number_format($item['revenue'], 0) }}</td>
                             </tr>
                             @empty
                             <tr>

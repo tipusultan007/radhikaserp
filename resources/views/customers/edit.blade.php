@@ -65,6 +65,22 @@
                                  </div>
                              </div>
 
+                             <div class="row">
+                                 <div class="col-md-6 mb-3">
+                                     <label for="district" class="form-label">District</label>
+                                     <select id="district" name="district" class="form-control" data-toggle="select2" data-allow-clear="true" data-placeholder="— Select District —">
+                                         <option value="">— Select District —</option>
+                                         @foreach($districts as $district)
+                                             <option value="{{ $district }}" {{ old('district', $customer->district) == $district ? 'selected' : '' }}>{{ $district }}</option>
+                                         @endforeach
+                                     </select>
+                                 </div>
+                                 <div class="col-md-6 mb-3">
+                                     <label for="company" class="form-label">Company</label>
+                                     <input type="text" id="company" name="company" class="form-control" placeholder="e.g. ABC Traders" value="{{ old('company', $customer->company) }}">
+                                 </div>
+                             </div>
+
                              <div class="mb-3">
                                  <label for="address" class="form-label">Address</label>
                                  <textarea id="address" name="address" class="form-control" rows="3">{{ old('address', $customer->address) }}</textarea>
@@ -108,3 +124,10 @@
     </div>
 @endsection
 
+@section('script')
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // District select2 is auto-initialized via data-toggle="select2"
+    });
+</script>
+@endsection

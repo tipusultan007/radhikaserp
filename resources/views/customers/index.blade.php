@@ -28,26 +28,47 @@
              <div class="col-12">
                  <div class="card">
                      <div class="card-body">
-                         <div class="row mb-3 align-items-center">
-                             <div class="col-sm-8">
-                                 <form action="{{ route('customers.index') }}" method="GET" class="d-flex justify-content-sm-start" id="searchForm">
-                                     <div class="input-group dropdown" style="max-width: 350px;" id="searchDropdown">
-                                         <input type="text" class="form-control" name="search" id="searchInput" placeholder="Search by Name, Email, or Phone..." value="{{ request('search') }}" autocomplete="off" data-bs-toggle="dropdown" aria-expanded="false">
+                         {{-- ── Filters Row ────────────────────────────────────────── --}}
+                         <form action="{{ route('customers.index') }}" method="GET" id="filterForm">
+                             <div class="row mb-3 align-items-end g-2">
+                                 {{-- Search --}}
+                                 <div class="col-sm-5">
+                                     <div class="input-group dropdown" id="searchDropdown">
+                                         <input type="text" class="form-control" name="search" id="searchInput"
+                                             placeholder="Search by Name, Email, or Phone..."
+                                             value="{{ request('search') }}" autocomplete="off"
+                                             data-bs-toggle="dropdown" aria-expanded="false">
                                          <button class="btn btn-primary" type="submit"><i class="ri-search-line"></i></button>
                                          @if(request('search'))
-                                             <a href="{{ route('customers.index') }}" class="btn btn-light" title="Clear Search"><i class="ri-close-line"></i></a>
+                                             <a href="{{ route('customers.index', array_merge(request()->except('search', 'page'), [])) }}" class="btn btn-light" title="Clear Search"><i class="ri-close-line"></i></a>
                                          @endif
-                                         <ul class="dropdown-menu w-100 shadow p-0" id="searchResults" style="max-height: 300px; overflow-y: auto;">
-                                             <!-- AJAX Results will appear here -->
-                                         </ul>
+                                         <ul class="dropdown-menu w-100 shadow p-0" id="searchResults" style="max-height: 300px; overflow-y: auto;"></ul>
                                      </div>
-                                 </form>
+                                 </div>
+
+                                 {{-- District Dropdown --}}
+                                 <div class="col-sm-3">
+                                     <select name="district" id="districtFilter" class="form-control" data-toggle="select2" data-allow-clear="true" data-placeholder="All Districts">
+                                         <option value="">All Districts</option>
+                                         @foreach($districts as $district)
+                                             <option value="{{ $district }}" {{ request('district') == $district ? 'selected' : '' }}>{{ $district }}</option>
+                                         @endforeach
+                                     </select>
+                                 </div>
+
+                                 {{-- Buttons --}}
+                                 <div class="col-sm-4 d-flex gap-2">
+                                     <button type="submit" class="btn btn-secondary"><i class="ri-filter-3-line me-1"></i>Filter</button>
+                                     @if(request('district') || request('search'))
+                                         <a href="{{ route('customers.index') }}" class="btn btn-light"><i class="ri-refresh-line me-1"></i>Clear</a>
+                                     @endif
+                                     <a href="{{ route('customers.create') }}" class="btn btn-danger ms-auto"><i class="ri-add-line me-1"></i> Add Customer</a>
+                                     <a href="{{ route('customers.export', request()->all()) }}" class="btn btn-success"><i class="ri-file-excel-2-line me-1"></i> Export</a>
+                                 </div>
                              </div>
-                             <div class="col-sm-4 d-flex justify-content-sm-end">
-                                 <a href="{{ route('customers.create') }}" class="btn btn-danger mb-2"><i class="ri-add-line me-1"></i> Add Customer</a>
-                                 <a href="{{ route('customers.export', request()->all()) }}" class="btn btn-success mb-2 ms-1"><i class="ri-file-excel-2-line me-1"></i> Export</a>
-                             </div>
-                         </div>
+                             {{-- preserve page --}}
+                             <input type="hidden" name="page" value="1">
+                         </form>
 
                          <div class="table-responsive-sm">
                              <table class="table table-centered table-hover mb-0">
@@ -55,6 +76,8 @@
                                      <tr>
                                          <th>Name</th>
                                          <th>Phone</th>
+                                         <th>District</th>
+                                         <th>Company</th>
                                          <th>Address</th>
                                          <th>Credit Limit (TK)</th>
                                          <th>Total Due (TK)</th>
@@ -67,7 +90,15 @@
                                          <tr>
                                              <td><a href="{{ route('customers.show', $customer->id) }}" class="text-body fw-semibold">{{ $customer->name }}</a></td>
                                              <td>{{ $customer->phone }}</td>
-                                             <td>{{ Str::limit($customer->address, 30) }}</td>
+                                             <td>
+                                                 @if($customer->district)
+                                                     <span class="badge bg-soft-primary text-primary">{{ $customer->district }}</span>
+                                                 @else
+                                                     <span class="text-muted">—</span>
+                                                 @endif
+                                             </td>
+                                             <td>{{ $customer->company ?: '—' }}</td>
+                                             <td>{{ Str::limit($customer->address, 25) }}</td>
                                              <td>{{ number_format($customer->credit_limit, 0) }}</td>
                                              <td>
                                                  <span class="{{ $customer->total_due > 0 ? 'text-danger fw-bold' : 'text-success' }}">
@@ -100,7 +131,7 @@
                                          </tr>
                                      @empty
                                          <tr>
-                                             <td colspan="7" class="text-center">No customers found.</td>
+                                             <td colspan="9" class="text-center">No customers found.</td>
                                          </tr>
                                      @endforelse
                                  </tbody>
@@ -118,19 +149,27 @@
 @endsection
 
 @section('script')
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-submit when district filter is selected or cleared (Select2 events require jQuery)
+        var jq = window.jQuery;
+        if (jq) {
+            jq('#districtFilter').on('select2:select select2:clear', function() {
+                document.getElementById('filterForm').submit();
+            });
+        }
+
+        // Search AJAX autocomplete
         let timer;
         const searchInput = document.getElementById('searchInput');
         const searchResults = document.getElementById('searchResults');
-        
-        // Use Bootstrap 5 Dropdown API
         const bsDropdown = new bootstrap.Dropdown(searchInput);
 
         searchInput.addEventListener('input', function() {
             clearTimeout(timer);
             let val = this.value.trim();
-            
+
             if (val.length === 0) {
                 searchResults.innerHTML = '';
                 bsDropdown.hide();
@@ -162,10 +201,9 @@
                         }
                     })
                     .catch(error => console.error('Error fetching customers:', error));
-            }, 400); // 400ms debounce
+            }, 400);
         });
-        
-        // Hide dropdown when clicking outside
+
         document.addEventListener('click', function(e) {
             if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
                 bsDropdown.hide();
@@ -189,6 +227,4 @@
         })
     }
 </script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 @endsection
-

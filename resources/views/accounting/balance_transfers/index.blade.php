@@ -153,11 +153,11 @@
                                         </td>
                                         <td class="text-center">
                                             <a href="javascript:void(0);" class="btn btn-sm btn-soft-primary" onclick="editTransfer({{ $transfer }})"><i class="ri-edit-line"></i></a>
-                                            <form action="{{ route('balance-transfers.destroy', $transfer->id) }}" method="POST" class="d-inline-block" onsubmit="return confirm('Are you sure you want to delete this transfer?');">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="btn btn-sm btn-soft-danger"><i class="ri-delete-bin-line"></i></button>
-                                            </form>
+                                            <button type="button" class="btn btn-sm btn-soft-danger"
+                                                onclick="confirmDelete('{{ route('balance-transfers.destroy', $transfer->id) }}')"
+                                                title="Delete">
+                                                <i class="ri-delete-bin-line"></i>
+                                            </button>
                                         </td>
                                     </tr>
                                 @empty
@@ -178,6 +178,12 @@
         </div>
     </div>
 </div>
+
+<!-- Global Delete Form -->
+<form id="_globalDeleteForm" method="POST" style="display: none;">
+    @csrf
+    @method('DELETE')
+</form>
 
 <!-- Edit Transfer Modal -->
 <div class="modal fade" id="editTransferModal" tabindex="-1" aria-labelledby="editTransferModalLabel" aria-hidden="true">
@@ -238,15 +244,34 @@
 @endsection
 
 @section('script')
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+    // ── SweetAlert Delete ─────────────────────────────────────────────────────
+    function confirmDelete(actionUrl) {
+        Swal.fire({
+            title: 'Delete Transfer?',
+            text: 'This will reverse the accounting entries. This action cannot be undone.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, delete it!',
+            cancelButtonText: 'Cancel'
+        }).then(function(result) {
+            if (result.isConfirmed) {
+                var form = document.getElementById('_globalDeleteForm');
+                form.action = actionUrl;
+                form.submit();
+            }
+        });
+    }
+
+    // ── Edit Transfer ─────────────────────────────────────────────────────────
     function editTransfer(transfer) {
-        // Set form action URL
         let url = "{{ route('balance-transfers.update', ':id') }}";
         url = url.replace(':id', transfer.id);
         $('#editTransferForm').attr('action', url);
         
-        // Populate fields
-        // Convert date string to YYYY-MM-DD
         let dateObj = new Date(transfer.date);
         let dateString = dateObj.toISOString().split('T')[0];
         $('#edit_date').val(dateString);
@@ -257,7 +282,6 @@
         $('#edit_reference').val(transfer.reference);
         $('#edit_notes').val(transfer.notes);
         
-        // Show modal
         var editModal = new bootstrap.Modal(document.getElementById('editTransferModal'));
         editModal.show();
     }

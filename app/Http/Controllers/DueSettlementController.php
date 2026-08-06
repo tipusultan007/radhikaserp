@@ -731,9 +731,15 @@ class DueSettlementController extends Controller
             });
         }
 
+        if ($request->filled('district')) {
+            $query->where('district', $request->district);
+        }
+
         $customers = $query->paginate(20)->withQueryString();
+        $districts = \App\Models\District::orderBy('name')->pluck('name');
+        $paymentMethods = ChartOfAccount::where('is_payment_method', true)->get();
         
-        return view('accounting.dues.due_list', compact('customers'));
+        return view('accounting.dues.due_list', compact('customers', 'districts', 'paymentMethods'));
     }
 
     public function exportDueList(Request $request)
@@ -745,6 +751,10 @@ class DueSettlementController extends Controller
                 $q->where('name', 'like', '%' . $request->search . '%')
                   ->orWhere('phone', 'like', '%' . $request->search . '%');
             });
+        }
+
+        if ($request->filled('district')) {
+            $query->where('district', $request->district);
         }
 
         $customers = $query->get();
@@ -759,12 +769,13 @@ class DueSettlementController extends Controller
 
         $callback = function() use ($customers) {
             $file = fopen('php://output', 'w');
-            fputcsv($file, ['Customer Name', 'Phone', 'Address', 'Total Due', 'Wallet Balance']);
+            fputcsv($file, ['Customer Name', 'Phone', 'District', 'Address', 'Total Due', 'Wallet Balance']);
 
             foreach ($customers as $customer) {
                 fputcsv($file, [
                     $customer->name,
                     $customer->phone ?? 'N/A',
+                    $customer->district ?? 'N/A',
                     $customer->address ?? 'N/A',
                     $customer->total_due,
                     $customer->wallet_balance

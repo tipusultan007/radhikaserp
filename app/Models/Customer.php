@@ -10,7 +10,7 @@ use Illuminate\Notifications\Notifiable;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
-#[Fillable(['name', 'customer_type', 'email', 'password', 'phone', 'address', 'credit_limit', 'total_due', 'opening_balance', 'wallet_balance'])]
+#[Fillable(['name', 'customer_type', 'email', 'password', 'phone', 'address', 'district', 'company', 'credit_limit', 'total_due', 'opening_balance', 'wallet_balance'])]
 class Customer extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;

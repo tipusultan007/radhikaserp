@@ -26,8 +26,13 @@ class CustomerController extends Controller
             });
         }
 
+        if ($request->filled('district')) {
+            $query->where('district', $request->district);
+        }
+
         $customers = $query->paginate(15)->withQueryString();
-        return view('customers.index', compact('customers'));
+        $districts = \App\Models\District::orderBy('name')->pluck('name');
+        return view('customers.index', compact('customers', 'districts'));
     }
 
     public function searchAjax(Request $request)
@@ -134,7 +139,8 @@ class CustomerController extends Controller
 
     public function create()
     {
-        return view('customers.create');
+        $districts = \App\Models\District::orderBy('name')->pluck('name');
+        return view('customers.create', compact('districts'));
     }
 
     public function store(Request $request)
@@ -145,6 +151,8 @@ class CustomerController extends Controller
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
             'address' => 'nullable|string',
+            'district' => 'nullable|string|max:255',
+            'company' => 'nullable|string|max:255',
             'customer_type' => 'nullable|in:customer,dealer,special_dealer',
             'credit_limit' => 'nullable|numeric|min:0',
             'opening_balance' => 'nullable|numeric|min:0',
@@ -340,7 +348,8 @@ class CustomerController extends Controller
 
     public function edit(Customer $customer)
     {
-        return view('customers.edit', compact('customer'));
+        $districts = \App\Models\District::orderBy('name')->pluck('name');
+        return view('customers.edit', compact('customer', 'districts'));
     }
 
     public function update(Request $request, Customer $customer)
@@ -351,6 +360,8 @@ class CustomerController extends Controller
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
             'address' => 'nullable|string',
+            'district' => 'nullable|string|max:255',
+            'company' => 'nullable|string|max:255',
             'customer_type' => 'nullable|in:customer,dealer,special_dealer',
             'credit_limit' => 'nullable|numeric|min:0',
             'opening_balance' => 'nullable|numeric|min:0',

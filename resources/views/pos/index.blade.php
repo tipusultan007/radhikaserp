@@ -40,7 +40,7 @@
                                      <label class="form-label">Customer <span class="text-danger">*</span></label>
                                      <div class="d-flex">
                                          <select name="customer_id" id="customer_id" class="form-control select2" data-toggle="select2" required style="width: 100%;">
-                                             <option value="">Walk-in / Select Customer</option>
+                                             <option value="">--Select Customer--</option>
                                              @foreach($customers as $customer)
                                                  <option value="{{ $customer->id }}" data-customer-type="{{ $customer->customer_type }}">{{ $customer->name }} (Wallet: {{ $customer->wallet_balance }}, Due: {{ $customer->total_due }})</option>
                                              @endforeach
