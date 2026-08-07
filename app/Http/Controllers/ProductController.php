@@ -45,6 +45,7 @@ class ProductController extends Controller
             'variants.*.unit_qty' => 'required|numeric|min:0',
             'variants.*.unit_id' => 'required|exists:units,id',
             'variants.*.price' => 'nullable|numeric|min:0',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
         $validated['status'] = $request->has('status');
@@ -53,6 +54,11 @@ class ProductController extends Controller
             $sku = 'PRD-' . strtoupper(\Illuminate\Support\Str::random(6));
         } while (\App\Models\Product::where('sku', $sku)->exists());
         $validated['sku'] = $sku;
+
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('products', 'public');
+            $validated['image_path'] = $path;
+        }
 
         $product = Product::create($validated);
 
@@ -90,9 +96,19 @@ class ProductController extends Controller
             'type' => 'required|in:raw,finished',
             'unit_id' => 'required|exists:units,id',
             'status' => 'nullable|boolean',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
         $validated['status'] = $request->has('status');
+
+        if ($request->hasFile('image')) {
+            // Delete old image if exists
+            if ($product->image_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($product->image_path)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($product->image_path);
+            }
+            $path = $request->file('image')->store('products', 'public');
+            $validated['image_path'] = $path;
+        }
 
         $product->update($validated);
 

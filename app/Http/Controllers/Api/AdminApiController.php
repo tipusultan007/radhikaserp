@@ -117,6 +117,7 @@ class AdminApiController extends Controller
             'variants.*.unit_qty' => 'required|numeric|min:0',
             'variants.*.unit_id' => 'required|exists:units,id',
             'variants.*.price' => 'nullable|numeric|min:0',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
         $validated['status'] = $request->has('status') && $request->status;
 
@@ -124,6 +125,11 @@ class AdminApiController extends Controller
             $sku = 'PRD-' . strtoupper(\Illuminate\Support\Str::random(6));
         } while (Product::where('sku', $sku)->exists());
         $validated['sku'] = $sku;
+
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('products', 'public');
+            $validated['image_path'] = $path;
+        }
 
         $product = Product::create($validated);
         
@@ -155,8 +161,17 @@ class AdminApiController extends Controller
             'type' => 'required|in:raw,finished',
             'unit_id' => 'required|exists:units,id',
             'status' => 'nullable|boolean',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
         $validated['status'] = $request->has('status') && $request->status;
+
+        if ($request->hasFile('image')) {
+            if ($product->image_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($product->image_path)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($product->image_path);
+            }
+            $path = $request->file('image')->store('products', 'public');
+            $validated['image_path'] = $path;
+        }
 
         $product->update($validated);
         return response()->json(['message' => 'Product updated', 'product' => $product]);
@@ -3663,11 +3678,11 @@ class AdminApiController extends Controller
     {
         $rawBatches = \App\Models\Batch::whereHas('product', function($q) {
             $q->where('type', 'raw');
-        })->whereNull('product_variant_id')->with(['product', 'warehouse'])->where('remaining_qty', '>', 0)->get();
+        })->whereNull('product_variant_id')->with(['product.unit', 'warehouse'])->where('remaining_qty', '>', 0)->get();
 
         $standaloneBatches = \App\Models\Batch::whereHas('product', function($q) {
             $q->where('type', 'finished');
-        })->whereNull('product_variant_id')->with(['product', 'warehouse'])->where('remaining_qty', '>', 0)->get();
+        })->whereNull('product_variant_id')->with(['product.unit', 'warehouse'])->where('remaining_qty', '>', 0)->get();
 
         $packagedBatches = \App\Models\Batch::whereNotNull('product_variant_id')->with(['productVariant.product', 'warehouse'])->where('remaining_qty', '>', 0)->get();
 
@@ -3762,5 +3777,110 @@ class AdminApiController extends Controller
             'entries' => $entries,
         ]);
     }
-}
+    private function consumeStockForSale(Sale $sale, $journalId = null, $userId = 1)
+    {
+        $hasTransactions = \App\Models\InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->exists();
+        if ($hasTransactions) return;
 
+        $totalCogs = 0;
+        $items = \App\Models\SaleItem::where('sale_id', $sale->id)->get();
+        
+        $groupedItems = [];
+        foreach ($items as $item) {
+            if (!isset($groupedItems[$item->product_variant_id])) {
+                $groupedItems[$item->product_variant_id] = [
+                    'qty' => 0,
+                    'unit_price' => $item->unit_price,
+                    'total_weight' => 0
+                ];
+            }
+            $groupedItems[$item->product_variant_id]['qty'] += $item->qty;
+            $groupedItems[$item->product_variant_id]['total_weight'] += $item->total_weight;
+        }
+
+        \App\Models\SaleItem::where('sale_id', $sale->id)->delete();
+
+        foreach ($groupedItems as $variantId => $data) {
+            $itemQty = $data['qty'];
+            $unitPrice = $data['unit_price'];
+            $variant = \App\Models\ProductVariant::find($variantId);
+            $unitQty = $variant ? $variant->getBaseQuantity() : 1;
+            
+            $batches = \App\Models\Batch::where('product_variant_id', $variantId)
+                ->where('warehouse_id', $sale->warehouse_id)
+                ->where('remaining_qty', '>', 0)
+                ->orderBy('id', 'asc')
+                ->lockForUpdate()
+                ->get();
+
+            $remainingToConsume = $itemQty;
+
+            foreach ($batches as $batch) {
+                if ($remainingToConsume <= 0) break;
+
+                $takeQty = min($batch->remaining_qty, $remainingToConsume);
+                $cogsForThisTake = $takeQty * $batch->cost_per_unit;
+
+                $batch->qty_out += $takeQty;
+                $batch->remaining_qty -= $takeQty;
+                $batch->save();
+
+                $totalCogs += $cogsForThisTake;
+                $remainingToConsume -= $takeQty;
+
+                \App\Models\SaleItem::create([
+                    'sale_id' => $sale->id,
+                    'product_variant_id' => $variantId,
+                    'batch_id' => $batch->id,
+                    'qty' => $takeQty,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $takeQty * $unitPrice,
+                    'total_weight' => $takeQty * $unitQty,
+                ]);
+
+                \App\Models\InventoryTransaction::create([
+                    'warehouse_id' => $sale->warehouse_id,
+                    'product_id' => $batch->product_id,
+                    'product_variant_id' => $variantId,
+                    'batch_id' => $batch->id,
+                    'type' => 'sale',
+                    'qty_in' => 0,
+                    'qty_out' => $takeQty,
+                    'cost' => $cogsForThisTake,
+                    'reference_type' => Sale::class,
+                    'reference_id' => $sale->id,
+                    'date' => $sale->dispatched_at ?? $sale->date,
+                    'created_by' => $userId,
+                ]);
+            }
+
+            if (round($remainingToConsume, 4) > 0) {
+                throw new \Exception("Insufficient finished stock for variant ID: {$variantId}. Shortfall: " . $remainingToConsume);
+            }
+        }
+
+        if ($totalCogs > 0) {
+            $journal = \App\Models\Journal::find($journalId);
+            if (!$journal) {
+                $journal = \App\Models\Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->first();
+            }
+            if ($journal) {
+                $inventoryFinAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
+                $cogsAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Cost of Goods Sold', 'type' => 'expense']);
+                
+                \App\Models\JournalEntry::create([
+                    'journal_id' => $journal->id,
+                    'account_id' => $cogsAcc->id,
+                    'type' => 'debit',
+                    'amount' => $totalCogs,
+                ]);
+                \App\Models\JournalEntry::create([
+                    'journal_id' => $journal->id,
+                    'account_id' => $inventoryFinAcc->id,
+                    'type' => 'credit',
+                    'amount' => $totalCogs,
+                ]);
+            }
+        }
+    }
+}

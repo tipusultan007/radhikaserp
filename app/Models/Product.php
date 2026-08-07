@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 
-#[Fillable(['name', 'sku', 'type', 'base_unit', 'unit_id', 'status'])]
+#[Fillable(['name', 'sku', 'type', 'base_unit', 'unit_id', 'status', 'image_path'])]
 class Product extends Model
 {
     use HasFactory;
@@ -25,4 +25,11 @@ class Product extends Model
     {
         return $this->belongsTo(Unit::class);
     }
+
+    public function getImageUrlAttribute()
+    {
+        return $this->image_path ? asset('storage/' . $this->image_path) : null;
+    }
+
+    protected $appends = ['image_url'];
 }

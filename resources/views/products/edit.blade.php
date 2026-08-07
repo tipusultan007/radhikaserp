@@ -34,13 +34,24 @@
                              </div>
                          @endif
 
-                         <form action="{{ route('products.update', $product->id) }}" method="POST">
+                         <form action="{{ route('products.update', $product->id) }}" method="POST" enctype="multipart/form-data">
                              @csrf
                              @method('PUT')
 
                              <div class="mb-3">
                                  <label for="name" class="form-label">Product Name <span class="text-danger">*</span></label>
                                  <input type="text" id="name" name="name" class="form-control" value="{{ old('name', $product->name) }}" required>
+                             </div>
+
+                             <div class="mb-3">
+                                 <label for="image" class="form-label">Product Image</label>
+                                 @if($product->image_url)
+                                     <div class="mb-2">
+                                         <img src="{{ $product->image_url }}" alt="Product Image" class="img-thumbnail" style="max-height: 100px;">
+                                     </div>
+                                 @endif
+                                 <input type="file" id="image" name="image" class="form-control" accept="image/jpeg,image/png,image/webp">
+                                 <small class="text-muted">Max size: 2MB. Allowed formats: JPG, PNG, WEBP. Leave empty to keep current image.</small>
                              </div>
 
 

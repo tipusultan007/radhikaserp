@@ -61,16 +61,40 @@ class AccountingApiController extends Controller
         }
 
         $account = ChartOfAccount::findOrFail($accountId);
+        $filterDate = $request->input('date');
 
-        $entries = JournalEntry::with(['journal'])
+        // Base query for all entries
+        $query = JournalEntry::with(['journal'])
             ->where('account_id', $accountId)
             ->join('journals', 'journal_entries.journal_id', '=', 'journals.id')
-            ->orderBy('journals.date', 'asc')
+            ->select('journal_entries.*', 'journals.date as journal_date');
+
+        $openingBalance = $account->opening_balance;
+
+        if ($filterDate) {
+            // Calculate opening balance before filterDate
+            $pastEntries = JournalEntry::where('account_id', $accountId)
+                ->join('journals', 'journal_entries.journal_id', '=', 'journals.id')
+                ->whereDate('journals.date', '<', $filterDate)
+                ->get();
+                
+            foreach ($pastEntries as $pe) {
+                if (in_array($account->type, ['asset', 'expense'])) {
+                    $openingBalance += ($pe->type === 'debit' ? $pe->amount : -$pe->amount);
+                } else {
+                    $openingBalance += ($pe->type === 'credit' ? $pe->amount : -$pe->amount);
+                }
+            }
+
+            // Filter main query for the date
+            $query->whereDate('journals.date', '=', $filterDate);
+        }
+
+        $entries = $query->orderBy('journals.date', 'asc')
             ->orderBy('journals.id', 'asc')
-            ->select('journal_entries.*')
             ->get();
 
-        $runningBalance = $account->opening_balance;
+        $runningBalance = $openingBalance;
         $ledger = [];
 
         foreach ($entries as $entry) {
@@ -104,9 +128,9 @@ class AccountingApiController extends Controller
 
         return response()->json([
             'account' => $account,
-            'opening_balance' => $account->opening_balance,
+            'opening_balance' => $openingBalance,
             'current_balance' => $runningBalance,
-            'ledger' => $ledger
+            'ledger' => $ledger,
         ]);
     }
 

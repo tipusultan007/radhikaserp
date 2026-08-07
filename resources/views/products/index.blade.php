@@ -60,6 +60,7 @@
                              <table class="table table-centered table-hover mb-0">
                                  <thead class="table-light">
                                      <tr>
+                                         <th>Image</th>
                                          <th>Name</th>
                                          <th>SKU</th>
                                          <th>Type</th>
@@ -71,6 +72,15 @@
                                  <tbody>
                                      @forelse ($products as $product)
                                          <tr>
+                                             <td>
+                                                 @if($product->image_url)
+                                                     <img src="{{ $product->image_url }}" alt="Product Image" class="img-thumbnail" style="width: 40px; height: 40px; object-fit: cover;">
+                                                 @else
+                                                     <div class="bg-light d-flex align-items-center justify-content-center text-muted border" style="width: 40px; height: 40px; border-radius: 4px;">
+                                                         <i class="ri-image-line"></i>
+                                                     </div>
+                                                 @endif
+                                             </td>
                                              <td><strong>{{ $product->name }}</strong></td>
                                              <td><span class="badge bg-light text-dark">{{ $product->sku }}</span></td>
                                              <td>
