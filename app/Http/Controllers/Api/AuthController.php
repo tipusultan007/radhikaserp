@@ -26,8 +26,8 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // Delete previous admin tokens to prevent database bloat
-        $user->tokens()->where('name', 'admin-token')->delete();
+        // Prune old admin tokens (> 30 days) to prevent database bloat while supporting multi-device login
+        $user->tokens()->where('name', 'admin-token')->where('created_at', '<', now()->subDays(30))->delete();
 
         $token = $user->createToken('admin-token')->plainTextToken;
 
@@ -65,8 +65,8 @@ class AuthController extends Controller
             ], 403);
         }
 
-        // Delete previous customer tokens to prevent database bloat
-        $customer->tokens()->where('name', 'customer-token')->delete();
+        // Prune old customer tokens (> 30 days) to prevent database bloat while supporting multi-device login
+        $customer->tokens()->where('name', 'customer-token')->where('created_at', '<', now()->subDays(30))->delete();
 
         // Customers can also use Sanctum if we add HasApiTokens to Customer model
         $token = $customer->createToken('customer-token')->plainTextToken;

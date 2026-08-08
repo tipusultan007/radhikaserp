@@ -105,7 +105,7 @@ class CustomerController extends Controller
             'phone' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
-            'address' => 'nullable|string',
+            'address' => 'required|string',
             'customer_type' => 'nullable|in:customer,dealer,special_dealer',
         ]);
 
@@ -150,7 +150,7 @@ class CustomerController extends Controller
             'phone' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
-            'address' => 'nullable|string',
+            'address' => 'required|string',
             'district' => 'nullable|string|max:255',
             'company' => 'nullable|string|max:255',
             'customer_type' => 'nullable|in:customer,dealer,special_dealer',
@@ -359,7 +359,7 @@ class CustomerController extends Controller
             'phone' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
-            'address' => 'nullable|string',
+            'address' => 'required|string',
             'district' => 'nullable|string|max:255',
             'company' => 'nullable|string|max:255',
             'customer_type' => 'nullable|in:customer,dealer,special_dealer',

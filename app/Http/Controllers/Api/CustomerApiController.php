@@ -37,6 +37,7 @@ class CustomerApiController extends Controller
             'items.*.unit_price' => 'required|numeric|min:0',
             'delivery_method' => 'nullable|string|in:manual,pickup,own_delivery,steadfast',
             'delivery_type' => 'nullable|integer|in:0,1',
+            'shipping_address' => 'required|string',
         ]);
 
         $customer = $request->user();
@@ -155,7 +156,7 @@ class CustomerApiController extends Controller
 
             return response()->json([
                 'message' => 'Order created successfully.',
-                'order' => $sale->load('items.productVariant')
+                'order' => $sale->load('items.productVariant.product')
             ], 201);
 
         } catch (\Exception $e) {
