@@ -54,18 +54,27 @@ class AdminApiController extends Controller
             $unreadCount = $request->user()->unreadNotifications()->count();
         }
 
-        // 7-day revenue/expense chart data
+        // 7-day revenue/expense chart data optimized (avoid N+1 queries in loop)
+        $sevenDaysAgo = \Carbon\Carbon::now()->subDays(6)->format('Y-m-d');
+        
+        $salesData = Sale::where('date', '>=', $sevenDaysAgo)
+            ->selectRaw('DATE(date) as date_val, SUM(total) as total_sum')
+            ->groupBy('date_val')
+            ->pluck('total_sum', 'date_val');
+
+        $expensesData = Expense::where('date', '>=', $sevenDaysAgo)
+            ->selectRaw('DATE(date) as date_val, SUM(amount) as total_sum')
+            ->groupBy('date_val')
+            ->pluck('total_sum', 'date_val');
+
         $chartData = [];
         for ($i = 6; $i >= 0; $i--) {
             $date = \Carbon\Carbon::now()->subDays($i)->format('Y-m-d');
             
-            $revenue = Sale::whereDate('date', $date)->sum('total');
-            $expense = Expense::whereDate('date', $date)->sum('amount');
-            
             $chartData[] = [
                 'date' => \Carbon\Carbon::now()->subDays($i)->format('M d'),
-                'revenue' => $revenue,
-                'expense' => $expense,
+                'revenue' => $salesData->get($date, 0),
+                'expense' => $expensesData->get($date, 0),
             ];
         }
 

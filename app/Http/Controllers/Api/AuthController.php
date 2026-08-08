@@ -26,6 +26,9 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // Delete previous admin tokens to prevent database bloat
+        $user->tokens()->where('name', 'admin-token')->delete();
+
         $token = $user->createToken('admin-token')->plainTextToken;
 
         return response()->json([
@@ -61,6 +64,9 @@ class AuthController extends Controller
                 'message' => 'Only Dealers and Special Dealers are allowed to login.'
             ], 403);
         }
+
+        // Delete previous customer tokens to prevent database bloat
+        $customer->tokens()->where('name', 'customer-token')->delete();
 
         // Customers can also use Sanctum if we add HasApiTokens to Customer model
         $token = $customer->createToken('customer-token')->plainTextToken;

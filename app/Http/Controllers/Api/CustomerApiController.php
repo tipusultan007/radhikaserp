@@ -17,7 +17,7 @@ class CustomerApiController extends Controller
      */
     public function products()
     {
-        $products = Product::with(['variants' => function ($query) {
+        $products = Product::with(['unit', 'variants' => function ($query) {
             $query->where('status', true)->with('unit');
         }])->where('status', true)->get();
 
@@ -292,13 +292,23 @@ class CustomerApiController extends Controller
         $arId = $arAcc ? $arAcc->id : 0;
         $advId = $advAcc ? $advAcc->id : 0;
 
+        $saleIds = $customer->sales->pluck('id');
         $journals = \App\Models\Journal::with(['entries', 'reference'])
             ->where(function($q) use ($customer) {
                 $q->where('reference_type', \App\Models\Customer::class)->where('reference_id', $customer->id);
-            })->orWhere(function($q) use ($customer) {
-                $q->where('reference_type', \App\Models\Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
+            })->orWhere(function($q) use ($saleIds) {
+                $q->where('reference_type', \App\Models\Sale::class)->whereIn('reference_id', $saleIds);
             })
             ->get();
+
+        $initialPayments = \App\Models\SalePayment::whereIn('sale_id', $saleIds)
+            ->where(function($q) {
+                $q->whereNull('reference')
+                  ->orWhereIn('reference', ['POS Payment', 'Wallet Payment']);
+            })
+            ->selectRaw('sale_id, SUM(amount) as total_amount')
+            ->groupBy('sale_id')
+            ->pluck('total_amount', 'sale_id');
 
         $ledgerEntries = collect();
         $runningBalance = 0;
@@ -320,12 +330,7 @@ class CustomerApiController extends Controller
                     ]);
                 }
 
-                $initialPaymentAmount = \App\Models\SalePayment::where('sale_id', $sale->id)
-                    ->where(function($q) {
-                        $q->whereNull('reference')
-                          ->orWhereIn('reference', ['POS Payment', 'Wallet Payment']);
-                    })
-                    ->sum('amount');
+                $initialPaymentAmount = $initialPayments->get($sale->id, 0);
 
                 $hasJournal = $journals->contains(function($j) use ($sale) {
                     return str_contains($j->notes, 'Payment for POS Sale ' . $sale->invoice_no);
