@@ -23,28 +23,44 @@ class WebhookController extends Controller
 
         $consignmentId = $request->input('consignment_id');
         $status = $request->input('status');
+        $trackingMessage = $request->input('tracking_message');
 
         Log::info('Steadfast Webhook Received', $request->all());
 
-        if (!$consignmentId || !$status) {
-            return response()->json(['error' => 'Missing consignment_id or status'], 400);
+        if (!$consignmentId || (!$status && !$trackingMessage)) {
+            Log::info('Steadfast Webhook ignored: Missing consignment_id or both status/tracking_message', $request->all());
+            return response()->json(['error' => 'Missing consignment_id or status/tracking_message'], 400);
         }
 
         // Find the sale with this consignment_id
         $sale = Sale::where('consignment_id', $consignmentId)->first();
 
         if (!$sale) {
+            Log::warning("Steadfast Webhook failed: Sale not found for consignment_id {$consignmentId}");
             return response()->json(['error' => 'Sale not found'], 404);
         }
 
-        // Map Steadfast status to our delivery_status
-        $newStatus = $this->mapSteadfastStatus($status);
+        if ($status) {
+            // Map Steadfast status to our delivery_status
+            $newStatus = $this->mapSteadfastStatus($status);
 
-        if ($newStatus) {
-            $sale->delivery_status = $newStatus;
-            $sale->save();
-            Log::info("Sale #{$sale->invoice_no} delivery_status updated to {$newStatus}");
+            if ($newStatus) {
+                $sale->delivery_status = $newStatus;
+                Log::info("Sale #{$sale->invoice_no} delivery_status updated to {$newStatus}");
+            }
         }
+
+        if ($trackingMessage) {
+            $updates = $sale->tracking_updates ?? [];
+            $updates[] = [
+                'status' => $status ?? 'tracking_update',
+                'message' => $trackingMessage,
+                'date' => now()->toDateTimeString()
+            ];
+            $sale->tracking_updates = $updates;
+        }
+
+        $sale->save();
 
         return response()->json(['message' => 'Status updated successfully']);
     }

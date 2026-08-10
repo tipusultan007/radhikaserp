@@ -24,25 +24,36 @@
                         <thead>
                             <tr>
                                 <th>Product</th>
-                                <th>Batch No</th>
                                 <th>Warehouse</th>
-                                <th>Remaining Qty</th>
-                                <th>Unit Cost</th>
-                                <th>Total Value</th>
+                                <th>Qty</th>
+                                <th>Cost (৳)</th>
+                                <th>Value (৳)</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($rawBatches as $batch)
-                            <tr>
-                                <td>{{ $batch->product->name }}</td>
-                                <td>{{ $batch->batch_no }}</td>
-                                <td>{{ $batch->warehouse->name ?? 'N/A' }}</td>
-                                <td>{{ number_format($batch->remaining_qty, 3) }} {{ $batch->product->base_unit }}</td>
-                                <td>${{ number_format($batch->cost_per_unit, 0) }}</td>
-                                <td>${{ number_format($batch->remaining_qty * $batch->cost_per_unit, 0) }}</td>
-                            </tr>
+                            @foreach($rawBatches->groupBy(fn($b) => $b->product?->name ?? 'Unknown Product') as $productName => $batches)
+                                <tr class="table-light">
+                                    <td colspan="5" class="fw-bold text-primary">{{ $productName }}</td>
+                                </tr>
+                                @foreach($batches as $batch)
+                                <tr>
+                                    <td class="ps-4"><span class="text-muted fs-10">Batch: {{ $batch->batch_no }}</span></td>
+                                    <td>{{ $batch->warehouse?->name ?? 'N/A' }}</td>
+                                    <td>{{ number_format($batch->remaining_qty, 2) }} {{ $batch->product?->base_unit ?? '' }}</td>
+                                    <td>{{ number_format($batch->cost_per_unit, 0) }}</td>
+                                    <td>{{ number_format($batch->remaining_qty * $batch->cost_per_unit, 0) }}</td>
+                                </tr>
+                                @endforeach
                             @endforeach
                         </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="2" class="text-end">Total</th>
+                                <th>{{ number_format($rawBatches->sum('remaining_qty'), 2) }}</th>
+                                <th></th>
+                                <th>{{ number_format($rawBatches->sum(function($batch) { return $batch->remaining_qty * $batch->cost_per_unit; }), 0) }}</th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -60,27 +71,38 @@
                 <div class="table-responsive">
                     <table class="table table-bordered table-sm datatable">
                         <thead>
-                            <tr>
+                            <tr>    
                                 <th>Product</th>
-                                <th>Batch No</th>
                                 <th>Warehouse</th>
-                                <th>Remaining Qty</th>
-                                <th>Unit Cost</th>
-                                <th>Total Value</th>
+                                <th>Qty</th>
+                                <th>Cost (৳)</th>
+                                <th>Value (৳)</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($standaloneBatches as $batch)
-                            <tr>
-                                <td>{{ $batch->product->name }}</td>
-                                <td>{{ $batch->batch_no }}</td>
-                                <td>{{ $batch->warehouse->name ?? 'N/A' }}</td>
-                                <td>{{ number_format($batch->remaining_qty, 3) }} {{ $batch->product->base_unit }}</td>
-                                <td>${{ number_format($batch->cost_per_unit, 0) }}</td>
-                                <td>${{ number_format($batch->remaining_qty * $batch->cost_per_unit, 0) }}</td>
-                            </tr>
+                            @foreach($standaloneBatches->groupBy(fn($b) => $b->product?->name ?? 'Unknown Product') as $productName => $batches)
+                                <tr class="table-light">
+                                    <td colspan="5" class="fw-bold text-primary">{{ $productName }}</td>
+                                </tr>
+                                @foreach($batches as $batch)
+                                <tr>
+                                    <td class="ps-4"><span class="text-muted fs-10">Batch: {{ $batch->batch_no }}</span></td>
+                                    <td>{{ $batch->warehouse?->name ?? 'N/A' }}</td>
+                                    <td>{{ number_format($batch->remaining_qty, 3) }} {{ $batch->product?->base_unit ?? '' }}</td>
+                                    <td>{{ number_format($batch->cost_per_unit, 0) }}</td>
+                                    <td>{{ number_format($batch->remaining_qty * $batch->cost_per_unit, 0) }}</td>
+                                </tr>
+                                @endforeach
                             @endforeach
                         </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="2" class="text-end">Total</th>
+                                <th>{{ number_format($standaloneBatches->sum('remaining_qty'), 3) }}</th>
+                                <th></th>
+                                <th>{{ number_format($standaloneBatches->sum(function($batch) { return $batch->remaining_qty * $batch->cost_per_unit; }), 0) }}</th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -100,27 +122,41 @@
                         <thead>
                             <tr>
                                 <th>Product - Variant</th>
-                                <th>Batch No</th>
                                 <th>Warehouse</th>
-                                <th>Unit Count</th>
-                                <th>Total Weight</th>
-                                <th>Unit Cost</th>
-                                <th>Total Value</th>
+                                <th>Qty</th>
+                                <th>Weight</th>
+                                <th>Cost (৳)</th>
+                                <th>Value (৳)</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($packagedBatches as $batch)
-                            <tr>
-                                <td>{{ $batch->productVariant->product->name }} - {{ $batch->productVariant->name }}</td>
-                                <td>{{ $batch->batch_no }}</td>
-                                <td>{{ $batch->warehouse->name ?? 'N/A' }}</td>
-                                <td>{{ number_format($batch->remaining_qty, 2) }} {{ $batch->productVariant->unit_type }}</td>
-                                <td>{{ number_format($batch->remaining_qty * $batch->productVariant->unit_qty, 2) }} {{ $batch->productVariant->product->base_unit }}</td>
-                                <td>${{ number_format($batch->cost_per_unit, 0) }}</td>
-                                <td>${{ number_format($batch->remaining_qty * $batch->cost_per_unit, 0) }}</td>
-                            </tr>
+                            @foreach($packagedBatches->groupBy(fn($b) => $b->productVariant?->product?->name ?? 'Unknown Product') as $productName => $batches)
+                                <tr class="table-light">
+                                    <td colspan="6" class="fw-bold text-primary">{{ $productName }}</td>
+                                </tr>
+                                @foreach($batches as $batch)
+                                <tr>
+                                    <td class="ps-4">{{ $batch->productVariant?->name ?? 'Unknown Variant' }}
+                                        <br><span class="text-muted fs-10">Batch: {{ $batch->batch_no }}</span>
+                                    </td>
+                                    <td>{{ $batch->warehouse?->name ?? 'N/A' }}</td>
+                                    <td>{{ number_format($batch->remaining_qty, 2) }} {{ $batch->productVariant?->unit_type ?? '' }}</td>
+                                    <td>{{ number_format($batch->remaining_qty * ($batch->productVariant?->unit_qty ?? 1), 2) }} {{ $batch->productVariant?->product?->base_unit ?? '' }}</td>
+                                    <td>{{ number_format($batch->cost_per_unit, 0) }}</td>
+                                    <td>{{ number_format($batch->remaining_qty * $batch->cost_per_unit, 0) }}</td>
+                                </tr>
+                                @endforeach
                             @endforeach
                         </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="2" class="text-end">Total</th>
+                                <th>{{ number_format($packagedBatches->sum('remaining_qty'), 2) }}</th>
+                                <th>{{ number_format($packagedBatches->sum(function($batch) { return $batch->remaining_qty * ($batch->productVariant?->unit_qty ?? 1); }), 2) }}</th>
+                                <th></th>
+                                <th> {{ number_format($packagedBatches->sum(function($batch) { return $batch->remaining_qty * $batch->cost_per_unit; }), 0) }}</th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -132,7 +168,10 @@
 @push('scripts')
 <script>
 $(document).ready(function() {
-    $('.datatable').DataTable();
+    $('.datatable').DataTable({
+        ordering: false,
+        pageLength: 50
+    });
 });
 </script>
 @endpush

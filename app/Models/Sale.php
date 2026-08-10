@@ -48,7 +48,8 @@ class Sale extends Model
         'paid_amount' => 'decimal:2',
         'due_amount' => 'decimal:2',
         'total_weight' => 'decimal:3',
-        'date' => 'date'
+        'date' => 'date',
+        'tracking_updates' => 'array'
     ];
 
     public function customer()
@@ -59,6 +60,11 @@ class Sale extends Model
     public function warehouse()
     {
         return $this->belongsTo(Warehouse::class);
+    }
+
+    public function activities()
+    {
+        return $this->morphMany(\App\Models\ActivityLog::class, 'reference')->latest();
     }
 
     public function creator()

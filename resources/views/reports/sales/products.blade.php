@@ -43,20 +43,32 @@
                                 <th>Product Name</th>
                                 <th>Variant</th>
                                 <th>Quantity Sold</th>
+                                <th>Total Weight (kg)</th>
                                 <th>Total Revenue</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($productData as $item)
-                            <tr>
-                                <td><strong>{{ $item['product_name'] }}</strong></td>
-                                <td>{{ $item['variant_name'] }}</td>
-                                <td>{{ number_format($item['qty_sold'], 0) }}</td>
-                                <td class="text-success fw-bold">{{ number_format($item['revenue'], 0) }}</td>
-                            </tr>
+                            @forelse($productData as $product)
+                                <!-- Parent Row -->
+                                <tr class="table-secondary fw-bold">
+                                    <td colspan="2">{{ $product['product_name'] }}</td>
+                                    <td>{{ number_format($product['total_qty'], 0) }}</td>
+                                    <td>{{ number_format($product['total_weight'], 3) }}</td>
+                                    <td class="text-success">{{ number_format($product['total_revenue'], 0) }}</td>
+                                </tr>
+                                <!-- Variant Rows -->
+                                @foreach($product['variants'] as $variant)
+                                <tr>
+                                    <td></td>
+                                    <td><i class="ri-corner-down-right-line text-muted ms-2"></i> {{ $variant['variant_name'] }}</td>
+                                    <td>{{ number_format($variant['qty_sold'], 0) }}</td>
+                                    <td>{{ number_format($variant['weight'], 3) }}</td>
+                                    <td class="text-success">{{ number_format($variant['revenue'], 0) }}</td>
+                                </tr>
+                                @endforeach
                             @empty
                             <tr>
-                                <td colspan="4" class="text-center text-muted">No product sales found for this period.</td>
+                                <td colspan="5" class="text-center text-muted">No product sales found for this period.</td>
                             </tr>
                             @endforelse
                         </tbody>

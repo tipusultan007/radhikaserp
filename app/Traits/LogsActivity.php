@@ -16,7 +16,24 @@ trait LogsActivity
         });
 
         static::updated(function ($model) {
-            $model->logActivity('updated', "Updated {$model->getModelName()} record");
+            $dirty = $model->getDirty();
+            if (empty($dirty)) return;
+            
+            $changes = [];
+            foreach ($dirty as $key => $value) {
+                if (in_array($key, ['updated_at', 'created_at'])) continue;
+                
+                $valStr = is_array($value) ? json_encode($value) : $value;
+                $changes[] = "{$key} changed to '{$valStr}'";
+            }
+            
+            if (!empty($changes)) {
+                $desc = "Updated {$model->getModelName()}: " . implode(', ', $changes);
+                if (strlen($desc) > 255) {
+                    $desc = substr($desc, 0, 252) . '...';
+                }
+                $model->logActivity('updated', $desc);
+            }
         });
 
         static::deleted(function ($model) {

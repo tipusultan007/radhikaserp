@@ -30,38 +30,44 @@
                                 <th>Warehouse</th>
                                 <th>Type</th>
                                 <th>Product / Variant</th>
-                                <th>Calculated Qty</th>
+                                <th>Stock Qty</th>
                                 <th>Total Weight</th>
-                                <th>Est. Total Value</th>
+                                <th>Est. Total Value (৳)</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($stock as $item)
-                            <tr>
-                                <td>{{ $item['warehouse'] }}</td>
-                                <td>
-                                    @if($item['type'] == 'raw')
-                                        <span class="badge bg-secondary">Raw</span>
-                                    @else
-                                        <span class="badge bg-success">Finished</span>
-                                    @endif
-                                </td>
-                                <td>
-                                    {{ $item['product_name'] }} 
-                                    @if($item['variant_name'] !== 'N/A')
-                                        - {{ $item['variant_name'] }}
-                                    @endif
-                                </td>
-                                <td>{{ number_format($item['qty'], 2) }} {{ $item['unit'] }}</td>
-                                <td>
-                                    @if($item['variant_name'] !== 'N/A' && !empty($item['variant_unit_qty']))
-                                        {{ number_format($item['qty'] * $item['variant_unit_qty'], 2) }} {{ $item['base_unit'] }}
-                                    @else
-                                        {{ number_format($item['qty'], 2) }} {{ $item['base_unit'] }}
-                                    @endif
-                                </td>
-                                <td>${{ number_format($item['value'], 0) }}</td>
-                            </tr>
+                            @foreach(collect($stock)->groupBy('product_name') as $productName => $items)
+                                <tr class="table-light">
+                                    <td colspan="6" class="fw-bold text-primary">{{ $productName }}</td>
+                                </tr>
+                                @foreach($items as $item)
+                                <tr>
+                                    <td>{{ $item['warehouse'] }}</td>
+                                    <td>
+                                        @if($item['type'] == 'raw')
+                                            <span class="badge bg-secondary">Raw</span>
+                                        @else
+                                            <span class="badge bg-success">Finished</span>
+                                        @endif
+                                    </td>
+                                    <td class="ps-4">
+                                        @if($item['variant_name'] !== 'N/A')
+                                            - {{ $item['variant_name'] }}
+                                        @else
+                                            Standalone
+                                        @endif
+                                    </td>
+                                    <td>{{ number_format($item['qty'], 2) }} {{ $item['unit'] }}</td>
+                                    <td>
+                                        @if($item['variant_name'] !== 'N/A' && !empty($item['variant_unit_qty']))
+                                            {{ number_format($item['qty'] * $item['variant_unit_qty'], 2) }} {{ $item['base_unit'] }}
+                                        @else
+                                            {{ number_format($item['qty'], 2) }} {{ $item['base_unit'] }}
+                                        @endif
+                                    </td>
+                                    <td>{{ number_format($item['value'], 0) }}</td>
+                                </tr>
+                                @endforeach
                             @endforeach
                         </tbody>
                     </table>
@@ -75,7 +81,10 @@
 @push('scripts')
 <script>
 $(document).ready(function() {
-    $('.datatable').DataTable();
+    $('.datatable').DataTable({
+        ordering: false,
+        pageLength: 50
+    });
 });
 </script>
 @endpush

@@ -44,6 +44,14 @@ class SalePaymentController extends Controller
                 'reference' => 'Invoice Payment',
             ]);
 
+            \App\Models\ActivityLog::create([
+                'user_id' => auth()->id() ?? 1,
+                'action' => 'payment_added',
+                'reference_type' => \App\Models\Sale::class,
+                'reference_id' => $sale->id,
+                'description' => "Added payment of " . number_format($newAmount, 2) . " via {$payment->method}",
+            ]);
+
             // Update Sale
             $sale->paid_amount += $newAmount;
             $sale->due_amount -= $newAmount;
@@ -110,6 +118,14 @@ class SalePaymentController extends Controller
             // Update Payment
             $payment->amount = $newAmount;
             $payment->save();
+
+            \App\Models\ActivityLog::create([
+                'user_id' => auth()->id() ?? 1,
+                'action' => 'payment_updated',
+                'reference_type' => \App\Models\Sale::class,
+                'reference_id' => $sale->id,
+                'description' => "Updated payment amount from " . number_format($oldAmount, 2) . " to " . number_format($newAmount, 2),
+            ]);
 
             // Update Sale
             $sale->paid_amount += $difference;
@@ -191,6 +207,14 @@ class SalePaymentController extends Controller
             // Reverse the payment: Debit AR, Credit Cash
             JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => $amount]);
             JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'credit', 'amount' => $amount]);
+
+            \App\Models\ActivityLog::create([
+                'user_id' => auth()->id() ?? 1,
+                'action' => 'payment_deleted',
+                'reference_type' => \App\Models\Sale::class,
+                'reference_id' => $sale->id,
+                'description' => "Deleted payment of " . number_format($amount, 2),
+            ]);
 
             $payment->delete();
 

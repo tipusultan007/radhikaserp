@@ -294,8 +294,56 @@
                                  <i class="ri-check-line align-middle me-1"></i> Invoice is fully paid.
                              </div>
                          @endif
+                    </div>
+                 </div>
+
+                 <!-- Tracking Timeline -->
+                 @if(!empty($sale->tracking_updates))
+                 <div class="card mt-4">
+                     <div class="card-header bg-light">
+                         <h4 class="card-title mb-0"><i class="ri-flight-takeoff-line me-1"></i> Tracking Updates</h4>
+                     </div>
+                     <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;">
+                         <ul class="list-group list-group-flush">
+                             @foreach(collect($sale->tracking_updates)->sortByDesc('date') as $update)
+                             <li class="list-group-item">
+                                 <div class="d-flex w-100 justify-content-between">
+                                     <h6 class="mb-1 text-primary">{{ ucfirst(str_replace('_', ' ', $update['status'] ?? 'update')) }}</h6>
+                                     <small class="text-muted" style="font-size: 0.75rem;">{{ \Carbon\Carbon::parse($update['date'])->format('d M, h:i A') }}</small>
+                                 </div>
+                                 <p class="mb-1 small">{{ $update['message'] ?? '' }}</p>
+                             </li>
+                             @endforeach
+                         </ul>
                      </div>
                  </div>
+                 @endif
+
+                 <!-- Order Updates History -->
+                 <div class="card mt-4">
+                     <div class="card-header bg-light">
+                         <h4 class="card-title mb-0"><i class="ri-history-line me-1"></i> Order Updates History</h4>
+                     </div>
+                     <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;">
+                         <ul class="list-group list-group-flush">
+                             @forelse($sale->activities as $activity)
+                             <li class="list-group-item">
+                                 <div class="d-flex w-100 justify-content-between">
+                                     <h6 class="mb-1 text-primary">{{ ucfirst(str_replace('_', ' ', $activity->action)) }}</h6>
+                                     <small class="text-muted" style="font-size: 0.75rem;">{{ $activity->created_at->format('d M, h:i A') }}</small>
+                                 </div>
+                                 <p class="mb-1 small">{{ $activity->description }}</p>
+                                 <small class="text-muted" style="font-size: 0.70rem;"><i class="ri-user-line"></i> {{ $activity->user->name ?? 'System' }}</small>
+                             </li>
+                             @empty
+                             <li class="list-group-item text-center text-muted">
+                                 <small>No history found for this order.</small>
+                             </li>
+                             @endforelse
+                         </ul>
+                     </div>
+                 </div>
+
              </div> <!-- end col-lg-4 -->
          </div>
     </div>

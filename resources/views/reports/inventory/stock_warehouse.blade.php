@@ -23,56 +23,72 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Type</th>
-                                <th>Product / Variant</th>
-                                <th>Batch No</th>
-                                <th>Unit Count</th>
-                                <th>Total Weight</th>
-                                <th>Unit Cost</th>
-                                <th>Total Value</th>
+                                <th>Item</th>
+                                <th>Qty</th>
+                                <th>Weight</th>
+                                <th>Cost (৳)</th>
+                                <th>Value (৳)</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($data['raw'] as $batch)
-                            <tr>
-                                <td><span class="badge bg-secondary">Raw Material</span></td>
-                                <td>{{ $batch->product->name }}</td>
-                                <td>{{ $batch->batch_no }}</td>
-                                <td>{{ number_format($batch->remaining_qty, 2) }} {{ $batch->product->base_unit }}</td>
-                                <td>{{ number_format($batch->remaining_qty, 2) }} {{ $batch->product->base_unit }}</td>
-                                <td>${{ number_format($batch->cost_per_unit, 0) }}</td>
-                                <td>${{ number_format($batch->remaining_qty * $batch->cost_per_unit, 0) }}</td>
-                            </tr>
+                            @foreach($data['raw']->groupBy(fn($b) => $b->product->name) as $productName => $batches)
+                                <tr class="table-light">
+                                    <td colspan="6" class="fw-bold text-primary">{{ $productName }} (Raw Material)</td>
+                                </tr>
+                                @foreach($batches as $batch)
+                                <tr>
+                                    <td><span class="badge bg-secondary">Raw Material</span></td>
+                                    <td class="ps-4">
+                                        <span class="text-muted fs-10">Batch: {{ $batch->batch_no }}</span>
+                                    </td>
+                                    <td>{{ number_format($batch->remaining_qty, 2) }} {{ $batch->product->base_unit }}</td>
+                                    <td>{{ number_format($batch->remaining_qty, 2) }} {{ $batch->product->base_unit }}</td>
+                                    <td>{{ number_format($batch->cost_per_unit, 0) }}</td>
+                                    <td>{{ number_format($batch->remaining_qty * $batch->cost_per_unit, 0) }}</td>
+                                </tr>
+                                @endforeach
                             @endforeach
                             
-                            @foreach($data['finished'] as $batch)
-                            <tr>
-                                <td><span class="badge bg-success">Finished Good</span></td>
-                                <td>
-                                    {{ $batch->product->name }}
-                                    @if($batch->productVariant)
-                                        - {{ $batch->productVariant->name }}
-                                    @endif
-                                </td>
-                                <td>{{ $batch->batch_no }}</td>
-                                <td>
-                                    {{ number_format($batch->remaining_qty, 2) }} 
-                                    {{ $batch->productVariant ? $batch->productVariant->unit_type : $batch->product->base_unit }}
-                                </td>
-                                <td>
-                                    @if($batch->productVariant)
-                                        {{ number_format($batch->remaining_qty * $batch->productVariant->unit_qty, 2) }} {{ $batch->productVariant->product->base_unit }}
-                                    @else
-                                        {{ number_format($batch->remaining_qty, 2) }} {{ $batch->product->base_unit }}
-                                    @endif
-                                </td>
-                                <td>${{ number_format($batch->cost_per_unit, 0) }}</td>
-                                <td>${{ number_format($batch->remaining_qty * $batch->cost_per_unit, 0) }}</td>
-                            </tr>
+                            @foreach($data['finished']->groupBy(fn($b) => $b->product->name) as $productName => $batches)
+                                <tr class="table-light">
+                                    <td colspan="6" class="fw-bold text-primary">{{ $productName }} (Finished/Packaged)</td>
+                                </tr>
+                                @foreach($batches as $batch)
+                                <tr>
+                                    <td>
+                                        @if($batch->productVariant)
+                                            <span class="badge bg-info">Packaged Variant</span>
+                                        @else
+                                            <span class="badge bg-success">Finished Product</span>
+                                        @endif
+                                    </td>
+                                    <td class="ps-4">
+                                        @if($batch->productVariant)
+                                            - {{ $batch->productVariant->name }}
+                                        @endif
+                                        <br><span class="text-muted fs-10">Batch: {{ $batch->batch_no }}</span>
+                                    </td>
+                                    
+                                    <td>
+                                        {{ number_format($batch->remaining_qty, 2) }} 
+                                        {{ $batch->productVariant ? $batch->productVariant->unit_type : $batch->product->base_unit }}
+                                    </td>
+                                    <td>
+                                        @if($batch->productVariant)
+                                            {{ number_format($batch->remaining_qty * $batch->productVariant->unit_qty, 2) }} {{ $batch->productVariant->product->base_unit }}
+                                        @else
+                                            {{ number_format($batch->remaining_qty, 2) }} {{ $batch->product->base_unit }}
+                                        @endif
+                                    </td>
+                                    <td>{{ number_format($batch->cost_per_unit, 0) }}</td>
+                                    <td>{{ number_format($batch->remaining_qty * $batch->cost_per_unit, 0) }}</td>
+                                </tr>
+                                @endforeach
                             @endforeach
                             
                             @if(count($data['raw']) == 0 && count($data['finished']) == 0)
                             <tr>
-                                <td colspan="7" class="text-center text-muted">No stock available in this warehouse.</td>
+                                <td colspan="6" class="text-center text-muted">No stock available in this warehouse.</td>
                             </tr>
                             @endif
                         </tbody>

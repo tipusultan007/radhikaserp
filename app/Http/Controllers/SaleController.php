@@ -827,6 +827,14 @@ class SaleController extends Controller
                 $this->consumeStockForSale($sale);
             }
 
+            \App\Models\ActivityLog::create([
+                'user_id' => auth()->id() ?? 1,
+                'action' => 'sale_updated',
+                'reference_type' => \App\Models\Sale::class,
+                'reference_id' => $sale->id,
+                'description' => "Order items and totals were modified by admin.",
+            ]);
+
             DB::commit();
 
             return redirect()->route('sales.index')->with('success', 'Sale updated successfully.');

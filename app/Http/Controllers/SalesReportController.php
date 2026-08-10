@@ -50,29 +50,66 @@ class SalesReportController extends Controller
                     $q->where('customer_id', $customerId);
                 }
             })
-            ->with(['batch.product', 'productVariant'])
+            ->with(['batch.product', 'productVariant.product'])
             ->get();
 
         $productData = [];
         foreach ($items as $item) {
-            $productId = $item->batch ? $item->batch->product_id : 'unknown';
-            $key = $productId . '_' . ($item->product_variant_id ?? 'none');
+            $productId = 'unknown';
+            $productName = 'N/A';
             
-            if (!isset($productData[$key])) {
-                $productData[$key] = [
-                    'product_name' => ($item->batch && $item->batch->product) ? $item->batch->product->name : 'N/A',
+            if ($item->productVariant && $item->productVariant->product) {
+                $productId = $item->productVariant->product_id;
+                $productName = $item->productVariant->product->name;
+            } elseif ($item->batch && $item->batch->product) {
+                $productId = $item->batch->product_id;
+                $productName = $item->batch->product->name;
+            }
+
+            if (!isset($productData[$productId])) {
+                $productData[$productId] = [
+                    'product_name' => $productName,
+                    'total_qty' => 0,
+                    'total_weight' => 0,
+                    'total_revenue' => 0,
+                    'variants' => []
+                ];
+            }
+
+            $variantKey = $item->product_variant_id ?? 'none';
+            
+            if (!isset($productData[$productId]['variants'][$variantKey])) {
+                $productData[$productId]['variants'][$variantKey] = [
                     'variant_name' => $item->productVariant ? $item->productVariant->name : 'N/A',
                     'qty_sold' => 0,
+                    'weight' => 0,
                     'revenue' => 0
                 ];
             }
             
-            $productData[$key]['qty_sold'] += $item->qty;
-            $productData[$key]['revenue'] += $item->subtotal;
+            $qty = $item->qty;
+            
+            $weight = $item->total_weight ?? 0;
+            if (!$weight) {
+                if ($item->productVariant && $item->productVariant->weight) {
+                    $weight = $item->productVariant->weight * $qty;
+                } elseif ($item->batch && $item->batch->product && $item->batch->product->weight) {
+                    $weight = $item->batch->product->weight * $qty;
+                }
+            }
+            
+            $rev = $item->total_price ?? ($item->qty * $item->unit_price);
+            
+            $productData[$productId]['total_qty'] += $qty;
+            $productData[$productId]['total_weight'] += $weight;
+            $productData[$productId]['total_revenue'] += $rev;
+            $productData[$productId]['variants'][$variantKey]['qty_sold'] += $qty;
+            $productData[$productId]['variants'][$variantKey]['weight'] += $weight;
+            $productData[$productId]['variants'][$variantKey]['revenue'] += $rev;
         }
 
         // Sort by revenue descending
-        usort($productData, fn($a, $b) => $b['revenue'] <=> $a['revenue']);
+        usort($productData, fn($a, $b) => $b['total_revenue'] <=> $a['total_revenue']);
 
         $customers = \App\Models\Customer::orderBy('name')->get();
 
