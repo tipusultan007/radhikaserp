@@ -5,116 +5,179 @@
     @include('layouts.shared/title-meta', ['title' => 'Log In'])
     @include('layouts.shared/head-css')
     @vite(['resources/js/head.js'])
+    <style>
+        .login-bg {
+            background: url('https://images.unsplash.com/photo-1557804506-669a67965ba0?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80') center/cover no-repeat;
+            position: relative;
+        }
+        .login-bg::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, rgba(14,42,71,0.9) 0%, rgba(0,69,158,0.8) 100%);
+        }
+        .login-bg-content {
+            position: relative;
+            z-index: 1;
+        }
+        .right-pane {
+            background-color: #f8f9fc;
+        }
+        .login-form-container {
+            max-width: 440px;
+            width: 100%;
+            background-color: #ffffff;
+            border: 1px solid #e9ecef;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+        }
+        .login-logo {
+            max-height: 150px;
+            width: auto;
+        }
+        .modern-label {
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .modern-input {
+            background-color: #ffffff;
+            border: 1px solid #ced4da;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 15px;
+            color: #212529;
+            transition: all 0.2s ease-in-out;
+        }
+        .modern-input:focus {
+            background-color: #ffffff;
+            border-color: #86b7fe;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+            outline: 0;
+        }
+        .input-group-merge .modern-input {
+            border-right: none;
+        }
+        .input-group-merge .input-group-text {
+            background-color: #ffffff;
+            border: 1px solid #ced4da;
+            border-left: none;
+            border-radius: 0 8px 8px 0;
+            padding-right: 16px;
+            color: #6c757d;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        .input-group-merge:focus-within .input-group-text {
+            background-color: #ffffff;
+            border-color: #86b7fe;
+        }
+        .btn-login {
+            background-color: #0d6efd;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.2s ease-in-out;
+        }
+        .btn-login:hover {
+            background-color: #0b5ed7;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+        }
+        .brand-text {
+            font-size: 2.25rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: white;
+            line-height: 1.3;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .form-check-input:checked {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+        }
+    </style>
 </head>
 
-<body class="authentication-bg position-relative">
-    <div class="position-absolute start-0 end-0 start-0 bottom-0 w-100 h-100">
-        <svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:svgjs="http://svgjs.com/svgjs" width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 1920 1024">
-            <g mask="url(&quot;#SvgjsMask1046&quot;)" fill="none">
-                <rect width="1920" height="1024" x="0" y="0" fill="url(#SvgjsLinearGradient1047)"></rect>
-                <path d="M1920 0L1864.16 0L1920 132.5z" fill="rgba(255, 255, 255, .1)"></path>
-                <path d="M1864.16 0L1920 132.5L1920 298.4L1038.6100000000001 0z" fill="rgba(255, 255, 255, .075)"></path>
-                <path d="M1038.6100000000001 0L1920 298.4L1920 379.53999999999996L857.7000000000002 0z" fill="rgba(255, 255, 255, .05)"></path>
-                <path d="M857.7 0L1920 379.53999999999996L1920 678.01L514.57 0z" fill="rgba(255, 255, 255, .025)"></path>
-                <path d="M0 1024L939.18 1024L0 780.91z" fill="rgba(0, 0, 0, .1)"></path>
-                <path d="M0 780.91L939.18 1024L1259.96 1024L0 585.71z" fill="rgba(0, 0, 0, .075)"></path>
-                <path d="M0 585.71L1259.96 1024L1426.79 1024L0 408.19000000000005z" fill="rgba(0, 0, 0, .05)"></path>
-                <path d="M0 408.19000000000005L1426.79 1024L1519.6599999999999 1024L0 404.09000000000003z" fill="rgba(0, 0, 0, .025)"></path>
-            </g>
-            <defs>
-                <mask id="SvgjsMask1046">
-                    <rect width="1920" height="1024" fill="#ffffff"></rect>
-                </mask>
-                <linearGradient x1="11.67%" y1="-21.87%" x2="88.33%" y2="121.88%" gradientUnits="userSpaceOnUse" id="SvgjsLinearGradient1047">
-                    <stop stop-color="#0e2a47" offset="0"></stop>
-                    <stop stop-color="#00459e" offset="1"></stop>
-                </linearGradient>
-            </defs>
-        </svg>
-    </div>
-    <div class="account-pages pt-2 pt-sm-5 pb-4 pb-sm-5 position-relative">
-        <div class="container">
-            <div class="row justify-content-center">
-                <div class="col-xxl-4 col-lg-5">
-                    <div class="card">
+<body class="authentication-bg pb-0">
+    <div class="row g-0 vh-100">
+        <!-- Left Side: Image/Brand -->
+        <div class="col-lg-6 d-none d-lg-flex login-bg align-items-center justify-content-center flex-column text-center px-5">
+            <div class="login-bg-content">
+                <h1 class="brand-text mb-3">Radhikas Trade International</h1>
+                <p class="text-white-50 fs-5 fw-light mt-2">Empowering your business with modern,<br>intelligent ERP solutions.</p>
+            </div>
+        </div>
 
-                        <!-- Logo -->
-                        <div class="card-header pt-4 text-center">
-                            <div class="auth-brand mb-0">
-                                <a href="/" class="text-decoration-none">
-                                    <h3 class="mb-0 text-dark">Radhikas Trade International</h3>
-                                </a>
+        <!-- Right Side: Login Form -->
+        <div class="col-lg-6 col-12 d-flex align-items-center justify-content-center flex-column right-pane px-3">
+            
+            <!-- Logo Above Card -->
+            <div class="mb-4 text-center">
+                <img src="{{ asset('logo.png') }}" alt="Radhikas Trade International" class="login-logo">
+            </div>
+
+            <div class="login-form-container p-4 p-sm-5">
+                <div class="mb-4 text-center">
+                    <h3 class="fw-semibold text-dark mb-2">Sign In</h3>
+                    <p class="text-muted">Enter your email and password to access the admin panel.</p>
+                </div>
+
+                @if ($errors->any())
+                    <div class="alert alert-danger rounded-3 shadow-sm border-0 bg-danger text-white">
+                        <ul class="mb-0 ps-3">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                <form method="POST" action="{{ route('login') }}" class="mt-4">
+                    @csrf
+                    
+                    <div class="mb-4">
+                        <label for="emailaddress" class="modern-label">Email Address</label>
+                        <input class="form-control modern-input" type="email" id="emailaddress" required placeholder="name@example.com" name="email">
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label for="password" class="modern-label mb-0">Password</label>
+                        </div>
+                        <div class="input-group input-group-merge shadow-sm-none">
+                            <input type="password" id="password" class="form-control modern-input" placeholder="Enter your password" name="password" required>
+                            <div class="input-group-text" data-password="false">
+                                <span class="password-eye"></span>
                             </div>
                         </div>
-
-                        <div class="card-body p-4">
-
-                            <div class="text-center w-75 m-auto">
-                                <h4 class="text-dark-50 text-center pb-0">Sign In</h4>
-                                <p class="text-muted mb-4">Enter your email address and password to access admin panel.</p>
-                            </div>
-
-                            @if ($errors->any())
-                                <div class="alert alert-danger">
-                                    <ul class="mb-0">
-                                        @foreach ($errors->all() as $error)
-                                            <li>{{ $error }}</li>
-                                        @endforeach
-                                    </ul>
-                                </div>
-                            @endif
-
-                            <form method="POST" action="{{ route('login') }}">
-                                @csrf
-                                <div class="mb-3">
-                                    <label for="emailaddress" class="form-label">Email address</label>
-                                    <input class="form-control" type="email" id="emailaddress" required="" placeholder="Enter your email" name="email">
-                                </div>
-
-                                <div class="mb-3">
-                                    <a href="{{ route('second', ['auth', 'recoverpw']) }}" class="text-muted float-end fs-12">Forgot your password?</a>
-                                    <label for="password" class="form-label">Password</label>
-                                    <div class="input-group input-group-merge">
-                                        <input type="password" id="password" class="form-control" placeholder="Enter your password" name="password">
-                                        <div class="input-group-text" data-password="false">
-                                            <span class="password-eye"></span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="mb-3 mb-3">
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" id="checkbox-signin" checked>
-                                        <label class="form-check-label" for="checkbox-signin">Remember me</label>
-                                    </div>
-                                </div>
-
-                                <div class="mb-3 mb-0 text-center">
-                                    <button class="btn btn-primary" type="submit"> Log In </button>
-                                </div>
-
-                            </form>
-                        </div> <!-- end card-body -->
                     </div>
-                    <!-- end card -->
 
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="checkbox-signin" checked>
+                            <label class="form-check-label text-muted ms-1" for="checkbox-signin">Remember me</label>
+                        </div>
+                    </div>
 
-
-                </div> <!-- end col -->
+                    <div class="d-grid mb-4">
+                        <button class="btn btn-primary btn-login text-white shadow-sm" type="submit">
+                            Sign In
+                        </button>
+                    </div>
+                </form>
+                
+                <div class="text-center mt-5">
+                    <span class="text-muted fs-14">
+                        <script>document.write(new Date().getFullYear())</script> © Radhikas Trade International
+                    </span>
+                </div>
             </div>
-            <!-- end row -->
         </div>
-        <!-- end container -->
     </div>
-    <!-- end page -->
-
-    <footer class="footer footer-alt">
-        <span class="text-white-50">
-            <script>
-                document.write(new Date().getFullYear())
-            </script> © Radhikas Trade International
-        </span>
-    </footer>
 
     <!-- App js -->
     @vite(['resources/js/app.js'])
@@ -123,4 +186,3 @@
 </body>
 
 </html>
-

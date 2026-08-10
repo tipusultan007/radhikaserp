@@ -8,7 +8,12 @@
          <div class="row">
             <div class="col-12">
                 <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
-                    <h4 class="page-title">Point of Sale (POS)</h4>
+                    <div class="d-flex align-items-center gap-2">
+                        <h4 class="page-title m-0">Point of Sale (POS)</h4>
+                        <a href="{{ route('pos.grid') }}" class="btn btn-xs btn-outline-primary ms-2">
+                            <i class="ri-grid-fill me-1"></i> Grid POS
+                        </a>
+                    </div>
                     <ol class="breadcrumb m-0">
                         <li class="breadcrumb-item"><a href="{{ route('home') }}">ERP</a></li>
                         <li class="breadcrumb-item active">POS</li>
@@ -103,7 +108,7 @@
                  <div class="col-lg-4">
                      <div class="card">
                          <div class="card-body">
-                             <h4 class="header-title mb-3"><i class="ri-file-list-3-fill text-success"></i> Payment Details</h4>
+                             <h4 class="header-title mb-3"><i class="ri-file-list-3-fill text-success"></i> Order Details</h4>
                              
                              <div class="mb-3 form-check form-switch">
                                  <input type="checkbox" name="is_promotional" class="form-check-input" id="isPromotional" value="1">
@@ -111,28 +116,7 @@
                              </div>
 
                              <hr>
-                             
-                             <div class="mb-3">
-                                 <label class="form-label">Delivery Charge ()</label>
-                                 <input type="number" step="1" name="delivery_charge" class="form-control" value="0">
-                             </div>
-
-                             <div class="mb-3">
-                                 <label class="form-label">Discount ()</label>
-                                 <input type="number" step="1" name="discount" class="form-control" value="0">
-                             </div>
-                             
-                             <div class="mb-3">
-                                 <label class="form-label">Payment Method</label>
-                                 <select name="payment_method" class="form-select">
-                                     <option value="">Default (Cash)</option>
-                                     @if(isset($paymentMethods))
-                                         @foreach($paymentMethods as $method)
-                                             <option value="{{ $method->id }}">{{ $method->name }}</option>
-                                         @endforeach
-                                     @endif
-                                 </select>
-                             </div>
+                             <h5 class="header-title mb-3"><i class="ri-truck-fill text-primary"></i> Shipping & Delivery</h5>
 
                              <div class="mb-3">
                                  <label class="form-label">Delivery Method</label>
@@ -158,10 +142,34 @@
                              </div>
 
                              <hr>
-                             <div class="mb-3 text-end">
+                             <h5 class="header-title mb-3"><i class="ri-money-dollar-circle-fill text-success"></i> Billing & Payment</h5>
+
+                             <div class="row">
+                                 <div class="col-md-6 mb-3">
+                                     <label class="form-label">Delivery Charge ()</label>
+                                     <input type="number" step="1" name="delivery_charge" class="form-control" value="0">
+                                 </div>
+                                 <div class="col-md-6 mb-3">
+                                     <label class="form-label">Discount ()</label>
+                                     <input type="number" step="1" name="discount" class="form-control" value="0">
+                                 </div>
+                             </div>
+
+                             <div class="mb-3 text-end bg-light p-2 rounded border">
                                  <h3 class="text-danger m-0">Grand Total: <span id="grandTotalDisplay">0.00</span></h3>
                              </div>
-                             <hr>
+
+                             <div class="mb-3">
+                                 <label class="form-label">Payment Method</label>
+                                 <select name="payment_method" class="form-select">
+                                     <option value="">Default (Cash)</option>
+                                     @if(isset($paymentMethods))
+                                         @foreach($paymentMethods as $method)
+                                             <option value="{{ $method->id }}">{{ $method->name }}</option>
+                                         @endforeach
+                                     @endif
+                                 </select>
+                             </div>
 
                              <div class="mb-3 form-check form-switch">
                                  <input type="checkbox" class="form-check-input" id="fullPaymentToggle">
@@ -170,12 +178,12 @@
 
                              <div class="mb-3">
                                  <label class="form-label text-success"><strong>Amount Paid Now ()</strong></label>
-                                 <input type="number" step="1" name="paid_amount" id="paidAmount" class="form-control" value="0">
+                                 <input type="number" step="1" name="paid_amount" id="paidAmount" class="form-control" value="0" style="font-size: 1.2rem; font-weight: bold;">
                                  <small class="text-muted d-block mt-1">If the customer has a <strong>Wallet Balance</strong>, it will be automatically applied to any remaining due. Overpayments will be added to the Wallet.</small>
                              </div>
 
                              <div class="mt-4 d-grid">
-                                 <button type="submit" class="btn btn-primary btn-lg"><i class="ri-checkbox-circle-fill"></i> Complete Sale</button>
+                                 <button type="submit" class="btn btn-primary btn-lg shadow-sm"><i class="ri-checkbox-circle-fill"></i> Complete Sale</button>
                              </div>
                          </div>
                      </div>

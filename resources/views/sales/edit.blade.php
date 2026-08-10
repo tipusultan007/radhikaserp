@@ -98,7 +98,7 @@
                              </div>
                              
                              <div class="mt-3">
-                                 <button type="button" class="btn btn-sm btn-outline-primary"><i class="ri-add-circle-fill"></i> Add Item (UI handled dynamically in a full app)</button>
+                                 <button type="button" id="add-item-btn" class="btn btn-sm btn-outline-primary"><i class="ri-add-circle-fill"></i> Add Item</button>
                              </div>
                          </div>
                      </div>
@@ -140,11 +140,19 @@
 
                              <div class="mb-3">
                                  <label class="form-label">Delivery Method</label>
-                                 <select name="delivery_method" class="form-select">
+                                 <select name="delivery_method" class="form-select" id="deliveryMethodSelect">
                                      <option value="" {{ $sale->delivery_method == '' ? 'selected' : '' }}>None / Walk-in</option>
                                      <option value="pickup" {{ $sale->delivery_method == 'pickup' ? 'selected' : '' }}>Pickup</option>
                                      <option value="own_delivery" {{ $sale->delivery_method == 'own_delivery' ? 'selected' : '' }}>Own Delivery</option>
                                      <option value="steadfast" {{ $sale->delivery_method == 'steadfast' ? 'selected' : '' }}>Steadfast Courier</option>
+                                 </select>
+                             </div>
+
+                             <div class="mb-3" id="deliveryTypeContainer" style="display: {{ $sale->delivery_method == 'steadfast' ? 'block' : 'none' }};">
+                                 <label class="form-label">Delivery Type (Steadfast)</label>
+                                 <select name="delivery_type" class="form-select" id="deliveryTypeSelect">
+                                     <option value="1" {{ $sale->delivery_type == 1 ? 'selected' : '' }}>Point Delivery</option>
+                                     <option value="0" {{ $sale->delivery_type === 0 ? 'selected' : '' }}>Home Delivery</option>
                                  </select>
                              </div>
 
@@ -260,12 +268,46 @@
 
         function calculateTotal() {
             let subtotal = 0;
-            for (let i = 0; i < qtyInputs.length; i++) {
-                const qty = parseFloat(qtyInputs[i].value) || 0;
-                const price = parseFloat(priceInputs[i].value) || 0;
+            let totalWeight = 0;
+            
+            const currentQtyInputs = document.querySelectorAll('.qty-input');
+            const currentPriceInputs = document.querySelectorAll('.price-input');
+            const currentRowSubtotals = document.querySelectorAll('.row-subtotal');
+            const variantSelects = document.querySelectorAll('.variant-select');
+
+            for (let i = 0; i < currentQtyInputs.length; i++) {
+                const qty = parseFloat(currentQtyInputs[i].value) || 0;
+                const price = parseFloat(currentPriceInputs[i].value) || 0;
                 const rowTotal = qty * price;
-                rowSubtotals[i].value = rowTotal.toFixed(0);
+                if(currentRowSubtotals[i]) currentRowSubtotals[i].value = rowTotal.toFixed(0);
                 subtotal += rowTotal;
+
+                const select = variantSelects[i];
+                if (select && select.selectedIndex >= 0) {
+                    const option = select.options[select.selectedIndex];
+                    const unitQty = option.dataset.unit_qty ? parseFloat(option.dataset.unit_qty) : 1;
+                    totalWeight += qty * unitQty;
+                }
+            }
+
+            const deliveryMethod = document.getElementById('deliveryMethodSelect');
+            const deliveryType = document.getElementById('deliveryTypeSelect');
+            
+            if (deliveryMethod && deliveryMethod.value === 'steadfast') {
+                document.getElementById('deliveryTypeContainer').style.display = 'block';
+                if (deliveryType && deliveryType.value === '1') { // Point Delivery
+                    if (deliveryChargeInput) {
+                        deliveryChargeInput.value = 0;
+                    }
+                } else if (deliveryType && deliveryType.value === '0') { // Home Delivery
+                    const autoCharge = Math.max(1, Math.ceil(totalWeight)) * 20;
+                    if (deliveryChargeInput) {
+                        deliveryChargeInput.value = autoCharge;
+                    }
+                }
+            } else {
+                const typeContainer = document.getElementById('deliveryTypeContainer');
+                if (typeContainer) typeContainer.style.display = 'none';
             }
 
             const delivery = parseFloat(deliveryChargeInput.value) || 0;
@@ -274,6 +316,11 @@
             const grandTotal = Math.max(0, subtotal + delivery - discount);
             return grandTotal;
         }
+
+        const deliveryMethodSel = document.getElementById('deliveryMethodSelect');
+        const deliveryTypeSel = document.getElementById('deliveryTypeSelect');
+        if (deliveryMethodSel) deliveryMethodSel.addEventListener('change', calculateTotal);
+        if (deliveryTypeSel) deliveryTypeSel.addEventListener('change', calculateTotal);
 
         function updateFullPayment() {
             if (isPromotionalCheckbox && isPromotionalCheckbox.checked) {
@@ -285,7 +332,14 @@
             }
         }
 
-        [...qtyInputs, ...priceInputs, deliveryChargeInput, discountInput].forEach(input => {
+        document.addEventListener('input', function(e) {
+            if (e.target.classList.contains('qty-input') || e.target.classList.contains('price-input')) {
+                calculateTotal();
+                updateFullPayment();
+            }
+        });
+
+        [deliveryChargeInput, discountInput].forEach(input => {
             if(input) {
                 input.addEventListener('input', () => {
                     calculateTotal();
@@ -305,7 +359,7 @@
             const warehouseId = warehouseSelect.value;
             if(!warehouseId) return;
             
-            fetch(`{{ route('pos.variants') }}?warehouse_id=${warehouseId}`)
+            fetch(`{{ route('pos.variants') }}?warehouse_id=${warehouseId}&sale_id={{ $sale->id }}`)
                 .then(res => res.json())
                 .then(data => {
                     const variantSelects = document.querySelectorAll('.variant-select');
@@ -340,6 +394,82 @@
             // Initial load
             loadVariants();
         }
+
+        // Add Item Row
+        let itemIndex = document.querySelectorAll('#cart-items tr').length;
+        const addItemBtn = document.getElementById('add-item-btn');
+        if (addItemBtn) {
+            addItemBtn.addEventListener('click', function() {
+                itemIndex++;
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <select name="items[${itemIndex}][product_variant_id]" class="form-control variant-select" required>
+                            <option value="">Select Variant</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" step="0.001" name="items[${itemIndex}][qty]" class="form-control qty-input" placeholder="Qty" required>
+                    </td>
+                    <td>
+                        <input type="number" step="1" name="items[${itemIndex}][unit_price]" class="form-control price-input" placeholder="Price" required>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <input type="number" step="1" class="form-control row-subtotal me-2" placeholder="0.00" readonly>
+                            <button type="button" class="btn btn-sm btn-danger remove-item-btn"><i class="ri-delete-bin-line"></i></button>
+                        </div>
+                    </td>
+                `;
+                
+                document.getElementById('cart-items').appendChild(tr);
+                
+                // Handle remove
+                tr.querySelector('.remove-item-btn').addEventListener('click', function() {
+                    tr.remove();
+                    calculateTotal();
+                    updateFullPayment();
+                });
+                
+                // Reload variants into this new select
+                loadVariants();
+            });
+        }
+        
+        // Setup remove on existing rows if any delete buttons exist
+        document.querySelectorAll('.remove-item-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.target.closest('tr').remove();
+                calculateTotal();
+                updateFullPayment();
+            });
+        });
+
+        // Update price when variant changes
+        document.getElementById('cart-items').addEventListener('change', function(e) {
+            if (e.target.classList.contains('variant-select')) {
+                const select = e.target;
+                const selectedOption = select.options[select.selectedIndex];
+                const tr = select.closest('tr');
+                const priceInput = tr.querySelector('.price-input');
+                const qtyInput = tr.querySelector('.qty-input');
+                
+                if (selectedOption && priceInput) {
+                    let variantPrice = parseFloat(selectedOption.dataset.price || 0);
+                    // Price lookup based on customer type if you have it, else default price
+                    priceInput.value = variantPrice.toFixed(0);
+                    
+                    if (!qtyInput.value || parseFloat(qtyInput.value) === 0) {
+                        qtyInput.value = 1;
+                    }
+                    qtyInput.step = 1;
+                    
+                    calculateTotal();
+                    updateFullPayment();
+                }
+            }
+        });
 
         // Add Customer AJAX
         document.getElementById('addCustomerForm').addEventListener('submit', function(e) {

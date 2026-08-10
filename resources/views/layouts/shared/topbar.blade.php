@@ -147,30 +147,7 @@
                     </div>
 
                     <!-- item-->
-                    <a href="{{ route('second', ['pages', 'profile']) }}" class="dropdown-item">
-                        <i class="ri-account-circle-fill fs-18 align-middle me-1"></i>
-                        <span>My Account</span>
-                    </a>
 
-                    <!-- item-->
-                    <a href="{{ route('second', ['pages', 'profile']) }}" class="dropdown-item">
-                        <i class="ri-settings-4-fill fs-18 align-middle me-1"></i>
-                        <span>Settings</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="{{ route('second', ['pages', 'faq']) }}" class="dropdown-item">
-                        <i class="ri-customer-service-2-fill fs-18 align-middle me-1"></i>
-                        <span>Support</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="{{ route('second', ['auth', 'lock-screen']) }}" class="dropdown-item">
-                        <i class="ri-lock-password-fill fs-18 align-middle me-1"></i>
-                        <span>Lock Screen</span>
-                    </a>
-
-                    <!-- item-->
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <a onclick="event.preventDefault(); this.closest('form').submit();" class="dropdown-item">

@@ -62,17 +62,26 @@
                                              <td>{{ $purchase->warehouse->name ?? 'N/A' }}</td>
                                              <td>{{ number_format($purchase->total_cost, 0) }}</td>
                                              <td>
-                                                 <a href="{{ route('purchases.show', $purchase->id) }}" class="action-icon text-info" title="View"> <i class="ri-eye-fill"></i></a>
-                                                 @canany(['edit purchases', 'manage purchases'])
-                                                 <a href="{{ route('purchases.edit', $purchase->id) }}" class="action-icon text-primary" title="Edit"> <i class="ri-edit-box-line"></i></a>
-                                                 @endcanany
-                                                 @canany(['delete purchases', 'manage purchases'])
-                                                 <form action="{{ route('purchases.destroy', $purchase->id) }}" method="POST" class="d-inline">
-                                                     @csrf
-                                                     @method('DELETE')
-                                                     <button type="submit" class="action-icon btn btn-link text-danger p-0" onclick="return confirm('Are you sure you want to delete this Purchase? This will reverse the supplier payable and remove stock from the warehouse. Action cannot be undone if stock is already consumed.')" title="Delete"> <i class="ri-delete-bin-line"></i></button>
-                                                 </form>
-                                                 @endcanany
+                                                 <div class="dropdown">
+                                                     <a href="#" class="dropdown-toggle arrow-none card-drop" data-bs-toggle="dropdown" aria-expanded="false">
+                                                         <i class="ri-more-2-fill"></i>
+                                                     </a>
+                                                     <div class="dropdown-menu dropdown-menu-end">
+                                                         <a href="{{ route('purchases.show', $purchase->id) }}" class="dropdown-item"><i class="ri-eye-fill me-2 text-info"></i> View</a>
+                                                         @canany(['edit purchases', 'manage purchases'])
+                                                         <a href="{{ route('purchases.edit', $purchase->id) }}" class="dropdown-item"><i class="ri-edit-box-line me-2 text-primary"></i> Edit</a>
+                                                         @endcanany
+                                                         @canany(['delete purchases', 'manage purchases'])
+                                                         <form action="{{ route('purchases.destroy', $purchase->id) }}" method="POST" class="d-inline">
+                                                             @csrf
+                                                             @method('DELETE')
+                                                             <button type="submit" class="dropdown-item" onclick="return confirm('Are you sure you want to delete this Purchase? This will reverse the supplier payable and remove stock from the warehouse. Action cannot be undone if stock is already consumed.')">
+                                                                 <i class="ri-delete-bin-line me-2 text-danger"></i> Delete
+                                                             </button>
+                                                         </form>
+                                                         @endcanany
+                                                     </div>
+                                                 </div>
                                              </td>
                                          </tr>
                                      @endforeach

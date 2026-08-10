@@ -7,6 +7,7 @@ use App\Models\SaleItem;
 use App\Models\SalePayment;
 use App\Models\Customer;
 use App\Models\Warehouse;
+use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Batch;
 use App\Models\InventoryTransaction;
@@ -85,7 +86,7 @@ class SaleController extends Controller
             }
         }
 
-        $sales = $query->latest('date')->paginate(15)->withQueryString();
+        $sales = $query->orderBy('id', 'desc')->paginate(15)->withQueryString();
         $customers = Customer::orderBy('name')->get();
         
         $totalSalesCount = Sale::count();
@@ -217,24 +218,108 @@ class SaleController extends Controller
         return view('pos.index', compact('customers', 'warehouses', 'variants', 'paymentMethods'));
     }
 
+    public function grid()
+    {
+        $customers = Customer::all();
+        $warehouses = Warehouse::all();
+        $paymentMethods = ChartOfAccount::where('is_payment_method', true)->get();
+        
+        return view('pos.grid', compact('customers', 'warehouses', 'paymentMethods'));
+    }
+
+    public function ajaxGetGridData(Request $request)
+    {
+        $warehouse_id = $request->warehouse_id;
+        if (!$warehouse_id) {
+            return response()->json(['products' => []]);
+        }
+
+        // Get total stock per variant in this warehouse
+        $stocks = DB::table('batches')
+            ->where('warehouse_id', $warehouse_id)
+            ->select('product_variant_id', DB::raw('SUM(remaining_qty) as stock'))
+            ->groupBy('product_variant_id')
+            ->pluck('stock', 'product_variant_id')
+            ->toArray();
+
+        // Get all active products with active variants
+        $products = Product::with(['unit', 'variants' => function ($q) {
+            $q->where('status', true)->with('unit');
+        }])
+        ->where('status', true)
+        ->get();
+
+        $data = $products->map(function ($product) use ($stocks) {
+            $totalStock = 0;
+            $variantsData = $product->variants->map(function ($variant) use ($product, $stocks, &$totalStock) {
+                $stock = isset($stocks[$variant->id]) ? (float)$stocks[$variant->id] : 0;
+                $totalStock += $stock;
+                
+                $displayName = $variant->name;
+                if ($variant->name === 'Default' || $variant->name === $product->name) {
+                    $displayName = 'Default';
+                }
+
+                return [
+                    'id' => $variant->id,
+                    'name' => $displayName,
+                    'sku' => $variant->sku,
+                    'unit_qty' => (float)$variant->unit_qty,
+                    'unit_name' => $variant->unit->name ?? ($product->unit->name ?? ''),
+                    'price' => (float)$variant->price,
+                    'dealer_price' => (float)$variant->dealer_price,
+                    'special_dealer_price' => (float)$variant->special_dealer_price,
+                    'stock' => $stock,
+                ];
+            })->values();
+
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'sku' => $product->sku,
+                'image_url' => $product->image_url,
+                'unit_name' => $product->unit->name ?? '',
+                'total_stock' => $totalStock,
+                'variants' => $variantsData,
+            ];
+        });
+
+        return response()->json(['products' => $data]);
+    }
+
     public function ajaxGetVariants(Request $request)
     {
         $warehouse_id = $request->warehouse_id;
+        $sale_id = $request->sale_id;
+        
         if (!$warehouse_id) {
             return response()->json([]);
         }
 
-        $stocks = \App\Models\Batch::where('warehouse_id', $warehouse_id)
+        $stocksArray = \App\Models\Batch::where('warehouse_id', $warehouse_id)
             ->select('product_variant_id', DB::raw('SUM(remaining_qty) as stock'))
             ->groupBy('product_variant_id')
-            ->get()
-            ->keyBy('product_variant_id');
+            ->pluck('stock', 'product_variant_id')
+            ->toArray();
+
+        // If editing a sale, add back the quantities already held by this sale
+        // so those variants still show up in the dropdown with their total available + held stock.
+        if ($sale_id) {
+            $saleItems = \App\Models\SaleItem::where('sale_id', $sale_id)->get();
+            foreach ($saleItems as $item) {
+                if (isset($stocksArray[$item->product_variant_id])) {
+                    $stocksArray[$item->product_variant_id] += $item->qty;
+                } else {
+                    $stocksArray[$item->product_variant_id] = $item->qty;
+                }
+            }
+        }
 
         $variants = ProductVariant::with('product')->get();
 
         $options = [];
         foreach ($variants as $variant) {
-            $stock = $stocks->has($variant->id) ? $stocks->get($variant->id)->stock : 0;
+            $stock = $stocksArray[$variant->id] ?? 0;
             if ($stock > 0) {
                 $displayName = $variant->product->name;
                 // If variant name is different from product name, display both

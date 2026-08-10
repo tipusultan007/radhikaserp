@@ -54,10 +54,10 @@
                                          <th>Batch No</th>
                                          <th>Product</th>
                                          <th>Warehouse</th>
-                                         <th>Qty In</th>
-                                         <th>Qty Out</th>
-                                         <th>Remaining Qty</th>
-                                         <th>Cost/Unit</th>
+                                         <th>In Qty</th>
+                                         <th>Out Qty</th>
+                                         <th>Balance Qty</th>
+                                         <th>Cost/Unit (৳)</th>
                                          <th>Status</th>
                                          <th style="width: 125px;">Action</th>
                                      </tr>
@@ -73,7 +73,7 @@
                                              <td>
                                                  <strong>{{ number_format($batch->remaining_qty, 3) }}</strong>
                                              </td>
-                                             <td>${{ number_format($batch->cost_per_unit, 0) }}</td>
+                                             <td> {{ number_format($batch->cost_per_unit, 0) }}</td>
                                              <td>
                                                  @if($batch->remaining_qty > 0)
                                                      <span class="badge bg-success">Available</span>

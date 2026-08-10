@@ -17,9 +17,23 @@ class CustomerApiController extends Controller
      */
     public function products()
     {
-        $products = Product::with(['unit', 'variants' => function ($query) {
-            $query->where('status', true)->with('unit');
-        }])->where('status', true)->get();
+        $variantsWithStock = \Illuminate\Support\Facades\DB::table('batches')
+            ->select('product_variant_id')
+            ->groupBy('product_variant_id')
+            ->havingRaw('SUM(remaining_qty) > 0')
+            ->pluck('product_variant_id');
+
+        $products = Product::with(['unit', 'variants' => function ($query) use ($variantsWithStock) {
+            $query->where('status', true)
+                  ->whereIn('id', $variantsWithStock)
+                  ->with('unit');
+        }])
+        ->where('status', true)
+        ->whereHas('variants', function ($query) use ($variantsWithStock) {
+            $query->where('status', true)
+                  ->whereIn('id', $variantsWithStock);
+        })
+        ->get();
 
         return response()->json(['products' => $products]);
     }

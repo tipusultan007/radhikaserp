@@ -201,10 +201,21 @@
                                  <tbody>
                                      @foreach ($sales as $sale)
                                          <tr>
-                                             <td><b>{{ $sale->invoice_no }}</b></td>
+                                             <td>
+                                                 <a href="{{ route('sales.show', $sale->id) }}" class="fw-bold text-primary">
+                                                     {{ $sale->invoice_no }}
+                                                 </a>
+                                             </td>
                                              <td>{{ $sale->date->format('Y-m-d') }}</td>
                                              <td>
-                                                 {{ $sale->customer->name ?? 'N/A' }}<br>
+                                                 @if($sale->customer)
+                                                     <a href="{{ route('customers.show', $sale->customer_id) }}" class="text-body fw-semibold">
+                                                         {{ $sale->customer->name }}
+                                                     </a>
+                                                 @else
+                                                     N/A
+                                                 @endif
+                                                 <br>
                                                  <span class="badge bg-{{ $sale->source == 'customer' ? 'info' : 'secondary' }} mt-1">{{ ucfirst($sale->source ?? 'Admin') }} Order</span>
                                              </td>
                                              <td>

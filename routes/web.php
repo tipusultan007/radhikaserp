@@ -185,6 +185,8 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     });
     Route::group(['middleware' => ['permission:create sales']], function () {
         Route::get('/pos', [SaleController::class, 'create'])->name('pos.index');
+        Route::get('/pos/grid', [SaleController::class, 'grid'])->name('pos.grid');
+        Route::get('/pos/grid-data', [SaleController::class, 'ajaxGetGridData'])->name('pos.grid-data');
         Route::get('/pos/variants', [SaleController::class, 'ajaxGetVariants'])->name('pos.variants');
         Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
     });

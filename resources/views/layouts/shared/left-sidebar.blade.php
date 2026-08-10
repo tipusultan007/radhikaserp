@@ -177,6 +177,12 @@
                     <span> POS Terminal </span>
                 </a>
             </li>
+            <li class="side-nav-item">
+                <a href="{{ route('pos.grid') }}" class="side-nav-link">
+                    <i class="ri-grid-fill"></i>
+                    <span> POS Grid </span>
+                </a>
+            </li>
             @endcan
 
             @can('view sales')
