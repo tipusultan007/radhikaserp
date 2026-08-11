@@ -15,7 +15,7 @@
         <div class="card border-primary">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h4 class="mb-0 text-white"><i class="ri-store-2-fill"></i> {{ $data['warehouse']->name }}</h4>
-                <span class="badge bg-light text-primary fs-5">Total Value: ${{ number_format($data['total_value'], 0) }}</span>
+                <span class="badge bg-light text-primary fs-5">Total Value: ৳ {{ number_format($data['total_value'], 0) }}</span>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -32,7 +32,7 @@
                         </thead>
                         <tbody>
                             @foreach($data['raw']->groupBy(fn($b) => $b->product->name) as $productName => $batches)
-                                <tr class="table-light">
+                                <tr class="table-dark">
                                     <td colspan="6" class="fw-bold text-primary">{{ $productName }} (Raw Material)</td>
                                 </tr>
                                 @foreach($batches as $batch)
@@ -50,7 +50,7 @@
                             @endforeach
                             
                             @foreach($data['finished']->groupBy(fn($b) => $b->product->name) as $productName => $batches)
-                                <tr class="table-light">
+                                <tr class>
                                     <td colspan="6" class="fw-bold text-primary">{{ $productName }} (Finished/Packaged)</td>
                                 </tr>
                                 @foreach($batches as $batch)
