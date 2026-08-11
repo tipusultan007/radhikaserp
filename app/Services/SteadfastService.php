@@ -125,6 +125,20 @@ class SteadfastService
             }
         }
 
-        throw new \Exception('Failed to dispatch to Steadfast courier. Please check credentials or data format.');
+        $errorMessage = 'Failed to dispatch to Steadfast courier. Please check credentials or data format.';
+
+        if (is_array($response) && isset($response['errors'])) {
+            $errorDetails = [];
+            foreach ($response['errors'] as $field => $messages) {
+                $errorDetails[] = is_array($messages) ? implode(' ', $messages) : $messages;
+            }
+            if (!empty($errorDetails)) {
+                $errorMessage = 'Steadfast API Error: ' . implode(' ', $errorDetails);
+            }
+        } elseif (is_array($response) && isset($response['message'])) {
+            $errorMessage = 'Steadfast API Error: ' . $response['message'];
+        }
+
+        throw new \Exception($errorMessage);
     }
 }
