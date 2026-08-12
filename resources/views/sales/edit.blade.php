@@ -26,7 +26,7 @@
                      <div class="card">
                          <div class="card-body">
                              <div class="row mb-3">
-                                 <div class="col-md-4">
+                                 <div class="col-md-2">
                                      <label class="form-label">Date <span class="text-danger">*</span></label>
                                      <input type="text" name="date" class="form-control flatpickr-date" value="{{ old('date', $sale->date->format('Y-m-d')) }}" required>
                                  </div>
@@ -79,7 +79,7 @@
                                          <tr>
                                              <td>
                                                  <select name="items[{{ $index }}][product_variant_id]" class="form-select variant-select" required>
-                                                     <option value="{{ $item->product_variant_id }}" data-stock="999">{{ $item->productVariant->product->name }} - {{ $item->productVariant->name }}</option>
+                                                     <option value="{{ $item->product_variant_id }}" data-stock="999" data-unit_qty="{{ $item->productVariant->unit_qty ?? 1 }}">{{ $item->productVariant->product->name }} - {{ $item->productVariant->name }}</option>
                                                  </select>
                                              </td>
                                              <td>
@@ -89,7 +89,10 @@
                                                  <input type="number" step="1" name="items[{{ $index }}][unit_price]" class="form-control price-input" placeholder="Price" value="{{ $item->unit_price }}" required>
                                              </td>
                                              <td>
-                                                 <input type="number" step="1" class="form-control row-subtotal" placeholder="0.00" value="{{ number_format($item->qty * $item->unit_price, 2, '.', '') }}" readonly>
+                                                 <div class="d-flex align-items-center">
+                                                     <input type="number" step="1" class="form-control row-subtotal me-2" placeholder="0.00" value="{{ number_format($item->qty * $item->unit_price, 2, '.', '') }}" readonly>
+                                                     <button type="button" class="btn btn-sm btn-danger remove-item-btn"><i class="ri-delete-bin-line"></i></button>
+                                                 </div>
                                              </td>
                                          </tr>
                                          @endforeach
@@ -154,6 +157,10 @@
                                      <option value="1" {{ $sale->delivery_type == 1 ? 'selected' : '' }}>Point Delivery</option>
                                      <option value="0" {{ $sale->delivery_type === 0 ? 'selected' : '' }}>Home Delivery</option>
                                  </select>
+                             </div>
+
+                             <div class="mb-3">
+                                 <h3 class="text-primary mb-3">Grand Total: <span id="grandTotalDisplay">{{ number_format($sale->total, 0) }}</span></h3>
                              </div>
 
                              <div class="mb-3 form-check form-switch">
@@ -314,6 +321,12 @@
             const discount = parseFloat(discountInput.value) || 0;
             
             const grandTotal = Math.max(0, subtotal + delivery - discount);
+            
+            const displayEl = document.getElementById('grandTotalDisplay');
+            if (displayEl) {
+                displayEl.textContent = grandTotal.toFixed(0);
+            }
+            
             return grandTotal;
         }
 
@@ -377,6 +390,7 @@
                             option.text = item.text;
                             // Add stock data attribute so we can use it later
                             option.dataset.stock = item.stock;
+                            option.dataset.unit_qty = item.unit_qty;
                             select.appendChild(option);
                         });
                         
@@ -394,6 +408,8 @@
             // Initial load
             loadVariants();
         }
+        
+        calculateTotal();
 
         // Add Item Row
         let itemIndex = document.querySelectorAll('#cart-items tr').length;

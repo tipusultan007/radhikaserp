@@ -15,38 +15,22 @@ class SyncStockBalancesCommand extends Command
      */
     public function handle()
     {
-        $this->info('Syncing stock balances...');
+        $this->info('Starting comprehensive stock reconciliation (Batches, Raw Materials, Variants, Warehouse Stocks)...');
 
-        // Wipe existing running tallies
-        \App\Models\WarehouseStock::truncate();
-        \App\Models\ProductVariant::query()->update(['current_stock' => 0]);
+        $result = \App\Services\StockReconciliationService::reconcileLedgerAndBatches();
 
-        // Get all transactions
-        $transactions = \App\Models\InventoryTransaction::all();
+        $this->info("Reconciliation complete:");
+        $this->line("- Batches Reconciled: {$result['batches_reconciled']}");
+        $this->line("- Warehouse Stocks Synced: {$result['warehouse_stocks_synced']}");
+        $this->line("- Variants Synced: {$result['variants_synced']}");
 
-        $this->withProgressBar($transactions, function ($transaction) {
-            $netQty = $transaction->qty_in - $transaction->qty_out;
-            if ($netQty == 0) return;
-
-            // Update warehouse stock
-            if ($transaction->warehouse_id && $transaction->product_variant_id) {
-                $warehouseStock = \App\Models\WarehouseStock::firstOrCreate(
-                    [
-                        'warehouse_id' => $transaction->warehouse_id,
-                        'product_variant_id' => $transaction->product_variant_id
-                    ],
-                    ['stock' => 0]
-                );
-                $warehouseStock->increment('stock', $netQty);
+        if (!empty($result['discrepancies'])) {
+            $this->warn("Corrected Discrepancies:");
+            foreach ($result['discrepancies'] as $disc) {
+                $this->line("  * {$disc}");
             }
-
-            // Update global product variant stock
-            if ($transaction->product_variant_id) {
-                \App\Models\ProductVariant::where('id', $transaction->product_variant_id)->increment('current_stock', $netQty);
-            }
-        });
-
-        $this->newLine();
-        $this->info('Stock balances synced successfully.');
+        } else {
+            $this->info("All stock tallies perfectly match transaction ledgers.");
+        }
     }
 }

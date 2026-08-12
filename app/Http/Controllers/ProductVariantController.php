@@ -10,8 +10,8 @@ class ProductVariantController extends Controller
 {
     public function index()
     {
-        $variants = ProductVariant::with('product')->get();
-        return view('product_variants.index', compact('variants'));
+        $products = Product::with(['variants', 'variants.unit'])->whereHas('variants')->get();
+        return view('product_variants.index', compact('products'));
     }
 
     public function show(ProductVariant $productVariant)

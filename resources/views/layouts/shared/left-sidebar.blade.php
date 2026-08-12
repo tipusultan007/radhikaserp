@@ -154,6 +154,12 @@
                     <span> Stock Adjustments </span>
                 </a>
             </li>
+            <li class="side-nav-item">
+                <a href="{{ route('stock-reconciliation.index') }}" class="side-nav-link">
+                    <i class="ri-scales-3-fill"></i>
+                    <span> Stock Reconciliation </span>
+                </a>
+            </li>
             @endcan
 
             @can('view journals')

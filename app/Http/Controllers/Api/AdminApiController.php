@@ -747,6 +747,53 @@ class AdminApiController extends Controller
                     }
 
                     if (round($remainingToConsume, 4) > 0) {
+                        $autoBatch = \App\Services\StockReconciliationService::autoRepackageRawToVariant(
+                            $warehouseId,
+                            $variantId,
+                            $remainingToConsume,
+                            $sale->date,
+                            'Auto-repackaged for Mobile Sale #' . ($sale->invoice_no ?? $sale->id)
+                        );
+
+                        if ($autoBatch && $autoBatch->remaining_qty > 0) {
+                            $takeQty = min((float)$autoBatch->remaining_qty, $remainingToConsume);
+                            $cogsForThisTake = $takeQty * $autoBatch->cost_per_unit;
+
+                            $autoBatch->qty_out += $takeQty;
+                            $autoBatch->remaining_qty -= $takeQty;
+                            $autoBatch->save();
+
+                            $totalCogs += $cogsForThisTake;
+                            $remainingToConsume -= $takeQty;
+
+                            \App\Models\SaleItem::create([
+                                'sale_id' => $sale->id,
+                                'product_variant_id' => $variantId,
+                                'batch_id' => $autoBatch->id,
+                                'qty' => $takeQty,
+                                'unit_price' => $unitPrice,
+                                'total_price' => $takeQty * $unitPrice,
+                                'total_weight' => $takeQty * $unitQty,
+                            ]);
+
+                            \App\Models\InventoryTransaction::create([
+                                'warehouse_id' => $warehouseId,
+                                'product_id' => $autoBatch->product_id,
+                                'product_variant_id' => $variantId,
+                                'batch_id' => $autoBatch->id,
+                                'type' => 'sale',
+                                'qty_in' => 0,
+                                'qty_out' => $takeQty,
+                                'cost' => $cogsForThisTake,
+                                'reference_type' => Sale::class,
+                                'reference_id' => $sale->id,
+                                'date' => $sale->date,
+                                'created_by' => $request->user()->id ?? 1,
+                            ]);
+                        }
+                    }
+
+                    if (round($remainingToConsume, 4) > 0) {
                         throw new \Exception("Insufficient stock for variant ID: {$variantId}. Shortfall: " . $remainingToConsume);
                     }
                     

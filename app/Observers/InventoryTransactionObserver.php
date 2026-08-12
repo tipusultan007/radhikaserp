@@ -47,11 +47,12 @@ class InventoryTransactionObserver
 
         if ($netQty == 0) return;
 
-        // Update warehouse stock
-        if ($transaction->warehouse_id && $transaction->product_variant_id) {
+        // Update warehouse stock (for both raw products and variants)
+        if ($transaction->warehouse_id && ($transaction->product_id || $transaction->product_variant_id)) {
             $warehouseStock = WarehouseStock::firstOrCreate(
                 [
                     'warehouse_id' => $transaction->warehouse_id,
+                    'product_id' => $transaction->product_id,
                     'product_variant_id' => $transaction->product_variant_id
                 ],
                 ['stock' => 0]

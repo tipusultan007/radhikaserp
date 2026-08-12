@@ -214,9 +214,10 @@
                          <!-- Action Buttons -->
                          <div class="d-print-none mt-5">
                              <div class="text-end">
-                                 <a href="{{ route('sales.print', $sale->id) }}" target="_blank" class="btn btn-primary"><i class="ri-printer-line me-1"></i> Print Invoice</a>
-                                 <a href="{{ route('sales.pdf', $sale->id) }}" class="btn btn-danger"><i class="ri-file-download-line me-1"></i> Download PDF</a>
-                                 <a href="{{ route('sales.index') }}" class="btn btn-light ms-2">Back</a>
+                                 <a href="{{ route('sales.edit', $sale->id) }}" class="btn btn-warning"><i class="ri-edit-line me-1"></i> Edit Sale</a>
+                                 <a href="{{ route('sales.print', $sale->id) }}" target="_blank" class="btn btn-primary ms-1"><i class="ri-printer-line me-1"></i> Print Invoice</a>
+                                 <a href="{{ route('sales.pdf', $sale->id) }}" class="btn btn-danger ms-1"><i class="ri-file-download-line me-1"></i> Download PDF</a>
+                                 <a href="{{ route('sales.index') }}" class="btn btn-light ms-1">Back</a>
                              </div>
                          </div>
 

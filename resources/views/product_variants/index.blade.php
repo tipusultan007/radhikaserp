@@ -38,7 +38,6 @@
                              <table class="table table-centered table-hover mb-0">
                                  <thead class="table-light">
                                      <tr>
-                                         <th>Parent Product</th>
                                          <th>Variant Name</th>
                                          <th>Unit Qty</th>
                                          <th>Unit Type</th>
@@ -49,9 +48,12 @@
                                      </tr>
                                  </thead>
                                  <tbody>
-                                     @forelse ($variants as $variant)
+                                     @forelse ($products as $product)
+                                         <tr class="table-active">
+                                             <td colspan="7"><strong>{{ $product->name }}</strong> @if($product->sku) (SKU: {{ $product->sku }}) @endif</td>
+                                         </tr>
+                                         @foreach ($product->variants as $variant)
                                          <tr>
-                                             <td>{{ $variant->product->name }}</td>
                                              <td><strong>{{ $variant->name }}</strong></td>
                                              <td>{{ $variant->unit_qty }}</td>
                                              <td>{{ $variant->unit ? $variant->unit->short_name : '' }}</td>
@@ -99,9 +101,10 @@
                                                  </div>
                                              </td>
                                          </tr>
+                                         @endforeach
                                      @empty
                                          <tr>
-                                             <td colspan="10" class="text-center">No product variants found.</td>
+                                             <td colspan="7" class="text-center">No product variants found.</td>
                                          </tr>
                                      @endforelse
                                  </tbody>

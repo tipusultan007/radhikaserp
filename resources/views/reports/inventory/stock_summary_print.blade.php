@@ -192,18 +192,19 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($packagedBatches->groupBy(fn($b) => $b->productVariant->product->name) as $productName => $batches)
-                    <tr style="background-color: #f4f4f4;">
-                        <td colspan="6" style="font-weight: bold;">{{ $productName }}</td>
+                @foreach($packagedBatches->groupBy(fn($b) => ($b->productVariant?->product?->name ?? 'Product') . ' — ' . ($b->productVariant?->name ?? 'Variant')) as $variantTitle => $vBatches)
+                    <tr style="background-color: #e9ecef;">
+                        <td colspan="2" style="font-weight: bold;">{{ $variantTitle }}</td>
+                        <td class="text-right" style="font-weight: bold;">{{ number_format($vBatches->sum('remaining_qty'), 2) }} {{ $vBatches->first()->productVariant?->unit_type ?? '' }}</td>
+                        <td class="text-right" style="font-weight: bold;">{{ number_format($vBatches->sum(fn($b) => $b->remaining_qty * ($b->productVariant?->unit_qty ?? 1)), 2) }} {{ $vBatches->first()->productVariant?->product?->base_unit ?? '' }}</td>
+                        <td colspan="2"></td>
                     </tr>
-                    @foreach($batches as $batch)
+                    @foreach($vBatches as $batch)
                     <tr>
-                        <td style="padding-left: 20px;">{{ $batch->productVariant->name }}
-                            <br> <span class="text-muted fs-10">Batch: {{ $batch->batch_no }}</span>
-                        </td>
+                        <td style="padding-left: 20px; font-family: monospace; color: #555;">Batch: {{ $batch->batch_no }}</td>
                         <td>{{ $batch->warehouse->name ?? 'N/A' }}</td>
-                        <td class="text-right">{{ number_format($batch->remaining_qty, 2) }} {{ $batch->productVariant->unit_type }}</td>
-                        <td class="text-right">{{ number_format($batch->remaining_qty * $batch->productVariant->unit_qty, 2) }} {{ $batch->productVariant->product->base_unit }}</td>
+                        <td class="text-right">{{ number_format($batch->remaining_qty, 2) }} {{ $batch->productVariant?->unit_type ?? '' }}</td>
+                        <td class="text-right">{{ number_format($batch->remaining_qty * ($batch->productVariant?->unit_qty ?? 1), 2) }} {{ $batch->productVariant?->product?->base_unit ?? '' }}</td>
                         <td class="text-right">{{ number_format($batch->cost_per_unit, 2) }}</td>
                         <td class="text-right">{{ number_format($batch->remaining_qty * $batch->cost_per_unit, 2) }}</td>
                     </tr>

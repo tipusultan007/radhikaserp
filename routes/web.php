@@ -275,6 +275,14 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::post('/stock-adjustments/{stock_adjustment}/update-status', [App\Http\Controllers\StockAdjustmentController::class, 'updateStatus'])->name('stock-adjustments.updateStatus');
     });
 
+    // ─── Stock Reconciliation ──────────────────────────────────────────────────
+    Route::group(['middleware' => ['permission:view stock adjustments']], function () {
+        Route::get('/stock-reconciliation', [App\Http\Controllers\StockReconciliationController::class, 'index'])->name('stock-reconciliation.index');
+        Route::post('/stock-reconciliation/reconcile', [App\Http\Controllers\StockReconciliationController::class, 'reconcile'])->name('stock-reconciliation.reconcile');
+        Route::get('/stock-reconciliation/physical-audit', [App\Http\Controllers\StockReconciliationController::class, 'physicalAudit'])->name('stock-reconciliation.physical-audit');
+        Route::post('/stock-reconciliation/physical-audit', [App\Http\Controllers\StockReconciliationController::class, 'storePhysicalAudit'])->name('stock-reconciliation.store-physical-audit');
+    });
+
     // ─── Journals & Accounting ──────────────────────────────────────────────────
     Route::group(['middleware' => ['permission:create journals']], function () {
         Route::get('journals/create', [App\Http\Controllers\JournalController::class, 'create'])->name('journals.create');

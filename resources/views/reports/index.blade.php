@@ -49,6 +49,13 @@
                                 <small class="text-muted">Track specific batch lifecycle & expiry</small>
                             </div>
                         </a>
+                        <a href="{{ route('stock-reconciliation.index') }}" class="list-group-item list-group-item-action border-0 py-3 d-flex align-items-center border-top">
+                            <i class="ri-scales-3-line text-primary fs-4 me-3"></i>
+                            <div>
+                                <h5 class="mb-0 fs-14">Stock Reconciliation & Audit</h5>
+                                <small class="text-muted">Reconcile raw materials, variants & physical audit</small>
+                            </div>
+                        </a>
                     @else
                         <div class="p-4 text-center text-muted">
                             <i class="ri-lock-2-line fs-1 mb-2 d-block text-warning"></i>

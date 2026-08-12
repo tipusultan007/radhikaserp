@@ -590,10 +590,16 @@ class SaleController extends Controller
                 ]);
             }
 
-            // COGS & Inventory Reduction entries are deferred until dispatch
-
+            // COGS & Inventory Reduction: Dispatch Steadfast or consume counter/POS sales immediately
             if ($sale->delivery_method === 'steadfast') {
                 \App\Services\SteadfastService::dispatchSale($sale);
+            } else {
+                $sale->delivery_status = 'delivered';
+                $sale->dispatched_at = now();
+                $sale->delivered_at = now();
+                $sale->save();
+
+                $this->consumeStockForSale($sale);
             }
 
             DB::commit();
@@ -1127,7 +1133,107 @@ class SaleController extends Controller
             }
 
             if (round($remainingToConsume, 4) > 0) {
-                throw new \Exception("Insufficient finished stock for variant ID: {$variantId}. Shortfall: " . $remainingToConsume);
+                // Attempt auto-repackaging from raw product stock
+                $autoBatch = \App\Services\StockReconciliationService::autoRepackageRawToVariant(
+                    $sale->warehouse_id,
+                    $variantId,
+                    $remainingToConsume,
+                    $sale->dispatched_at ?? $sale->date,
+                    'Auto-repackaged for Sale #' . ($sale->invoice_no ?? $sale->id)
+                );
+
+                if ($autoBatch && $autoBatch->remaining_qty > 0) {
+                    $takeQty = min((float)$autoBatch->remaining_qty, $remainingToConsume);
+                    $cogsForThisTake = $takeQty * $autoBatch->cost_per_unit;
+
+                    $autoBatch->qty_out += $takeQty;
+                    $autoBatch->remaining_qty -= $takeQty;
+                    $autoBatch->save();
+
+                    $totalCogs += $cogsForThisTake;
+                    $remainingToConsume -= $takeQty;
+
+                    SaleItem::create([
+                        'sale_id' => $sale->id,
+                        'product_variant_id' => $variantId,
+                        'batch_id' => $autoBatch->id,
+                        'qty' => $takeQty,
+                        'unit_price' => $unitPrice,
+                        'total_price' => $takeQty * $unitPrice,
+                        'total_weight' => $takeQty * $unitQty,
+                    ]);
+
+                    InventoryTransaction::create([
+                        'warehouse_id' => $sale->warehouse_id,
+                        'product_id' => $autoBatch->product_id,
+                        'product_variant_id' => $variantId,
+                        'batch_id' => $autoBatch->id,
+                        'type' => 'sale',
+                        'qty_in' => 0,
+                        'qty_out' => $takeQty,
+                        'cost' => $cogsForThisTake,
+                        'reference_type' => Sale::class,
+                        'reference_id' => $sale->id,
+                        'date' => $sale->dispatched_at ?? $sale->date,
+                        'created_by' => auth()->id() ?? 1,
+                    ]);
+                }
+            }
+
+            if (round($remainingToConsume, 4) > 0) {
+                // Find latest batch or create default batch to record inventory transaction
+                $batch = Batch::where('product_variant_id', $variantId)
+                    ->where('warehouse_id', $sale->warehouse_id)
+                    ->latest()
+                    ->first();
+
+                if (!$batch) {
+                    $productId = $variant ? $variant->product_id : 1;
+                    $batch = Batch::create([
+                        'batch_no' => 'B-POS-' . $sale->id . '-' . $variantId,
+                        'product_id' => $productId,
+                        'product_variant_id' => $variantId,
+                        'warehouse_id' => $sale->warehouse_id,
+                        'qty_in' => 0,
+                        'qty_out' => 0,
+                        'remaining_qty' => 0,
+                        'cost_per_unit' => 0,
+                    ]);
+                }
+
+                $takeQty = $remainingToConsume;
+                $cogsForThisTake = $takeQty * $batch->cost_per_unit;
+
+                $batch->qty_out += $takeQty;
+                $batch->remaining_qty -= $takeQty;
+                $batch->save();
+
+                $totalCogs += $cogsForThisTake;
+
+                SaleItem::create([
+                    'sale_id' => $sale->id,
+                    'product_variant_id' => $variantId,
+                    'batch_id' => $batch->id,
+                    'qty' => $takeQty,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $takeQty * $unitPrice,
+                    'total_weight' => $takeQty * $unitQty,
+                ]);
+
+                InventoryTransaction::create([
+                    'warehouse_id' => $sale->warehouse_id,
+                    'product_id' => $batch->product_id,
+                    'product_variant_id' => $variantId,
+                    'batch_id' => $batch->id,
+                    'type' => 'sale',
+                    'qty_in' => 0,
+                    'qty_out' => $takeQty,
+                    'cost' => $cogsForThisTake,
+                    'reference_type' => Sale::class,
+                    'reference_id' => $sale->id,
+                    'date' => $sale->dispatched_at ?? $sale->date,
+                    'created_by' => auth()->id() ?? 1,
+                ]);
             }
         }
 
