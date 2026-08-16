@@ -212,6 +212,12 @@
                     <span> Customers </span>
                 </a>
             </li>
+            <li class="side-nav-item">
+                <a href="{{ route('push-notifications.index') }}" class="side-nav-link">
+                    <i class="ri-notification-3-fill"></i>
+                    <span> Push Notifications </span>
+                </a>
+            </li>
             @endcan
 
             @can('view suppliers')

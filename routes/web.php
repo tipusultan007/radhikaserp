@@ -24,6 +24,9 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
 
     // ─── Notifications ──────────────────────────────────────────────────────────
     Route::post('/notifications/mark-read', [App\Http\Controllers\NotificationController::class, 'markAsRead'])->name('notifications.markRead');
+    Route::get('/push-notifications', [App\Http\Controllers\NotificationBroadcastController::class, 'index'])->name('push-notifications.index');
+    Route::post('/push-notifications/send', [App\Http\Controllers\NotificationBroadcastController::class, 'send'])->name('push-notifications.send');
+    Route::post('/push-notifications/trigger-dues', [App\Http\Controllers\NotificationBroadcastController::class, 'triggerDueReminders'])->name('push-notifications.trigger-dues');
 
 
     // ─── Warehouses ─────────────────────────────────────────────────────────────

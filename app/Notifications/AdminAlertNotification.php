@@ -28,9 +28,15 @@ class AdminAlertNotification extends Notification
 
         try {
             $messaging = app('firebase.messaging');
-            $messageObj = \Kreait\Firebase\Messaging\CloudMessage::withTarget('topic', 'admins')
+            $payloadData = [];
+            foreach (array_merge(['type' => $type], (array) $data) as $k => $v) {
+                $payloadData[(string) $k] = is_array($v) ? json_encode($v) : (string) $v;
+            }
+
+            $messageObj = \Kreait\Firebase\Messaging\CloudMessage::new()
+                ->withTopic('admins')
                 ->withNotification(\Kreait\Firebase\Messaging\Notification::create($title, $message))
-                ->withData(array_merge(['type' => $type], $data));
+                ->withData($payloadData);
             $messaging->send($messageObj);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Firebase Error: ' . $e->getMessage());

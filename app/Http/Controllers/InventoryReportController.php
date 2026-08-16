@@ -111,11 +111,46 @@ class InventoryReportController extends Controller
         $query = Batch::with(['product', 'productVariant', 'warehouse']);
         
         if ($request->filled('batch_no')) {
-            $query->where('batch_no', 'like', '%' . $request->batch_no . '%');
+            $query->where('batch_no', 'like', '%' . trim($request->batch_no) . '%');
+        }
+
+        if ($request->filled('product_id')) {
+            $query->where('product_id', $request->product_id);
+        }
+
+        if ($request->filled('warehouse_id')) {
+            $query->where('warehouse_id', $request->warehouse_id);
+        }
+
+        if ($request->filled('stock_status')) {
+            if ($request->stock_status === 'in_stock') {
+                $query->where('remaining_qty', '>', 0);
+            } elseif ($request->stock_status === 'low_stock') {
+                $query->where('remaining_qty', '>', 0)->where('remaining_qty', '<=', 10);
+            } elseif ($request->stock_status === 'out_of_stock') {
+                $query->where('remaining_qty', '<=', 0);
+            }
+        }
+
+        if ($request->filled('product_type')) {
+            $query->whereHas('product', function($q) use ($request) {
+                $q->where('type', $request->product_type);
+            });
+        }
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->start_date);
+        }
+
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->end_date);
         }
         
         $batches = $query->orderBy('created_at', 'desc')->paginate(20)->withQueryString();
 
-        return view('reports.inventory.batch_movement', compact('batches'));
+        $products = Product::orderBy('name')->get();
+        $warehouses = Warehouse::orderBy('name')->get();
+
+        return view('reports.inventory.batch_movement', compact('batches', 'products', 'warehouses'));
     }
 }

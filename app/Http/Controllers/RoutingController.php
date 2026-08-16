@@ -24,6 +24,12 @@ class RoutingController extends Controller
     {
         $totalSales = \App\Models\Sale::sum('total');
         $totalExpenses = \App\Models\Expense::sum('amount');
+        $totalPurchases = \App\Models\Purchase::sum('total_cost');
+        $totalProducts = \App\Models\Product::count();
+        $totalCustomers = \App\Models\Customer::count();
+        $totalDue = \App\Models\Sale::sum('due_amount');
+        $todaySales = \App\Models\Sale::whereDate('date', \Carbon\Carbon::today())->sum('total');
+        $inventoryValue = \App\Models\Batch::selectRaw('SUM(remaining_qty * cost_per_unit) as val')->value('val') ?? 0;
         
         // Cash Balance Approximation
         $cashBalance = \App\Models\JournalEntry::whereHas('account', function($q) {
@@ -44,9 +50,33 @@ class RoutingController extends Controller
             
         $lowStockAlerts = \App\Models\Batch::where('remaining_qty', '<=', 10)->count();
 
+        // Monthly Financial Comparison
+        $thisMonthSales = \App\Models\Sale::whereMonth('date', \Carbon\Carbon::today()->month)
+            ->whereYear('date', \Carbon\Carbon::today()->year)->sum('total');
+        $lastMonthDate = \Carbon\Carbon::today()->subMonth();
+        $lastMonthSales = \App\Models\Sale::whereMonth('date', $lastMonthDate->month)
+            ->whereYear('date', $lastMonthDate->year)->sum('total');
+        $monthlyGrowthPercent = $lastMonthSales > 0 ? round((($thisMonthSales - $lastMonthSales) / $lastMonthSales) * 100, 1) : ($thisMonthSales > 0 ? 100 : 0);
+
         // Recent Activity
         $recentSales = \App\Models\Sale::with('customer')->latest('date')->take(5)->get();
         $recentPurchases = \App\Models\Purchase::with('supplier')->latest('date')->take(5)->get();
+
+        // Top Selling Items
+        $topSellingItems = \App\Models\SaleItem::with(['productVariant.product', 'batch.product'])
+            ->selectRaw('product_variant_id, batch_id, SUM(qty) as total_qty, SUM(total_price) as total_revenue')
+            ->groupBy('product_variant_id', 'batch_id')
+            ->orderByDesc('total_qty')
+            ->take(5)
+            ->get();
+
+        // Expense Categories Breakdown
+        $expenseCategories = \App\Models\Expense::with('category')
+            ->selectRaw('expense_category_id, SUM(amount) as total_amount')
+            ->groupBy('expense_category_id')
+            ->orderByDesc('total_amount')
+            ->take(5)
+            ->get();
 
         // Chart.js Data (Last 7 Days)
         $dates = collect();
@@ -61,7 +91,29 @@ class RoutingController extends Controller
             $expensesData->push(\App\Models\Expense::whereDate('date', $date)->sum('amount'));
         }
 
-        return view('index', compact('totalSales', 'totalExpenses', 'cashBalance', 'lowStockAlerts', 'lowStockBatches', 'recentSales', 'recentPurchases', 'dates', 'salesData', 'expensesData'));
+        return view('index', compact(
+            'totalSales', 
+            'totalExpenses', 
+            'totalPurchases',
+            'totalProducts',
+            'totalCustomers',
+            'totalDue',
+            'todaySales',
+            'inventoryValue',
+            'cashBalance', 
+            'lowStockAlerts', 
+            'lowStockBatches', 
+            'recentSales', 
+            'recentPurchases', 
+            'topSellingItems',
+            'expenseCategories',
+            'thisMonthSales',
+            'lastMonthSales',
+            'monthlyGrowthPercent',
+            'dates', 
+            'salesData', 
+            'expensesData'
+        ));
     }
 
     /**
