@@ -97,7 +97,10 @@
         <div class="col-xl-8 col-lg-7">
             <div class="card">
                 <div class="card-body">
-                    <h4 class="header-title mb-3">Expenses History</h4>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="header-title mb-0">Expenses History</h4>
+                        <a href="{{ route('expenses.export', request()->all()) }}" class="btn btn-success btn-sm"><i class="ri-file-excel-2-line me-1"></i> Export</a>
+                    </div>
                     
                     <div class="card bg-light mb-3 shadow-none border">
                         <div class="card-body py-2 px-3">

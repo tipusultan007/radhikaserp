@@ -351,6 +351,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
 
     // ─── Expenses ───────────────────────────────────────────────────────────────
     Route::group(['middleware' => ['permission:view expenses']], function () {
+        Route::get('expenses/export', [App\Http\Controllers\ExpenseController::class, 'export'])->name('expenses.export');
         Route::get('expenses', [App\Http\Controllers\ExpenseController::class, 'index'])->name('expenses.index');
     });
     Route::group(['middleware' => ['permission:create expenses']], function () {

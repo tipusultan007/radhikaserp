@@ -26,21 +26,26 @@ class AdminAlertNotification extends Notification
         $this->type = $type; // e.g., 'order', 'stock', 'alert'
         $this->data = $data; // extra context
 
-        try {
-            $messaging = app('firebase.messaging');
-            $payloadData = [];
-            foreach (array_merge(['type' => $type], (array) $data) as $k => $v) {
-                $payloadData[(string) $k] = is_array($v) ? json_encode($v) : (string) $v;
+        app()->terminating(function () use ($title, $message, $type, $data) {
+            if ($type === 'expense') {
+                return; // Do not send push notification for expenses
             }
+            try {
+                $messaging = app('firebase.messaging');
+                $payloadData = [];
+                foreach (array_merge(['type' => $type], (array) $data) as $k => $v) {
+                    $payloadData[(string) $k] = is_array($v) ? json_encode($v) : (string) $v;
+                }
 
-            $messageObj = \Kreait\Firebase\Messaging\CloudMessage::new()
-                ->withTopic('admins')
-                ->withNotification(\Kreait\Firebase\Messaging\Notification::create($title, $message))
-                ->withData($payloadData);
-            $messaging->send($messageObj);
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Firebase Error: ' . $e->getMessage());
-        }
+                $messageObj = \Kreait\Firebase\Messaging\CloudMessage::new()
+                    ->withTopic('admins')
+                    ->withNotification(\Kreait\Firebase\Messaging\Notification::create($title, $message))
+                    ->withData($payloadData);
+                $messaging->send($messageObj);
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Firebase Error: ' . $e->getMessage());
+            }
+        });
     }
 
     /**

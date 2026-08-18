@@ -122,7 +122,10 @@ class CustomerController extends Controller
         $customer = Customer::create($validated);
 
         try {
-            $admins = \App\Models\User::all();
+            $admins = \App\Models\User::role(['Admin', 'Accountant', 'Manager'])->get();
+            if ($admins->isEmpty()) {
+                $admins = \App\Models\User::where('id', 1)->get();
+            }
             \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\AdminAlertNotification(
                 'New Customer Added',
                 "Customer {$customer->name} has been added.",
@@ -177,7 +180,10 @@ class CustomerController extends Controller
             }
 
             try {
-                $admins = \App\Models\User::all();
+                $admins = \App\Models\User::role(['Admin', 'Accountant', 'Manager'])->get();
+                if ($admins->isEmpty()) {
+                    $admins = \App\Models\User::where('id', 1)->get();
+                }
                 \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\AdminAlertNotification(
                     'New Customer Added',
                     "Customer {$customer->name} has been added.",

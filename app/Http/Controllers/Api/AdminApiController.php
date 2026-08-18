@@ -3,29 +3,50 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use App\Models\Product;
-use App\Models\Sale;
-use App\Models\Customer;
-use App\Models\Supplier;
-use App\Models\Purchase;
-use App\Models\PurchaseItem;
-use App\Models\Expense;
-use App\Models\Warehouse;
-use App\Models\StockTransfer;
-use App\Models\StockAdjustment;
-use App\Models\RepackagingOrder;
-use App\Models\Journal;
-use App\Models\JournalEntry;
+use App\Http\Controllers\SaleController;
 use App\Models\ActivityLog;
-use App\Models\SaleItem;
-use App\Models\SalePayment;
 use App\Models\Batch;
+use App\Models\ChartOfAccount;
+use App\Models\Customer;
+use App\Models\District;
+use App\Models\Expense;
+use App\Models\ExpenseCategory;
 use App\Models\InventoryTransaction;
 use App\Models\Investment;
+use App\Models\Journal;
+use App\Models\JournalEntry;
+use App\Models\PriceHistory;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Models\Purchase;
+use App\Models\PurchaseItem;
+use App\Models\RepackagingAdjustment;
+use App\Models\RepackagingInput;
+use App\Models\RepackagingOrder;
+use App\Models\RepackagingOutput;
+use App\Models\Sale;
+use App\Models\SaleItem;
+use App\Models\SalePayment;
+use App\Models\StockAdjustment;
+use App\Models\StockTransfer;
+use App\Models\StockTransferItem;
+use App\Models\Supplier;
+use App\Models\User;
+use App\Models\Warehouse;
+use App\Models\WarehouseStock;
+use App\Notifications\AdminAlertNotification;
+use App\Notifications\CustomerAlertNotification;
+use App\Services\SmsService;
+use App\Services\SteadfastService;
+use App\Services\StockReconciliationService;
+use Carbon\Carbon;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use App\Models\ChartOfAccount;
 
 class AdminApiController extends Controller
 {
@@ -34,7 +55,7 @@ class AdminApiController extends Controller
      */
     public function dashboard(Request $request)
     {
-        $today = \Carbon\Carbon::today()->format('Y-m-d');
+        $today = Carbon::today()->format('Y-m-d');
 
         $totalSales = Sale::sum('total');
         $totalCustomers = Customer::count();
@@ -43,20 +64,20 @@ class AdminApiController extends Controller
 
         $todaySales = Sale::whereDate('date', $today)->sum('total');
         $todayExpenses = Expense::whereDate('date', $today)->sum('amount');
-        $todayPayments = \App\Models\SalePayment::whereDate('date', $today)->sum('amount');
+        $todayPayments = SalePayment::whereDate('date', $today)->sum('amount');
         $todayDues = Sale::whereDate('date', $today)->sum('due_amount');
-        
+
         $recentSales = Sale::with('customer')->orderBy('id', 'desc')->take(5)->get();
         $recentLogs = ActivityLog::with('user')->orderBy('id', 'desc')->take(5)->get();
-        
+
         $unreadCount = 0;
         if ($request->user()) {
             $unreadCount = $request->user()->unreadNotifications()->count();
         }
 
         // 7-day revenue/expense chart data optimized (avoid N+1 queries in loop)
-        $sevenDaysAgo = \Carbon\Carbon::now()->subDays(6)->format('Y-m-d');
-        
+        $sevenDaysAgo = Carbon::now()->subDays(6)->format('Y-m-d');
+
         $salesData = Sale::where('date', '>=', $sevenDaysAgo)
             ->selectRaw('DATE(date) as date_val, SUM(total) as total_sum')
             ->groupBy('date_val')
@@ -69,17 +90,17 @@ class AdminApiController extends Controller
 
         $chartData = [];
         for ($i = 6; $i >= 0; $i--) {
-            $date = \Carbon\Carbon::now()->subDays($i)->format('Y-m-d');
-            
+            $date = Carbon::now()->subDays($i)->format('Y-m-d');
+
             $chartData[] = [
-                'date' => \Carbon\Carbon::now()->subDays($i)->format('M d'),
+                'date' => Carbon::now()->subDays($i)->format('M d'),
                 'revenue' => $salesData->get($date, 0),
                 'expense' => $expensesData->get($date, 0),
             ];
         }
 
         // Low stock alerts (< 10)
-        $lowStock = \App\Models\WarehouseStock::with(['productVariant.product.unit', 'productVariant.unit', 'warehouse'])
+        $lowStock = WarehouseStock::with(['productVariant.product.unit', 'productVariant.unit', 'warehouse'])
             ->where('stock', '<', 10)
             ->where('stock', '>', 0) // exclude completely out of stock if desired, but let's include 0 as well, wait let's just do < 10
             ->take(10)
@@ -90,7 +111,7 @@ class AdminApiController extends Controller
             'today_expenses' => $todayExpenses,
             'today_payments' => $todayPayments,
             'today_dues' => $todayDues,
-            
+
             'total_sales' => $totalSales,
             'total_customers' => $totalCustomers,
             'total_products' => $totalProducts,
@@ -106,11 +127,12 @@ class AdminApiController extends Controller
     /**
      * Get all products.
      */
-        public function products(Request $request)
+    public function products(Request $request)
     {
-        $products = Product::with(['unit', 'variants' => function($q) {
+        $products = Product::with(['unit', 'variants' => function ($q) {
             $q->with(['priceHistory', 'unit']);
         }])->orderBy('id', 'desc')->get();
+
         return response()->json(['products' => $products]);
     }
 
@@ -131,7 +153,7 @@ class AdminApiController extends Controller
         $validated['status'] = $request->has('status') && $request->status;
 
         do {
-            $sku = 'PRD-' . strtoupper(\Illuminate\Support\Str::random(6));
+            $sku = 'PRD-'.strtoupper(Str::random(6));
         } while (Product::where('sku', $sku)->exists());
         $validated['sku'] = $sku;
 
@@ -141,14 +163,14 @@ class AdminApiController extends Controller
         }
 
         $product = Product::create($validated);
-        
+
         $createdVariants = [];
         foreach ($request->variants as $varData) {
             do {
-                $varSku = $product->sku . '-' . strtoupper(\Illuminate\Support\Str::random(4));
-            } while (\App\Models\ProductVariant::where('sku', $varSku)->exists());
-            
-            $createdVariants[] = \App\Models\ProductVariant::create([
+                $varSku = $product->sku.'-'.strtoupper(Str::random(4));
+            } while (ProductVariant::where('sku', $varSku)->exists());
+
+            $createdVariants[] = ProductVariant::create([
                 'product_id' => $product->id,
                 'name' => $varData['name'],
                 'sku' => $varSku,
@@ -175,14 +197,15 @@ class AdminApiController extends Controller
         $validated['status'] = $request->has('status') && $request->status;
 
         if ($request->hasFile('image')) {
-            if ($product->image_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($product->image_path)) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($product->image_path);
+            if ($product->image_path && Storage::disk('public')->exists($product->image_path)) {
+                Storage::disk('public')->delete($product->image_path);
             }
             $path = $request->file('image')->store('products', 'public');
             $validated['image_path'] = $path;
         }
 
         $product->update($validated);
+
         return response()->json(['message' => 'Product updated', 'product' => $product]);
     }
 
@@ -193,12 +216,14 @@ class AdminApiController extends Controller
             // Delete variants first to prevent constraint violations
             $product->variants()->delete();
             $product->delete();
+
             return response()->json(['message' => 'Product deleted']);
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             if ($e->getCode() == '23000') {
                 return response()->json(['message' => 'Cannot delete product because it has associated stock, sales, or other records.'], 400);
             }
-            return response()->json(['message' => 'Failed to delete product: ' . $e->getMessage()], 500);
+
+            return response()->json(['message' => 'Failed to delete product: '.$e->getMessage()], 500);
         }
     }
 
@@ -206,16 +231,16 @@ class AdminApiController extends Controller
     {
         $prefix = 'VAR';
         if ($request->has('product_id') && $request->product_id != '') {
-            $product = \App\Models\Product::find($request->product_id);
+            $product = Product::find($request->product_id);
             if ($product) {
                 $prefix = $product->sku;
             }
         }
-        
+
         do {
-            $sku = $prefix . '-' . strtoupper(\Illuminate\Support\Str::random(4));
-        } while (\App\Models\ProductVariant::where('sku', $sku)->exists());
-        
+            $sku = $prefix.'-'.strtoupper(Str::random(4));
+        } while (ProductVariant::where('sku', $sku)->exists());
+
         return response()->json(['sku' => $sku]);
     }
 
@@ -237,10 +262,10 @@ class AdminApiController extends Controller
         $validated['status'] = $request->has('status') && $request->status;
         $validated['price'] = $validated['price'] ?? 0;
 
-        $variant = \App\Models\ProductVariant::create($validated);
+        $variant = ProductVariant::create($validated);
 
         if ($variant->price > 0) {
-            \App\Models\PriceHistory::create([
+            PriceHistory::create([
                 'product_variant_id' => $variant->id,
                 'old_price' => 0,
                 'new_price' => $variant->price,
@@ -253,12 +278,12 @@ class AdminApiController extends Controller
 
     public function updateProductVariant(Request $request, $id)
     {
-        $variant = \App\Models\ProductVariant::findOrFail($id);
-        
+        $variant = ProductVariant::findOrFail($id);
+
         $validated = $request->validate([
             'product_id' => 'required|exists:products,id',
             'name' => 'required|string|max:255',
-            'sku' => 'required|string|unique:product_variants,sku,' . $variant->id . '|max:255',
+            'sku' => 'required|string|unique:product_variants,sku,'.$variant->id.'|max:255',
             'barcode' => 'nullable|string|max:255',
             'unit_qty' => 'required|numeric|min:0',
             'unit_id' => 'required|exists:units,id',
@@ -275,7 +300,7 @@ class AdminApiController extends Controller
         $variant->update($validated);
 
         if ($oldPrice != $variant->price) {
-            \App\Models\PriceHistory::create([
+            PriceHistory::create([
                 'product_variant_id' => $variant->id,
                 'old_price' => $oldPrice,
                 'new_price' => $variant->price,
@@ -288,7 +313,8 @@ class AdminApiController extends Controller
 
     public function destroyProductVariant($id)
     {
-        \App\Models\ProductVariant::destroy($id);
+        ProductVariant::destroy($id);
+
         return response()->json(['message' => 'Variant deleted']);
     }
 
@@ -300,7 +326,7 @@ class AdminApiController extends Controller
         $query = Sale::with(['customer', 'items.productVariant.product.unit', 'items.productVariant.unit', 'warehouse', 'creator']);
 
         if ($request->filled('invoice_no')) {
-            $query->where('invoice_no', 'LIKE', '%' . $request->invoice_no . '%');
+            $query->where('invoice_no', 'LIKE', '%'.$request->invoice_no.'%');
         }
         if ($request->filled('customer_id')) {
             $query->where('customer_id', $request->customer_id);
@@ -312,14 +338,15 @@ class AdminApiController extends Controller
             $query->where('delivery_status', $request->delivery_status);
         }
         if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween('date', [$request->start_date . ' 00:00:00', $request->end_date . ' 23:59:59']);
+            $query->whereBetween('date', [$request->start_date.' 00:00:00', $request->end_date.' 23:59:59']);
         } elseif ($request->filled('start_date')) {
-            $query->where('date', '>=', $request->start_date . ' 00:00:00');
+            $query->where('date', '>=', $request->start_date.' 00:00:00');
         } elseif ($request->filled('end_date')) {
-            $query->where('date', '<=', $request->end_date . ' 23:59:59');
+            $query->where('date', '<=', $request->end_date.' 23:59:59');
         }
 
         $sales = $query->orderBy('id', 'desc')->paginate(20);
+
         return response()->json(['sales' => $sales]);
     }
 
@@ -344,7 +371,7 @@ class AdminApiController extends Controller
 
         $discount = $validated['discount'] ?? 0;
         $deliveryCharge = $validated['delivery_charge'] ?? 0;
-        $isPromotional = !empty($validated['is_promotional']);
+        $isPromotional = ! empty($validated['is_promotional']);
 
         try {
             DB::beginTransaction();
@@ -356,7 +383,7 @@ class AdminApiController extends Controller
             $grandTotalWeight = 0;
             foreach ($validated['items'] as $item) {
                 $subtotal += $item['qty'] * $item['unit_price'];
-                $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
+                $variant = ProductVariant::find($item['product_variant_id']);
                 $unitQty = $variant ? $variant->getBaseQuantity() : 1;
                 $grandTotalWeight += ($item['qty'] * $unitQty);
             }
@@ -398,7 +425,7 @@ class AdminApiController extends Controller
 
             // Create Sale
             $sale = Sale::create([
-                'invoice_no' => 'INV-' . strtoupper(Str::random(6)),
+                'invoice_no' => 'INV-'.strtoupper(Str::random(6)),
                 'customer_id' => $validated['customer_id'],
                 'warehouse_id' => $warehouseId,
                 'date' => $validated['date'],
@@ -421,7 +448,7 @@ class AdminApiController extends Controller
             ]);
 
             // Update Customer Due and Wallet (only if not promotional)
-            if (!$isPromotional && $customer) {
+            if (! $isPromotional && $customer) {
                 $customer->wallet_balance = $customer->wallet_balance - $walletUsed + $newAdvance;
                 if ($dueAmount > 0) {
                     $customer->total_due += $dueAmount;
@@ -430,11 +457,11 @@ class AdminApiController extends Controller
             }
 
             // Record Payment (only if not promotional)
-            if (!$isPromotional && $paidAmount > 0) {
+            if (! $isPromotional && $paidAmount > 0) {
                 SalePayment::create([
                     'sale_id' => $sale->id,
                     'amount' => $paidAmount,
-                    'method' => 'cash', 
+                    'method' => 'cash',
                     'date' => $validated['date'],
                     'reference' => 'POS Payment (Mobile)',
                 ]);
@@ -447,12 +474,12 @@ class AdminApiController extends Controller
                 $itemQty = $item['qty'];
                 $unitPrice = $item['unit_price'];
 
-                $variant = \App\Models\ProductVariant::find($variantId);
+                $variant = ProductVariant::find($variantId);
                 $unitQty = $variant ? $variant->getBaseQuantity() : 1;
                 $grandTotalWeight += ($itemQty * $unitQty);
 
                 // Just save the item without inventory deduction initially
-                \App\Models\SaleItem::create([
+                SaleItem::create([
                     'sale_id' => $sale->id,
                     'product_variant_id' => $variantId,
                     'batch_id' => null,
@@ -471,17 +498,17 @@ class AdminApiController extends Controller
             $cogsAcc = ChartOfAccount::firstOrCreate(['name' => 'Cost of Goods Sold', 'type' => 'expense']);
             $salesRevAcc = ChartOfAccount::firstOrCreate(['name' => 'Sales Revenue', 'type' => 'income']);
             $promoAcc = ChartOfAccount::firstOrCreate(['name' => 'Promotional Expense', 'type' => 'expense']);
-            
+
             $cashAcc = isset($validated['payment_method']) ? ChartOfAccount::find($validated['payment_method']) : ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
             $arAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Receivable', 'type' => 'asset']);
             $advAcc = ChartOfAccount::firstOrCreate(['name' => 'Customer Advance', 'type' => 'liability']);
 
             $journal = Journal::create([
-                'journal_no' => 'JNL-' . strtoupper(Str::random(6)),
+                'journal_no' => 'JNL-'.strtoupper(Str::random(6)),
                 'date' => $validated['date'],
                 'reference_type' => Sale::class,
                 'reference_id' => $sale->id,
-                'notes' => 'POS Sale ' . $sale->invoice_no . ' (Mobile' . ($isPromotional ? ', Promotional' : '') . ')',
+                'notes' => 'POS Sale '.$sale->invoice_no.' (Mobile'.($isPromotional ? ', Promotional' : '').')',
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
@@ -500,7 +527,7 @@ class AdminApiController extends Controller
                 }
             }
             JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $salesRevAcc->id, 'type' => 'credit', 'amount' => $total]);
-            if (!$isPromotional && $newAdvance > 0) {
+            if (! $isPromotional && $newAdvance > 0) {
                 JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'credit', 'amount' => $newAdvance]);
             }
 
@@ -510,19 +537,20 @@ class AdminApiController extends Controller
             }
 
             if ($sale->delivery_method === 'steadfast') {
-                \App\Services\SteadfastService::dispatchSale($sale);
+                SteadfastService::dispatchSale($sale);
             }
 
             DB::commit();
 
-            if ($paidAmount > 0 && $customer && !empty($customer->phone)) {
-                \App\Services\SmsService::sendSms($customer->phone, "Dear {$customer->name}, we have received your payment of BDT {$paidAmount} for order {$sale->invoice_no}. Thank you!");
+            if ($paidAmount > 0 && $customer && ! empty($customer->phone)) {
+                SmsService::sendSms($customer->phone, "Dear {$customer->name}, we have received your payment of BDT {$paidAmount} for order {$sale->invoice_no}. Thank you!");
             }
 
             return response()->json(['message' => 'Sale created', 'sale' => $sale->load(['items', 'customer'])], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -560,7 +588,7 @@ class AdminApiController extends Controller
             $grandTotalWeight = 0;
             foreach ($validated['items'] as $item) {
                 $subtotal += $item['qty'] * $item['unit_price'];
-                $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
+                $variant = ProductVariant::find($item['product_variant_id']);
                 $unitQty = $variant ? $variant->getBaseQuantity() : 1;
                 $grandTotalWeight += ($item['qty'] * $unitQty);
             }
@@ -579,8 +607,8 @@ class AdminApiController extends Controller
 
             $total = max(0, $subtotal + $deliveryCharge - $discount);
 
-            $isPromotional = $request->has('is_promotional') ? !empty($request->input('is_promotional')) : !empty($sale->is_promotional);
-            
+            $isPromotional = $request->has('is_promotional') ? ! empty($request->input('is_promotional')) : ! empty($sale->is_promotional);
+
             if ($isPromotional) {
                 $paidAmount = 0;
                 $walletUsed = 0;
@@ -608,7 +636,7 @@ class AdminApiController extends Controller
                 $paymentStatus = $dueAmount > 0 ? ($paidAmount > 0 || $walletUsed > 0 ? 'partial' : 'due') : 'paid';
                 $paymentMethod = $request->input('payment_method', $sale->payment_method);
             }
-            
+
             $dispatchedAt = $request->input('dispatched_at', $sale->dispatched_at);
             $dispatchedBy = $request->input('dispatched_by', $sale->dispatched_by);
             $newDeliveryStatus = $request->input('delivery_status', $sale->delivery_status);
@@ -625,7 +653,7 @@ class AdminApiController extends Controller
                         'recipient_address' => $customer->address ?? 'N/A',
                         'cod_amount' => $dueAmount,
                     ];
-                    $response = \App\Services\SteadfastService::createOrder($steadfastData);
+                    $response = SteadfastService::createOrder($steadfastData);
                     if ($response && isset($response['consignment']['consignment_id'])) {
                         $consignmentId = $response['consignment']['consignment_id'];
                     }
@@ -656,7 +684,7 @@ class AdminApiController extends Controller
             ]);
 
             // Update Customer Due and Wallet (only for non-promotional sales)
-            if (!$isPromotional && $customer) {
+            if (! $isPromotional && $customer) {
                 $customer->wallet_balance = $customer->wallet_balance - $walletUsed + $newAdvance;
                 if ($dueAmount > 0) {
                     $customer->total_due += $dueAmount;
@@ -665,19 +693,19 @@ class AdminApiController extends Controller
             }
 
             // Record Payment (only for non-promotional sales)
-            if (!$isPromotional && $paidAmount > 0) {
-                \App\Models\SalePayment::create([
+            if (! $isPromotional && $paidAmount > 0) {
+                SalePayment::create([
                     'sale_id' => $sale->id,
                     'amount' => $paidAmount,
                     'method' => 'cash',
                     'date' => $sale->date,
                     'reference' => 'POS Payment (Mobile Updated)',
                 ]);
-                
+
                 if ($customer) {
-                    \Illuminate\Support\Facades\Notification::send($customer, new \App\Notifications\CustomerAlertNotification(
+                    Notification::send($customer, new CustomerAlertNotification(
                         'Payment Received',
-                        "We have received a payment of BDT " . number_format($paidAmount, 2) . " for your order #{$sale->invoice_no}.",
+                        'We have received a payment of BDT '.number_format($paidAmount, 2)." for your order #{$sale->invoice_no}.",
                         'payment',
                         ['sale_id' => $sale->id],
                         $customer->id
@@ -694,12 +722,12 @@ class AdminApiController extends Controller
                 $itemQty = $item['qty'];
                 $unitPrice = $item['unit_price'];
 
-                $variant = \App\Models\ProductVariant::find($variantId);
+                $variant = ProductVariant::find($variantId);
                 $unitQty = $variant ? $variant->getBaseQuantity() : 1;
                 $grandTotalWeight += ($itemQty * $unitQty);
 
                 if ($shouldConsumeStock) {
-                    $batches = \App\Models\Batch::where('product_variant_id', $variantId)
+                    $batches = Batch::where('product_variant_id', $variantId)
                         ->where('warehouse_id', $warehouseId)
                         ->where('remaining_qty', '>', 0)
                         ->orderBy('id', 'asc')
@@ -709,7 +737,9 @@ class AdminApiController extends Controller
                     $remainingToConsume = $itemQty;
 
                     foreach ($batches as $batch) {
-                        if ($remainingToConsume <= 0) break;
+                        if ($remainingToConsume <= 0) {
+                            break;
+                        }
                         $takeQty = min($batch->remaining_qty, $remainingToConsume);
                         $cogsForThisTake = $takeQty * $batch->cost_per_unit;
 
@@ -720,7 +750,7 @@ class AdminApiController extends Controller
                         $totalCogs += $cogsForThisTake;
                         $remainingToConsume -= $takeQty;
 
-                        \App\Models\SaleItem::create([
+                        SaleItem::create([
                             'sale_id' => $sale->id,
                             'product_variant_id' => $variantId,
                             'batch_id' => $batch->id,
@@ -730,7 +760,7 @@ class AdminApiController extends Controller
                             'total_weight' => $takeQty * $unitQty,
                         ]);
 
-                        \App\Models\InventoryTransaction::create([
+                        InventoryTransaction::create([
                             'warehouse_id' => $warehouseId,
                             'product_id' => $batch->product_id,
                             'product_variant_id' => $variantId,
@@ -747,16 +777,16 @@ class AdminApiController extends Controller
                     }
 
                     if (round($remainingToConsume, 4) > 0) {
-                        $autoBatch = \App\Services\StockReconciliationService::autoRepackageRawToVariant(
+                        $autoBatch = StockReconciliationService::autoRepackageRawToVariant(
                             $warehouseId,
                             $variantId,
                             $remainingToConsume,
                             $sale->date,
-                            'Auto-repackaged for Mobile Sale #' . ($sale->invoice_no ?? $sale->id)
+                            'Auto-repackaged for Mobile Sale #'.($sale->invoice_no ?? $sale->id)
                         );
 
                         if ($autoBatch && $autoBatch->remaining_qty > 0) {
-                            $takeQty = min((float)$autoBatch->remaining_qty, $remainingToConsume);
+                            $takeQty = min((float) $autoBatch->remaining_qty, $remainingToConsume);
                             $cogsForThisTake = $takeQty * $autoBatch->cost_per_unit;
 
                             $autoBatch->qty_out += $takeQty;
@@ -766,7 +796,7 @@ class AdminApiController extends Controller
                             $totalCogs += $cogsForThisTake;
                             $remainingToConsume -= $takeQty;
 
-                            \App\Models\SaleItem::create([
+                            SaleItem::create([
                                 'sale_id' => $sale->id,
                                 'product_variant_id' => $variantId,
                                 'batch_id' => $autoBatch->id,
@@ -776,7 +806,7 @@ class AdminApiController extends Controller
                                 'total_weight' => $takeQty * $unitQty,
                             ]);
 
-                            \App\Models\InventoryTransaction::create([
+                            InventoryTransaction::create([
                                 'warehouse_id' => $warehouseId,
                                 'product_id' => $autoBatch->product_id,
                                 'product_variant_id' => $variantId,
@@ -794,28 +824,32 @@ class AdminApiController extends Controller
                     }
 
                     if (round($remainingToConsume, 4) > 0) {
-                        throw new \Exception("Insufficient stock for variant ID: {$variantId}. Shortfall: " . $remainingToConsume);
+                        throw new \Exception("Insufficient stock for variant ID: {$variantId}. Shortfall: ".$remainingToConsume);
                     }
-                    
+
                     // Check Low Stock
-                    $currentStock = \App\Models\WarehouseStock::where('product_variant_id', $variantId)
+                    $currentStock = WarehouseStock::where('product_variant_id', $variantId)
                         ->where('warehouse_id', $warehouseId)
                         ->value('stock');
-                    
+
                     if ($currentStock !== null && $currentStock < 10) {
                         try {
-                            $admins = \App\Models\User::all();
+                            $admins = User::role(['Admin', 'Accountant', 'Manager'])->get();
+                            if ($admins->isEmpty()) {
+                                $admins = User::where('id', 1)->get();
+                            }
                             $varName = $variant ? $variant->name : 'Item';
-                            \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\AdminAlertNotification(
+                            Notification::send($admins, new AdminAlertNotification(
                                 'Low Stock Alert',
                                 "Product {$varName} is low on stock ({$currentStock} remaining).",
                                 'stock',
                                 ['product_variant_id' => $variantId]
                             ));
-                        } catch (\Exception $e) {}
+                        } catch (\Exception $e) {
+                        }
                     }
                 } else {
-                    \App\Models\SaleItem::create([
+                    SaleItem::create([
                         'sale_id' => $sale->id,
                         'product_variant_id' => $variantId,
                         'batch_id' => null,
@@ -831,39 +865,39 @@ class AdminApiController extends Controller
             $sale->save();
 
             // Accounting Entries
-            $inventoryFinAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
-            $cogsAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Cost of Goods Sold', 'type' => 'expense']);
-            $salesRevAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Sales Revenue', 'type' => 'income']);
-            $promoAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Promotional Expense', 'type' => 'expense']);
-            $cashAcc = $paymentMethod ? \App\Models\ChartOfAccount::find($paymentMethod) : \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
-            $arAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Accounts Receivable', 'type' => 'asset']);
-            $advAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Customer Advance', 'type' => 'liability']);
+            $inventoryFinAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
+            $cogsAcc = ChartOfAccount::firstOrCreate(['name' => 'Cost of Goods Sold', 'type' => 'expense']);
+            $salesRevAcc = ChartOfAccount::firstOrCreate(['name' => 'Sales Revenue', 'type' => 'income']);
+            $promoAcc = ChartOfAccount::firstOrCreate(['name' => 'Promotional Expense', 'type' => 'expense']);
+            $cashAcc = $paymentMethod ? ChartOfAccount::find($paymentMethod) : ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
+            $arAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Receivable', 'type' => 'asset']);
+            $advAcc = ChartOfAccount::firstOrCreate(['name' => 'Customer Advance', 'type' => 'liability']);
 
-            $journal = \App\Models\Journal::create([
-                'journal_no' => 'JNL-' . strtoupper(\Illuminate\Support\Str::random(6)),
+            $journal = Journal::create([
+                'journal_no' => 'JNL-'.strtoupper(Str::random(6)),
                 'date' => $sale->date,
                 'reference_type' => Sale::class,
                 'reference_id' => $sale->id,
-                'notes' => 'POS Sale ' . $sale->invoice_no . ' (Mobile Updated' . ($isPromotional ? ', Promotional' : '') . ')',
+                'notes' => 'POS Sale '.$sale->invoice_no.' (Mobile Updated'.($isPromotional ? ', Promotional' : '').')',
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
             if ($isPromotional) {
-                \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $promoAcc->id, 'type' => 'debit', 'amount' => $total]);
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $promoAcc->id, 'type' => 'debit', 'amount' => $total]);
             } else {
                 if ($paidAmount > 0) {
-                    \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $paidAmount]);
+                    JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $paidAmount]);
                 }
                 if ($walletUsed > 0) {
-                    \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'debit', 'amount' => $walletUsed]);
+                    JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'debit', 'amount' => $walletUsed]);
                 }
                 if ($dueAmount > 0) {
-                    \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => $dueAmount]);
+                    JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => $dueAmount]);
                 }
             }
-            \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $salesRevAcc->id, 'type' => 'credit', 'amount' => $total]);
-            if (!$isPromotional && $newAdvance > 0) {
-                \App\Models\JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'credit', 'amount' => $newAdvance]);
+            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $salesRevAcc->id, 'type' => 'credit', 'amount' => $total]);
+            if (! $isPromotional && $newAdvance > 0) {
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'credit', 'amount' => $newAdvance]);
             }
             // COGS & Inventory Reduction entries are deferred until dispatch
             if (in_array($newDeliveryStatus, ['dispatched', 'delivered'])) {
@@ -871,7 +905,7 @@ class AdminApiController extends Controller
             }
             if ($oldDeliveryStatus !== 'processing' && $newDeliveryStatus === 'processing') {
                 if ($customer) {
-                    \Illuminate\Support\Facades\Notification::send($customer, new \App\Notifications\CustomerAlertNotification(
+                    Notification::send($customer, new CustomerAlertNotification(
                         'Order Accepted',
                         "Your order #{$sale->invoice_no} has been accepted and is now processing.",
                         'order_processing',
@@ -883,16 +917,19 @@ class AdminApiController extends Controller
 
             if ($oldDeliveryStatus !== 'shipped' && $newDeliveryStatus === 'shipped') {
                 try {
-                    $admins = \App\Models\User::all();
-                    \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\AdminAlertNotification(
+                    $admins = User::role(['Admin', 'Accountant', 'Manager'])->get();
+                    if ($admins->isEmpty()) {
+                        $admins = User::where('id', 1)->get();
+                    }
+                    Notification::send($admins, new AdminAlertNotification(
                         'Order Dispatched',
                         "Order #{$sale->invoice_no} has been dispatched.",
                         'dispatch',
                         ['sale_id' => $sale->id]
                     ));
-                    
+
                     if ($customer) {
-                        \Illuminate\Support\Facades\Notification::send($customer, new \App\Notifications\CustomerAlertNotification(
+                        Notification::send($customer, new CustomerAlertNotification(
                             'Order Dispatched',
                             "Your order #{$sale->invoice_no} has been dispatched and is on its way!",
                             'order_shipped',
@@ -900,21 +937,25 @@ class AdminApiController extends Controller
                             $customer->id
                         ));
                     }
-                } catch (\Exception $e) {}
+                } catch (\Exception $e) {
+                }
             }
 
             if ($oldDeliveryStatus !== 'delivered' && $newDeliveryStatus === 'delivered') {
                 try {
-                    $admins = \App\Models\User::all();
-                    \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\AdminAlertNotification(
+                    $admins = User::role(['Admin', 'Accountant', 'Manager'])->get();
+                    if ($admins->isEmpty()) {
+                        $admins = User::where('id', 1)->get();
+                    }
+                    Notification::send($admins, new AdminAlertNotification(
                         'Order Delivered',
                         "Order #{$sale->invoice_no} has been delivered.",
                         'deliver',
                         ['sale_id' => $sale->id]
                     ));
-                    
+
                     if ($customer) {
-                        \Illuminate\Support\Facades\Notification::send($customer, new \App\Notifications\CustomerAlertNotification(
+                        Notification::send($customer, new CustomerAlertNotification(
                             'Order Delivered',
                             "Your order #{$sale->invoice_no} has been delivered successfully.",
                             'order_delivered',
@@ -922,19 +963,20 @@ class AdminApiController extends Controller
                             $customer->id
                         ));
                     }
-                } catch (\Exception $e) {}
+                } catch (\Exception $e) {
+                }
             }
 
             DB::commit();
 
-            if ($customer && !empty($customer->phone)) {
+            if ($customer && ! empty($customer->phone)) {
                 if ($oldDeliveryStatus !== 'processing' && $newDeliveryStatus === 'processing') {
-                    \App\Services\SmsService::sendSms($customer->phone, "Dear {$customer->name}, your order #{$sale->invoice_no} has been accepted and is now processing.");
+                    SmsService::sendSms($customer->phone, "Dear {$customer->name}, your order #{$sale->invoice_no} has been accepted and is now processing.");
                 }
 
                 if ($paidAmount > $oldPaid) {
                     $paidDiff = $paidAmount - $oldPaid;
-                    \App\Services\SmsService::sendSms($customer->phone, "Dear {$customer->name}, we have received your payment of BDT {$paidDiff} for order #{$sale->invoice_no}. Thank you!");
+                    SmsService::sendSms($customer->phone, "Dear {$customer->name}, we have received your payment of BDT {$paidDiff} for order #{$sale->invoice_no}. Thank you!");
                 }
             }
 
@@ -942,6 +984,7 @@ class AdminApiController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -960,24 +1003,24 @@ class AdminApiController extends Controller
         }
 
         // 2. Delete Inventory Transactions
-        \App\Models\InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->delete();
+        InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->delete();
 
         // 3 & 5. Revert Customer Due, Wallet Balance, and Accounting Entries
-        $journal = \App\Models\Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->first();
-        
-        $customer = \App\Models\Customer::find($sale->customer_id);
+        $journal = Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->first();
+
+        $customer = Customer::find($sale->customer_id);
         if ($customer) {
             $walletUsed = 0;
             $newAdvance = 0;
-            $advAcc = \App\Models\ChartOfAccount::where('name', 'Customer Advance')->first();
-            
+            $advAcc = ChartOfAccount::where('name', 'Customer Advance')->first();
+
             if ($advAcc && $journal) {
-                $walletUsed = \App\Models\JournalEntry::where('journal_id', $journal->id)->where('account_id', $advAcc->id)->where('type', 'debit')->sum('amount');
-                $newAdvance = \App\Models\JournalEntry::where('journal_id', $journal->id)->where('account_id', $advAcc->id)->where('type', 'credit')->sum('amount');
+                $walletUsed = JournalEntry::where('journal_id', $journal->id)->where('account_id', $advAcc->id)->where('type', 'debit')->sum('amount');
+                $newAdvance = JournalEntry::where('journal_id', $journal->id)->where('account_id', $advAcc->id)->where('type', 'credit')->sum('amount');
             }
 
             $customer->wallet_balance = $customer->wallet_balance + $walletUsed - $newAdvance;
-            
+
             if ($sale->due_amount > 0) {
                 $customer->total_due = max(0, $customer->total_due - $sale->due_amount);
             }
@@ -985,15 +1028,15 @@ class AdminApiController extends Controller
         }
 
         // 4. Delete Payments
-        \App\Models\SalePayment::where('sale_id', $sale->id)->delete();
+        SalePayment::where('sale_id', $sale->id)->delete();
 
         if ($journal) {
-            \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
+            JournalEntry::where('journal_id', $journal->id)->delete();
             $journal->delete();
         }
 
         // 6. Delete Sale Items
-        \App\Models\SaleItem::where('sale_id', $sale->id)->delete();
+        SaleItem::where('sale_id', $sale->id)->delete();
     }
 
     public function destroySale($id)
@@ -1004,17 +1047,18 @@ class AdminApiController extends Controller
             $this->reverseSale($sale);
             $sale->delete();
             DB::commit();
+
             return response()->json(['message' => 'Sale deleted and reversed successfully']);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Failed to delete sale: ' . $e->getMessage()], 400);
+
+            return response()->json(['error' => 'Failed to delete sale: '.$e->getMessage()], 400);
         }
     }
 
     /**
      * Get all customers.
      */
-
     public function updateDeliveryStatus(Request $request, $id)
     {
         $request->validate([
@@ -1029,17 +1073,17 @@ class AdminApiController extends Controller
             $newStatus = $request->delivery_status;
 
             $wasDispatched = in_array($oldStatus, ['dispatched', 'delivered']);
-            $isDispatched  = in_array($newStatus, ['dispatched', 'delivered']);
+            $isDispatched = in_array($newStatus, ['dispatched', 'delivered']);
 
-            $journal = \App\Models\Journal::where('reference_type', Sale::class)
+            $journal = Journal::where('reference_type', Sale::class)
                 ->where('reference_id', $sale->id)
                 ->first();
 
-            if (!$wasDispatched && $isDispatched) {
+            if (! $wasDispatched && $isDispatched) {
                 if ($journal) {
                     $this->consumeStockForSale($sale, $journal->id, $request->user()->id ?? 1);
                 }
-            } elseif ($wasDispatched && !$isDispatched) {
+            } elseif ($wasDispatched && ! $isDispatched) {
                 foreach ($sale->items as $item) {
                     if ($item->batch) {
                         $item->batch->qty_out -= $item->qty;
@@ -1047,21 +1091,25 @@ class AdminApiController extends Controller
                         $item->batch->save();
                     }
                 }
-                \App\Models\InventoryTransaction::where('reference_type', Sale::class)
+                InventoryTransaction::where('reference_type', Sale::class)
                     ->where('reference_id', $sale->id)
                     ->delete();
                 if ($journal) {
-                    $cogsAcc = \App\Models\ChartOfAccount::where('name', 'Cost of Goods Sold')->first();
-                    $invAcc  = \App\Models\ChartOfAccount::where('name', 'Inventory (Finished)')->first();
-                    if ($cogsAcc) \App\Models\JournalEntry::where('journal_id', $journal->id)->where('account_id', $cogsAcc->id)->delete();
-                    if ($invAcc)  \App\Models\JournalEntry::where('journal_id', $journal->id)->where('account_id', $invAcc->id)->delete();
+                    $cogsAcc = ChartOfAccount::where('name', 'Cost of Goods Sold')->first();
+                    $invAcc = ChartOfAccount::where('name', 'Inventory (Finished)')->first();
+                    if ($cogsAcc) {
+                        JournalEntry::where('journal_id', $journal->id)->where('account_id', $cogsAcc->id)->delete();
+                    }
+                    if ($invAcc) {
+                        JournalEntry::where('journal_id', $journal->id)->where('account_id', $invAcc->id)->delete();
+                    }
                 }
             }
 
             $sale->delivery_status = $newStatus;
 
             if ($newStatus === 'accepted' && $oldStatus !== 'accepted' && $sale->delivery_method === 'steadfast') {
-                \App\Services\SteadfastService::dispatchSale($sale);
+                SteadfastService::dispatchSale($sale);
             }
 
             $sale->save();
@@ -1069,18 +1117,21 @@ class AdminApiController extends Controller
             DB::commit();
 
             return response()->json([
-                'message' => 'Delivery status updated to ' . $newStatus,
+                'message' => 'Delivery status updated to '.$newStatus,
                 'sale' => $sale->fresh(),
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Failed to update status: ' . $e->getMessage()], 400);
+
+            return response()->json(['error' => 'Failed to update status: '.$e->getMessage()], 400);
         }
     }
+
     public function districts()
     {
-        $districts = \App\Models\District::orderBy('name')->get(['id', 'name']);
+        $districts = District::orderBy('name')->get(['id', 'name']);
+
         return response()->json(['districts' => $districts]);
     }
 
@@ -1090,9 +1141,9 @@ class AdminApiController extends Controller
 
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
-                  ->orWhere('phone', 'LIKE', "%{$search}%");
+                    ->orWhere('phone', 'LIKE', "%{$search}%");
             });
         }
 
@@ -1105,7 +1156,7 @@ class AdminApiController extends Controller
         } else {
             $customers = $query->paginate(20);
         }
-        
+
         return response()->json(['customers' => $customers]);
     }
 
@@ -1128,8 +1179,8 @@ class AdminApiController extends Controller
         $validated['opening_balance'] = $validated['opening_balance'] ?? 0;
         $validated['total_due'] = $validated['opening_balance'];
 
-        if (!empty($validated['password'])) {
-            $validated['password'] = \Illuminate\Support\Facades\Hash::make($validated['password']);
+        if (! empty($validated['password'])) {
+            $validated['password'] = Hash::make($validated['password']);
         } else {
             unset($validated['password']);
         }
@@ -1143,9 +1194,11 @@ class AdminApiController extends Controller
             }
 
             DB::commit();
+
             return response()->json(['message' => 'Customer created', 'customer' => $customer], 201);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -1155,13 +1208,13 @@ class AdminApiController extends Controller
         $customer = Customer::findOrFail($id);
 
         return response()->json([
-            'customer' => $customer
+            'customer' => $customer,
         ]);
     }
 
     public function customerSales($id)
     {
-        $sales = \App\Models\Sale::with('items.productVariant.product', 'warehouse')
+        $sales = Sale::with('items.productVariant.product', 'warehouse')
             ->where('customer_id', $id)
             ->orderBy('date', 'desc')
             ->paginate(20);
@@ -1171,7 +1224,7 @@ class AdminApiController extends Controller
 
     public function customerPayments($id)
     {
-        $payments = \App\Models\SalePayment::whereHas('sale', function($q) use ($id) {
+        $payments = SalePayment::whereHas('sale', function ($q) use ($id) {
             $q->where('customer_id', $id);
         })->with('sale')->orderBy('date', 'desc')->paginate(20);
 
@@ -1198,8 +1251,8 @@ class AdminApiController extends Controller
         $validated['credit_limit'] = $validated['credit_limit'] ?? $customer->credit_limit;
         $newOpeningBalance = $validated['opening_balance'] ?? 0;
 
-        if (!empty($validated['password'])) {
-            $validated['password'] = \Illuminate\Support\Facades\Hash::make($validated['password']);
+        if (! empty($validated['password'])) {
+            $validated['password'] = Hash::make($validated['password']);
         } else {
             unset($validated['password']);
         }
@@ -1207,7 +1260,7 @@ class AdminApiController extends Controller
         DB::beginTransaction();
         try {
             $oldOpeningBalance = (float) $customer->opening_balance;
-            
+
             $diff = $newOpeningBalance - $oldOpeningBalance;
             $validated['total_due'] = $customer->total_due + $diff;
 
@@ -1215,9 +1268,9 @@ class AdminApiController extends Controller
 
             if ($oldOpeningBalance !== (float) $newOpeningBalance) {
                 $journal = Journal::where('reference_type', Customer::class)
-                                  ->where('reference_id', $customer->id)
-                                  ->where('notes', 'Opening Balance')
-                                  ->first();
+                    ->where('reference_id', $customer->id)
+                    ->where('notes', 'Opening Balance')
+                    ->first();
 
                 if ($newOpeningBalance > 0) {
                     if ($journal) {
@@ -1234,9 +1287,11 @@ class AdminApiController extends Controller
             }
 
             DB::commit();
+
             return response()->json(['message' => 'Customer updated', 'customer' => $customer]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -1244,13 +1299,14 @@ class AdminApiController extends Controller
     public function destroyCustomer($id)
     {
         Customer::destroy($id);
+
         return response()->json(['message' => 'Customer deleted']);
     }
 
     private function createOpeningBalanceJournal($customer)
     {
         $journal = Journal::create([
-            'journal_no' => 'OB-CUST-' . strtoupper(Str::random(6)),
+            'journal_no' => 'OB-CUST-'.strtoupper(Str::random(6)),
             'date' => date('Y-m-d'),
             'reference_type' => Customer::class,
             'reference_id' => $customer->id,
@@ -1278,12 +1334,14 @@ class AdminApiController extends Controller
     public function suppliers(Request $request)
     {
         $suppliers = Supplier::orderBy('id', 'desc')->get();
+
         return response()->json(['suppliers' => $suppliers]);
     }
 
     public function storeSupplier(Request $request)
     {
         $supplier = Supplier::create($request->all());
+
         return response()->json(['message' => 'Supplier created', 'supplier' => $supplier], 201);
     }
 
@@ -1291,42 +1349,46 @@ class AdminApiController extends Controller
     {
         $supplier = Supplier::findOrFail($id);
         $supplier->update($request->all());
+
         return response()->json(['message' => 'Supplier updated', 'supplier' => $supplier]);
     }
 
     public function destroySupplier($id)
     {
         Supplier::destroy($id);
+
         return response()->json(['message' => 'Supplier deleted']);
     }
 
     public function showSupplier($id)
     {
         $supplier = Supplier::findOrFail($id);
+
         return response()->json(['supplier' => $supplier]);
     }
 
     public function supplierPurchases($id)
     {
-        $purchases = \App\Models\Purchase::where('supplier_id', $id)
+        $purchases = Purchase::where('supplier_id', $id)
             ->with('warehouse')
             ->orderBy('date', 'desc')
             ->paginate(20);
+
         return response()->json(['purchases' => $purchases]);
     }
 
     public function supplierPayments($id)
     {
-        $journals = \App\Models\Journal::with('entries.account')
-            ->where('reference_type', \App\Models\Supplier::class)
+        $journals = Journal::with('entries.account')
+            ->where('reference_type', Supplier::class)
             ->where('reference_id', $id)
-            ->whereHas('entries', function($q) {
+            ->whereHas('entries', function ($q) {
                 $q->where('type', 'debit');
             })
             ->orderBy('date', 'desc')
             ->paginate(20);
 
-        $journals->getCollection()->transform(function($journal) {
+        $journals->getCollection()->transform(function ($journal) {
             $debitEntry = $journal->entries->firstWhere('type', 'debit');
             $creditEntry = $journal->entries->firstWhere('type', 'credit');
             $amount = $journal->entries->where('type', 'debit')->sum('amount');
@@ -1348,7 +1410,7 @@ class AdminApiController extends Controller
                 'raw_notes' => $notes,
                 'payment_method_id' => $creditEntry ? $creditEntry->account_id : null,
                 'payment_method' => $creditEntry && $creditEntry->account ? $creditEntry->account->name : 'Cash',
-                'sale' => ['invoice_no' => $journal->journal_no]
+                'sale' => ['invoice_no' => $journal->journal_no],
             ];
         });
 
@@ -1359,20 +1421,20 @@ class AdminApiController extends Controller
     {
         $supplier = Supplier::findOrFail($id);
         $apAcc = ChartOfAccount::where('name', 'Accounts Payable')->first();
-        
-        if (!$apAcc) {
+
+        if (! $apAcc) {
             return response()->json(['ledger' => ['data' => []], 'total_payable' => 0]);
         }
 
-        $purchaseIds = \App\Models\Purchase::where('supplier_id', $id)->pluck('id');
+        $purchaseIds = Purchase::where('supplier_id', $id)->pluck('id');
 
-        $supplierJournalIds = \App\Models\Journal::where(function($q) use ($supplier) {
-            $q->where('reference_type', \App\Models\Supplier::class)->where('reference_id', $supplier->id);
-        })->orWhere(function($q) use ($purchaseIds) {
-            $q->where('reference_type', \App\Models\Purchase::class)->whereIn('reference_id', $purchaseIds);
+        $supplierJournalIds = Journal::where(function ($q) use ($supplier) {
+            $q->where('reference_type', Supplier::class)->where('reference_id', $supplier->id);
+        })->orWhere(function ($q) use ($purchaseIds) {
+            $q->where('reference_type', Purchase::class)->whereIn('reference_id', $purchaseIds);
         })->pluck('id');
 
-        $query = \App\Models\JournalEntry::with('journal')
+        $query = JournalEntry::with('journal')
             ->whereIn('journal_id', $supplierJournalIds)
             ->where('account_id', $apAcc->id)
             ->orderBy('id', 'asc');
@@ -1382,19 +1444,19 @@ class AdminApiController extends Controller
         $initialBalance = 0;
         if ($paginatedEntries->currentPage() > 1 && $paginatedEntries->first()) {
             $firstEntryIdOnPage = $paginatedEntries->first()->id;
-            
-            $priorCredits = \App\Models\JournalEntry::whereIn('journal_id', $supplierJournalIds)
+
+            $priorCredits = JournalEntry::whereIn('journal_id', $supplierJournalIds)
                 ->where('account_id', $apAcc->id)
                 ->where('id', '<', $firstEntryIdOnPage)
                 ->where('type', 'credit')
                 ->sum('amount');
-                
-            $priorDebits = \App\Models\JournalEntry::whereIn('journal_id', $supplierJournalIds)
+
+            $priorDebits = JournalEntry::whereIn('journal_id', $supplierJournalIds)
                 ->where('account_id', $apAcc->id)
                 ->where('id', '<', $firstEntryIdOnPage)
                 ->where('type', 'debit')
                 ->sum('amount');
-                
+
             $initialBalance = $priorCredits - $priorDebits;
         }
 
@@ -1408,12 +1470,13 @@ class AdminApiController extends Controller
             $entry->balance = $runningBalance;
             $entry->date = $entry->journal->date;
             $entry->description = $entry->journal->notes ?? 'N/A';
+
             return $entry;
         });
 
         return response()->json([
             'ledger' => $paginatedEntries,
-            'total_payable' => $supplier->total_payable
+            'total_payable' => $supplier->total_payable,
         ]);
     }
 
@@ -1422,9 +1485,10 @@ class AdminApiController extends Controller
      */
     public function purchaseFormData()
     {
-        $suppliers = \App\Models\Supplier::all();
-        $warehouses = \App\Models\Warehouse::all();
-        $products = \App\Models\Product::with('unit')->where('type', 'raw')->get();
+        $suppliers = Supplier::all();
+        $warehouses = Warehouse::all();
+        $products = Product::with('unit')->where('type', 'raw')->get();
+
         return response()->json([
             'suppliers' => $suppliers,
             'warehouses' => $warehouses,
@@ -1435,12 +1499,14 @@ class AdminApiController extends Controller
     public function purchases(Request $request)
     {
         $purchases = Purchase::with(['supplier', 'warehouse', 'items.product.unit'])->orderBy('date', 'desc')->get();
+
         return response()->json(['purchases' => $purchases]);
     }
 
     public function showPurchase($id)
     {
         $purchase = Purchase::with(['supplier', 'warehouse', 'items.product.unit'])->findOrFail($id);
+
         return response()->json(['purchase' => $purchase]);
     }
 
@@ -1461,25 +1527,25 @@ class AdminApiController extends Controller
 
             $totalCost = 0;
             foreach ($validated['items'] as $item) {
-                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float)$item['unit_cost'] : 0;
+                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float) $item['unit_cost'] : 0;
                 $totalCost += $item['qty'] * $unitCost;
             }
 
             $purchase = Purchase::create([
-                'purchase_no' => 'PUR-' . strtoupper(Str::random(6)),
+                'purchase_no' => 'PUR-'.strtoupper(Str::random(6)),
                 'supplier_id' => $validated['supplier_id'],
                 'warehouse_id' => $validated['warehouse_id'],
                 'date' => $validated['date'],
                 'total_cost' => $totalCost,
             ]);
 
-            $supplier = \App\Models\Supplier::find($validated['supplier_id']);
+            $supplier = Supplier::find($validated['supplier_id']);
             if ($supplier) {
                 $supplier->increment('total_payable', $totalCost);
             }
 
             foreach ($validated['items'] as $item) {
-                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float)$item['unit_cost'] : 0;
+                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float) $item['unit_cost'] : 0;
                 $lineTotal = $item['qty'] * $unitCost;
 
                 PurchaseItem::create([
@@ -1490,8 +1556,8 @@ class AdminApiController extends Controller
                     'total_cost' => $lineTotal,
                 ]);
 
-                $batch = \App\Models\Batch::create([
-                    'batch_no' => 'B-' . $purchase->id . '-' . $item['product_id'] . '-' . strtoupper(Str::random(4)),
+                $batch = Batch::create([
+                    'batch_no' => 'B-'.$purchase->id.'-'.$item['product_id'].'-'.strtoupper(Str::random(4)),
                     'product_id' => $item['product_id'],
                     'warehouse_id' => $validated['warehouse_id'],
                     'purchase_id' => $purchase->id,
@@ -1502,7 +1568,7 @@ class AdminApiController extends Controller
                     'expiry_date' => null,
                 ]);
 
-                \App\Models\InventoryTransaction::create([
+                InventoryTransaction::create([
                     'warehouse_id' => $validated['warehouse_id'],
                     'product_id' => $item['product_id'],
                     'batch_id' => $batch->id,
@@ -1517,15 +1583,15 @@ class AdminApiController extends Controller
                 ]);
             }
 
-            $inventoryAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
-            $payableAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Accounts Payable', 'type' => 'liability'], ['parent_id' => null]);
+            $inventoryAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
+            $payableAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Payable', 'type' => 'liability'], ['parent_id' => null]);
 
             $journal = Journal::create([
-                'journal_no' => 'JNL-' . strtoupper(Str::random(6)),
+                'journal_no' => 'JNL-'.strtoupper(Str::random(6)),
                 'date' => $validated['date'],
                 'reference_type' => Purchase::class,
                 'reference_id' => $purchase->id,
-                'notes' => 'Purchase Shipment ' . $purchase->purchase_no,
+                'notes' => 'Purchase Shipment '.$purchase->purchase_no,
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
@@ -1533,9 +1599,11 @@ class AdminApiController extends Controller
             JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $payableAcc->id, 'type' => 'credit', 'amount' => $totalCost]);
 
             DB::commit();
+
             return response()->json(['message' => 'Purchase confirmed successfully', 'purchase' => $purchase], 201);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -1558,25 +1626,25 @@ class AdminApiController extends Controller
             $purchase = Purchase::findOrFail($id);
 
             // Reverse existing purchase
-            $batches = \App\Models\Batch::where('purchase_id', $purchase->id)->get();
+            $batches = Batch::where('purchase_id', $purchase->id)->get();
             foreach ($batches as $batch) {
                 if ($batch->qty_out > 0) {
                     throw new \Exception("Cannot update purchase. Stock from batch {$batch->batch_no} has already been consumed.");
                 }
             }
 
-            $supplier = \App\Models\Supplier::find($purchase->supplier_id);
+            $supplier = Supplier::find($purchase->supplier_id);
             if ($supplier) {
                 $supplier->decrement('total_payable', $purchase->total_cost);
             }
 
-            \App\Models\Batch::where('purchase_id', $purchase->id)->delete();
-            \App\Models\InventoryTransaction::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->delete();
-            
+            Batch::where('purchase_id', $purchase->id)->delete();
+            InventoryTransaction::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->delete();
+
             // Delete old journals
-            $journals = \App\Models\Journal::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->get();
+            $journals = Journal::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->get();
             foreach ($journals as $journal) {
-                \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
+                JournalEntry::where('journal_id', $journal->id)->delete();
                 $journal->delete();
             }
 
@@ -1585,7 +1653,7 @@ class AdminApiController extends Controller
             // Apply new data
             $totalCost = 0;
             foreach ($validated['items'] as $item) {
-                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float)$item['unit_cost'] : 0;
+                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float) $item['unit_cost'] : 0;
                 $totalCost += $item['qty'] * $unitCost;
             }
 
@@ -1596,13 +1664,13 @@ class AdminApiController extends Controller
                 'total_cost' => $totalCost,
             ]);
 
-            $supplier = \App\Models\Supplier::find($validated['supplier_id']);
+            $supplier = Supplier::find($validated['supplier_id']);
             if ($supplier) {
                 $supplier->increment('total_payable', $totalCost);
             }
 
             foreach ($validated['items'] as $item) {
-                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float)$item['unit_cost'] : 0;
+                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float) $item['unit_cost'] : 0;
                 $lineTotal = $item['qty'] * $unitCost;
 
                 PurchaseItem::create([
@@ -1613,8 +1681,8 @@ class AdminApiController extends Controller
                     'total_cost' => $lineTotal,
                 ]);
 
-                $batch = \App\Models\Batch::create([
-                    'batch_no' => 'B-' . $purchase->id . '-' . $item['product_id'] . '-' . strtoupper(Str::random(4)),
+                $batch = Batch::create([
+                    'batch_no' => 'B-'.$purchase->id.'-'.$item['product_id'].'-'.strtoupper(Str::random(4)),
                     'product_id' => $item['product_id'],
                     'warehouse_id' => $validated['warehouse_id'],
                     'purchase_id' => $purchase->id,
@@ -1625,7 +1693,7 @@ class AdminApiController extends Controller
                     'expiry_date' => null,
                 ]);
 
-                \App\Models\InventoryTransaction::create([
+                InventoryTransaction::create([
                     'warehouse_id' => $validated['warehouse_id'],
                     'product_id' => $item['product_id'],
                     'batch_id' => $batch->id,
@@ -1641,26 +1709,26 @@ class AdminApiController extends Controller
             }
 
             // Create Accounting Entry
-            $inventoryAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
-            $payableAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Accounts Payable', 'type' => 'liability'], ['parent_id' => null]);
+            $inventoryAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
+            $payableAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Payable', 'type' => 'liability'], ['parent_id' => null]);
 
-            $journal = \App\Models\Journal::create([
-                'journal_no' => 'JNL-' . strtoupper(Str::random(6)),
+            $journal = Journal::create([
+                'journal_no' => 'JNL-'.strtoupper(Str::random(6)),
                 'date' => $validated['date'],
                 'reference_type' => Purchase::class,
                 'reference_id' => $purchase->id,
-                'notes' => 'Purchase Shipment ' . $purchase->purchase_no . ' (Updated)',
+                'notes' => 'Purchase Shipment '.$purchase->purchase_no.' (Updated)',
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
-            \App\Models\JournalEntry::create([
+            JournalEntry::create([
                 'journal_id' => $journal->id,
                 'account_id' => $inventoryAcc->id,
                 'type' => 'debit',
                 'amount' => $totalCost,
             ]);
 
-            \App\Models\JournalEntry::create([
+            JournalEntry::create([
                 'journal_id' => $journal->id,
                 'account_id' => $payableAcc->id,
                 'type' => 'credit',
@@ -1668,10 +1736,12 @@ class AdminApiController extends Controller
             ]);
 
             DB::commit();
+
             return response()->json(['message' => 'Purchase updated successfully', 'purchase' => $purchase], 200);
 
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -1682,24 +1752,24 @@ class AdminApiController extends Controller
             DB::beginTransaction();
             $purchase = Purchase::findOrFail($id);
 
-            $batches = \App\Models\Batch::where('purchase_id', $purchase->id)->get();
+            $batches = Batch::where('purchase_id', $purchase->id)->get();
             foreach ($batches as $batch) {
                 if ($batch->qty_out > 0) {
                     throw new \Exception("Cannot reverse purchase. Stock from batch {$batch->batch_no} has already been consumed.");
                 }
             }
 
-            $supplier = \App\Models\Supplier::find($purchase->supplier_id);
+            $supplier = Supplier::find($purchase->supplier_id);
             if ($supplier) {
                 $supplier->decrement('total_payable', $purchase->total_cost);
             }
 
-            \App\Models\Batch::where('purchase_id', $purchase->id)->delete();
-            \App\Models\InventoryTransaction::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->delete();
+            Batch::where('purchase_id', $purchase->id)->delete();
+            InventoryTransaction::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->delete();
 
-            $journals = \App\Models\Journal::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->get();
+            $journals = Journal::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->get();
             foreach ($journals as $journal) {
-                \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
+                JournalEntry::where('journal_id', $journal->id)->delete();
                 $journal->delete();
             }
 
@@ -1707,9 +1777,11 @@ class AdminApiController extends Controller
             $purchase->delete();
 
             DB::commit();
+
             return response()->json(['message' => 'Purchase deleted successfully']);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -1718,13 +1790,13 @@ class AdminApiController extends Controller
      * Get all expenses.
      */
 
-
     /**
      * Get all warehouses.
      */
     public function warehouses(Request $request)
     {
         $warehouses = Warehouse::orderBy('id', 'desc')->get();
+
         return response()->json(['warehouses' => $warehouses]);
     }
 
@@ -1732,9 +1804,10 @@ class AdminApiController extends Controller
     {
         $data = $request->all();
         if (empty($data['code'])) {
-            $data['code'] = 'W-' . strtoupper(\Illuminate\Support\Str::random(4));
+            $data['code'] = 'W-'.strtoupper(Str::random(4));
         }
         $warehouse = Warehouse::create($data);
+
         return response()->json(['message' => 'Warehouse created', 'warehouse' => $warehouse], 201);
     }
 
@@ -1743,14 +1816,17 @@ class AdminApiController extends Controller
         $warehouse = Warehouse::findOrFail($id);
         $data = $request->all();
         $warehouse->update($data);
+
         return response()->json(['message' => 'Warehouse updated', 'warehouse' => $warehouse]);
     }
 
     public function destroyWarehouse($id)
     {
         Warehouse::destroy($id);
+
         return response()->json(['message' => 'Warehouse deleted']);
     }
+
     /**
      * Get all settlements data (Customer Dues and Supplier Payables).
      */
@@ -1782,7 +1858,7 @@ class AdminApiController extends Controller
         $newAdvance = max(0, $amount - $customer->total_due);
 
         try {
-            \Illuminate\Support\Facades\DB::beginTransaction();
+            DB::beginTransaction();
 
             if ($duePayment > 0) {
                 $customer->decrement('total_due', $duePayment);
@@ -1795,11 +1871,11 @@ class AdminApiController extends Controller
             $arAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Receivable', 'type' => 'asset']);
 
             $journal = Journal::create([
-                'journal_no' => 'RCV-' . strtoupper(\Illuminate\Support\Str::random(6)),
+                'journal_no' => 'RCV-'.strtoupper(Str::random(6)),
                 'date' => $validated['date'],
                 'reference_type' => Customer::class,
                 'reference_id' => $customer->id,
-                'notes' => 'API Payment received from Customer: ' . $customer->name . ($validated['reference'] ? ' (Ref: ' . $validated['reference'] . ')' : ''),
+                'notes' => 'API Payment received from Customer: '.$customer->name.($validated['reference'] ? ' (Ref: '.$validated['reference'].')' : ''),
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
@@ -1818,21 +1894,23 @@ class AdminApiController extends Controller
                     'amount' => $duePayment,
                 ]);
 
-                $unpaidSales = \App\Models\Sale::where('customer_id', $customer->id)->where('due_amount', '>', 0)->orderBy('date', 'asc')->get();
+                $unpaidSales = Sale::where('customer_id', $customer->id)->where('due_amount', '>', 0)->orderBy('date', 'asc')->get();
                 $remainingPayment = $duePayment;
                 foreach ($unpaidSales as $sale) {
-                    if ($remainingPayment <= 0) break;
+                    if ($remainingPayment <= 0) {
+                        break;
+                    }
                     $payThisSale = min($sale->due_amount, $remainingPayment);
                     $sale->paid_amount += $payThisSale;
                     $sale->due_amount -= $payThisSale;
                     $sale->payment_status = $sale->due_amount > 0 ? 'partial' : 'paid';
                     $sale->save();
-                    \App\Models\SalePayment::create([
+                    SalePayment::create([
                         'sale_id' => $sale->id,
                         'amount' => $payThisSale,
                         'method' => 'cash',
                         'date' => $validated['date'],
-                        'reference' => 'API Settlement ' . ($validated['reference'] ?? ''),
+                        'reference' => 'API Settlement '.($validated['reference'] ?? ''),
                     ]);
                     $remainingPayment -= $payThisSale;
                 }
@@ -1848,10 +1926,12 @@ class AdminApiController extends Controller
                 ]);
             }
 
-            \Illuminate\Support\Facades\DB::commit();
+            DB::commit();
+
             return response()->json(['message' => 'Customer payment recorded successfully']);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
@@ -1870,27 +1950,27 @@ class AdminApiController extends Controller
         $supplier = Supplier::findOrFail($validated['supplier_id']);
 
         try {
-            \Illuminate\Support\Facades\DB::beginTransaction();
+            DB::beginTransaction();
 
             $supplier->decrement('total_payable', $validated['amount']);
 
             $paymentMethodId = $validated['payment_method_id'] ?? $validated['payment_method'] ?? null;
-            $cashAcc = $paymentMethodId 
-                ? ChartOfAccount::find($paymentMethodId) 
+            $cashAcc = $paymentMethodId
+                ? ChartOfAccount::find($paymentMethodId)
                 : ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
 
-            if (!$cashAcc) {
+            if (! $cashAcc) {
                 $cashAcc = ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
             }
 
             $apAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Payable', 'type' => 'liability']);
 
             $journal = Journal::create([
-                'journal_no' => 'PAY-' . strtoupper(\Illuminate\Support\Str::random(6)),
+                'journal_no' => 'PAY-'.strtoupper(Str::random(6)),
                 'date' => $validated['date'],
                 'reference_type' => Supplier::class,
                 'reference_id' => $supplier->id,
-                'notes' => 'API Payment made to Supplier: ' . $supplier->name . ($validated['reference'] ? ' (Ref: ' . $validated['reference'] . ')' : ''),
+                'notes' => 'API Payment made to Supplier: '.$supplier->name.($validated['reference'] ? ' (Ref: '.$validated['reference'].')' : ''),
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
@@ -1908,10 +1988,12 @@ class AdminApiController extends Controller
                 'amount' => $validated['amount'],
             ]);
 
-            \Illuminate\Support\Facades\DB::commit();
+            DB::commit();
+
             return response()->json(['message' => 'Supplier payment recorded successfully']);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
@@ -1925,22 +2007,22 @@ class AdminApiController extends Controller
             'payment_method_id' => 'nullable|exists:chart_of_accounts,id',
         ]);
 
-        $journal = \App\Models\Journal::with('entries.account')->findOrFail($id);
+        $journal = Journal::with('entries.account')->findOrFail($id);
 
         try {
-            \Illuminate\Support\Facades\DB::beginTransaction();
+            DB::beginTransaction();
 
-            $newAmount = (float)$validated['amount'];
+            $newAmount = (float) $validated['amount'];
             $newDate = $validated['date'];
             $newRef = $validated['reference'] ?? '';
             $paymentMethodId = $validated['payment_method_id'] ?? null;
 
-            if ($journal->reference_type === \App\Models\Supplier::class) {
-                $supplier = \App\Models\Supplier::findOrFail($journal->reference_id);
-                $apEntry = $journal->entries->first(function($e) {
+            if ($journal->reference_type === Supplier::class) {
+                $supplier = Supplier::findOrFail($journal->reference_id);
+                $apEntry = $journal->entries->first(function ($e) {
                     return $e->type === 'debit';
                 });
-                $oldAmount = $apEntry ? (float)$apEntry->amount : 0.0;
+                $oldAmount = $apEntry ? (float) $apEntry->amount : 0.0;
                 $diff = $newAmount - $oldAmount;
 
                 // Adjust supplier payable balance
@@ -1949,7 +2031,7 @@ class AdminApiController extends Controller
                 // Update journal date & notes
                 $journal->update([
                     'date' => $newDate,
-                    'notes' => 'API Payment made to Supplier: ' . $supplier->name . ($newRef ? ' (Ref: ' . $newRef . ')' : ''),
+                    'notes' => 'API Payment made to Supplier: '.$supplier->name.($newRef ? ' (Ref: '.$newRef.')' : ''),
                 ]);
 
                 // Update Debit (Accounts Payable)
@@ -1958,7 +2040,7 @@ class AdminApiController extends Controller
                 }
 
                 // Update Credit (Cash/Bank account)
-                $creditEntry = $journal->entries->first(function($e) {
+                $creditEntry = $journal->entries->first(function ($e) {
                     return $e->type === 'credit';
                 });
 
@@ -1976,40 +2058,44 @@ class AdminApiController extends Controller
                 }
             }
 
-            \Illuminate\Support\Facades\DB::commit();
+            DB::commit();
+
             return response()->json(['message' => 'Payment updated successfully']);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
     public function destroyPayment($id)
     {
-        $journal = \App\Models\Journal::with('entries')->findOrFail($id);
+        $journal = Journal::with('entries')->findOrFail($id);
 
         try {
-            \Illuminate\Support\Facades\DB::beginTransaction();
+            DB::beginTransaction();
 
-            if ($journal->reference_type === \App\Models\Supplier::class) {
-                $supplier = \App\Models\Supplier::find($journal->reference_id);
-                $apEntry = $journal->entries->first(function($e) {
+            if ($journal->reference_type === Supplier::class) {
+                $supplier = Supplier::find($journal->reference_id);
+                $apEntry = $journal->entries->first(function ($e) {
                     return $e->type === 'debit';
                 });
-                $oldAmount = $apEntry ? (float)$apEntry->amount : 0.0;
+                $oldAmount = $apEntry ? (float) $apEntry->amount : 0.0;
 
                 if ($supplier && $oldAmount > 0) {
                     $supplier->increment('total_payable', $oldAmount);
                 }
             }
 
-            \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
+            JournalEntry::where('journal_id', $journal->id)->delete();
             $journal->delete();
 
-            \Illuminate\Support\Facades\DB::commit();
+            DB::commit();
+
             return response()->json(['message' => 'Payment deleted successfully']);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
@@ -2017,32 +2103,35 @@ class AdminApiController extends Controller
     /**
      * Get all stock transfers.
      */
-        public function transferFormData()
+    public function transferFormData()
     {
-        $warehouses = \App\Models\Warehouse::all();
-        $variants = \App\Models\ProductVariant::with(['product.unit', 'unit'])->get();
-        $stocks = \App\Models\WarehouseStock::all();
+        $warehouses = Warehouse::all();
+        $variants = ProductVariant::with(['product.unit', 'unit'])->get();
+        $stocks = WarehouseStock::all();
+
         return response()->json(['warehouses' => $warehouses, 'variants' => $variants, 'stocks' => $stocks]);
     }
 
     public function stockTransfers(Request $request)
     {
         $query = StockTransfer::with(['fromWarehouse', 'toWarehouse', 'creator', 'items.productVariant.unit', 'items.productVariant.product.unit'])->orderBy('id', 'desc');
-        
+
         if ($request->filled('transfer_no')) {
-            $query->where('transfer_no', 'like', '%' . $request->transfer_no . '%');
+            $query->where('transfer_no', 'like', '%'.$request->transfer_no.'%');
         }
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
         $transfers = $query->orderBy('id', 'desc')->paginate(20);
+
         return response()->json(['stock_transfers' => $transfers]);
     }
 
     public function showStockTransfer($id)
     {
         $transfer = StockTransfer::with(['fromWarehouse', 'toWarehouse', 'creator', 'items.productVariant.product.unit', 'items.productVariant.unit'])->findOrFail($id);
+
         return response()->json(['stock_transfer' => $transfer]);
     }
 
@@ -2057,10 +2146,10 @@ class AdminApiController extends Controller
         ]);
 
         try {
-            \Illuminate\Support\Facades\DB::beginTransaction();
+            DB::beginTransaction();
 
             $transfer = StockTransfer::create([
-                'transfer_no' => 'TRF-' . strtoupper(\Illuminate\Support\Str::random(6)),
+                'transfer_no' => 'TRF-'.strtoupper(Str::random(6)),
                 'from_warehouse_id' => $validated['from_warehouse_id'],
                 'to_warehouse_id' => $validated['to_warehouse_id'],
                 'status' => 'draft',
@@ -2068,7 +2157,7 @@ class AdminApiController extends Controller
             ]);
 
             foreach ($validated['items'] as $item) {
-                \App\Models\StockTransferItem::create([
+                StockTransferItem::create([
                     'stock_transfer_id' => $transfer->id,
                     'product_variant_id' => $item['product_variant_id'],
                     'batch_id' => null,
@@ -2076,10 +2165,12 @@ class AdminApiController extends Controller
                 ]);
             }
 
-            \Illuminate\Support\Facades\DB::commit();
+            DB::commit();
+
             return response()->json(['message' => 'Transfer Draft created successfully', 'stock_transfer' => $transfer], 201);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -2090,11 +2181,11 @@ class AdminApiController extends Controller
         $action = $request->input('action');
 
         try {
-            \Illuminate\Support\Facades\DB::beginTransaction();
+            DB::beginTransaction();
 
             if ($action === 'send' && $transfer->status === 'draft') {
                 foreach ($transfer->items as $item) {
-                    $batches = \App\Models\Batch::where('product_variant_id', $item->product_variant_id)
+                    $batches = Batch::where('product_variant_id', $item->product_variant_id)
                         ->where('warehouse_id', $transfer->from_warehouse_id)
                         ->where('remaining_qty', '>', 0)
                         ->orderBy('id', 'asc')
@@ -2104,14 +2195,16 @@ class AdminApiController extends Controller
                     $remainingToConsume = $item->qty;
 
                     foreach ($batches as $batch) {
-                        if ($remainingToConsume <= 0) break;
+                        if ($remainingToConsume <= 0) {
+                            break;
+                        }
                         $takeQty = min($batch->remaining_qty, $remainingToConsume);
-                        
+
                         $batch->qty_out += $takeQty;
                         $batch->remaining_qty -= $takeQty;
                         $batch->save();
 
-                        \App\Models\InventoryTransaction::create([
+                        InventoryTransaction::create([
                             'warehouse_id' => $transfer->from_warehouse_id,
                             'product_id' => $batch->product_id,
                             'product_variant_id' => $item->product_variant_id,
@@ -2134,15 +2227,14 @@ class AdminApiController extends Controller
                     }
                 }
                 $transfer->update(['status' => 'sent']);
-            } 
-            elseif ($action === 'receive' && $transfer->status === 'sent') {
+            } elseif ($action === 'receive' && $transfer->status === 'sent') {
                 foreach ($transfer->items as $item) {
-                    $variant = \App\Models\ProductVariant::find($item->product_variant_id);
-                    $latestBatch = \App\Models\Batch::where('product_variant_id', $variant->id)->latest()->first();
+                    $variant = ProductVariant::find($item->product_variant_id);
+                    $latestBatch = Batch::where('product_variant_id', $variant->id)->latest()->first();
                     $costPerUnit = $latestBatch ? $latestBatch->cost_per_unit : 0;
 
-                    $newBatch = \App\Models\Batch::create([
-                        'batch_no' => 'B-TRF-' . $transfer->id . '-' . $variant->id . '-' . strtoupper(\Illuminate\Support\Str::random(4)),
+                    $newBatch = Batch::create([
+                        'batch_no' => 'B-TRF-'.$transfer->id.'-'.$variant->id.'-'.strtoupper(Str::random(4)),
                         'product_id' => $variant->product_id,
                         'product_variant_id' => $variant->id,
                         'warehouse_id' => $transfer->to_warehouse_id,
@@ -2152,7 +2244,7 @@ class AdminApiController extends Controller
                         'cost_per_unit' => $costPerUnit,
                     ]);
 
-                    \App\Models\InventoryTransaction::create([
+                    InventoryTransaction::create([
                         'warehouse_id' => $transfer->to_warehouse_id,
                         'product_id' => $variant->product_id,
                         'product_variant_id' => $variant->id,
@@ -2169,14 +2261,16 @@ class AdminApiController extends Controller
                 }
                 $transfer->update(['status' => 'received']);
             } else {
-                 throw new \Exception("Invalid action or status mismatch.");
+                throw new \Exception('Invalid action or status mismatch.');
             }
 
-            \Illuminate\Support\Facades\DB::commit();
-            return response()->json(['message' => 'Transfer status updated to ' . ucfirst($transfer->status)]);
+            DB::commit();
+
+            return response()->json(['message' => 'Transfer status updated to '.ucfirst($transfer->status)]);
 
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -2198,17 +2292,17 @@ class AdminApiController extends Controller
         ]);
 
         try {
-            \Illuminate\Support\Facades\DB::beginTransaction();
+            DB::beginTransaction();
 
             $transfer->update([
                 'from_warehouse_id' => $validated['from_warehouse_id'],
                 'to_warehouse_id' => $validated['to_warehouse_id'],
             ]);
 
-            \App\Models\StockTransferItem::where('stock_transfer_id', $transfer->id)->delete();
+            StockTransferItem::where('stock_transfer_id', $transfer->id)->delete();
 
             foreach ($validated['items'] as $item) {
-                \App\Models\StockTransferItem::create([
+                StockTransferItem::create([
                     'stock_transfer_id' => $transfer->id,
                     'product_variant_id' => $item['product_variant_id'],
                     'batch_id' => null,
@@ -2216,10 +2310,12 @@ class AdminApiController extends Controller
                 ]);
             }
 
-            \Illuminate\Support\Facades\DB::commit();
+            DB::commit();
+
             return response()->json(['message' => 'Transfer updated successfully', 'stock_transfer' => $transfer], 200);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -2231,6 +2327,7 @@ class AdminApiController extends Controller
             $transfer->items()->delete();
             $transfer->delete();
         }
+
         return response()->json(['message' => 'Transfer deleted']);
     }
 
@@ -2239,10 +2336,10 @@ class AdminApiController extends Controller
      */
     public function adjustmentFormData()
     {
-        $warehouses = \App\Models\Warehouse::all();
-        $products = \App\Models\Product::with('unit')->get();
-        $variants = \App\Models\ProductVariant::with(['unit', 'product.unit'])->get();
-        $batches = \App\Models\Batch::with(['product.unit', 'productVariant.unit'])->where('remaining_qty', '>', 0)->get();
+        $warehouses = Warehouse::all();
+        $products = Product::with('unit')->get();
+        $variants = ProductVariant::with(['unit', 'product.unit'])->get();
+        $batches = Batch::with(['product.unit', 'productVariant.unit'])->where('remaining_qty', '>', 0)->get();
 
         return response()->json([
             'warehouses' => $warehouses,
@@ -2255,7 +2352,7 @@ class AdminApiController extends Controller
     public function stockAdjustments(Request $request)
     {
         $query = StockAdjustment::with(['warehouse', 'product', 'productVariant', 'batch', 'creator', 'approver'])->orderBy('id', 'desc');
-        
+
         if ($request->filled('warehouse_id')) {
             $query->where('warehouse_id', $request->warehouse_id);
         }
@@ -2264,6 +2361,7 @@ class AdminApiController extends Controller
         }
 
         $adjustments = $query->orderBy('id', 'desc')->paginate(20);
+
         return response()->json(['adjustments' => $adjustments]);
     }
 
@@ -2279,8 +2377,8 @@ class AdminApiController extends Controller
             'reason' => 'required|string',
         ]);
 
-        $batch = \App\Models\Batch::findOrFail($validated['batch_id']);
-        
+        $batch = Batch::findOrFail($validated['batch_id']);
+
         if ($validated['type'] === 'remove' && $batch->remaining_qty < $validated['qty']) {
             return response()->json(['error' => 'Cannot remove more than the batch remaining quantity.'], 400);
         }
@@ -2291,6 +2389,7 @@ class AdminApiController extends Controller
         $validated['product_variant_id'] = $batch->product_variant_id;
 
         $adjustment = StockAdjustment::create($validated);
+
         return response()->json(['message' => 'Adjustment created', 'stock_adjustment' => $adjustment], 201);
     }
 
@@ -2304,13 +2403,13 @@ class AdminApiController extends Controller
         }
 
         try {
-            \Illuminate\Support\Facades\DB::beginTransaction();
+            DB::beginTransaction();
 
             if ($action === 'approve') {
                 $batch = $adjustment->batch;
 
                 if ($adjustment->type === 'remove' && $batch->remaining_qty < $adjustment->qty) {
-                    throw new \Exception("Batch remaining quantity is less than requested removal.");
+                    throw new \Exception('Batch remaining quantity is less than requested removal.');
                 }
 
                 if ($adjustment->type === 'add') {
@@ -2322,7 +2421,7 @@ class AdminApiController extends Controller
                 }
                 $batch->save();
 
-                \App\Models\InventoryTransaction::create([
+                InventoryTransaction::create([
                     'warehouse_id' => $adjustment->warehouse_id,
                     'product_id' => $adjustment->product_id,
                     'product_variant_id' => $adjustment->product_variant_id,
@@ -2347,14 +2446,16 @@ class AdminApiController extends Controller
                     'approved_by' => $request->user()->id ?? 1,
                 ]);
             } else {
-                throw new \Exception("Invalid action.");
+                throw new \Exception('Invalid action.');
             }
 
-            \Illuminate\Support\Facades\DB::commit();
-            return response()->json(['message' => 'Adjustment ' . ucfirst($action) . 'd']);
+            DB::commit();
+
+            return response()->json(['message' => 'Adjustment '.ucfirst($action).'d']);
 
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -2362,7 +2463,7 @@ class AdminApiController extends Controller
     public function updateStockAdjustment(Request $request, $id)
     {
         $adjustment = StockAdjustment::findOrFail($id);
-        
+
         if ($adjustment->status !== 'pending') {
             return response()->json(['error' => 'Only pending adjustments can be edited.'], 400);
         }
@@ -2375,8 +2476,8 @@ class AdminApiController extends Controller
             'reason' => 'required|string',
         ]);
 
-        $batch = \App\Models\Batch::findOrFail($validated['batch_id']);
-        
+        $batch = Batch::findOrFail($validated['batch_id']);
+
         if ($validated['type'] === 'remove' && $batch->remaining_qty < $validated['qty']) {
             return response()->json(['error' => 'Cannot remove more than the batch remaining quantity.'], 400);
         }
@@ -2385,23 +2486,25 @@ class AdminApiController extends Controller
         $validated['product_variant_id'] = $batch->product_variant_id;
 
         $adjustment->update($validated);
+
         return response()->json(['message' => 'Adjustment updated', 'stock_adjustment' => $adjustment], 200);
     }
 
     public function destroyStockAdjustment($id)
     {
         StockAdjustment::destroy($id);
+
         return response()->json(['message' => 'Adjustment deleted']);
     }
 
     /**
      * Get all repackaging orders.
      */
-        public function repackagingFormData()
+    public function repackagingFormData()
     {
-        $warehouses = \App\Models\Warehouse::all();
-        $inputProducts = \App\Models\Product::with('unit')->whereIn('type', ['raw', 'finished'])->get();
-        $variants = \App\Models\ProductVariant::with(['product.unit', 'unit'])->get();
+        $warehouses = Warehouse::all();
+        $inputProducts = Product::with('unit')->whereIn('type', ['raw', 'finished'])->get();
+        $variants = ProductVariant::with(['product.unit', 'unit'])->get();
 
         return response()->json([
             'warehouses' => $warehouses,
@@ -2413,18 +2516,20 @@ class AdminApiController extends Controller
     public function repackaging(Request $request)
     {
         $query = RepackagingOrder::with(['warehouse', 'creator', 'inputs.product', 'outputs.productVariant'])->orderBy('id', 'desc');
-        
+
         if ($request->filled('ref_no')) {
-            $query->where('ref_no', 'like', '%' . $request->ref_no . '%');
+            $query->where('ref_no', 'like', '%'.$request->ref_no.'%');
         }
 
         $orders = $query->orderBy('id', 'desc')->paginate(20);
+
         return response()->json(['repackaging_orders' => $orders]);
     }
 
     public function showRepackaging($id)
     {
         $order = RepackagingOrder::with(['warehouse', 'creator', 'inputs.product', 'outputs.productVariant.product', 'adjustments'])->findOrFail($id);
+
         return response()->json(['repackaging_order' => $order]);
     }
 
@@ -2445,23 +2550,23 @@ class AdminApiController extends Controller
         $expenses = $validated['expenses'] ?? 0;
 
         try {
-            \Illuminate\Support\Facades\DB::beginTransaction();
+            DB::beginTransaction();
 
             $warehouseId = $validated['warehouse_id'];
-            
+
             $inputParts = explode('_', $validated['input_item']);
             $inputType = $inputParts[0];
             $inputId = $inputParts[1];
-            
+
             $inputProductId = null;
             $inputVariantId = null;
             $inputUnitQty = 1;
-            
+
             if ($inputType === 'product') {
                 $inputProductId = $inputId;
             } else {
                 $inputVariantId = $inputId;
-                $variant = \App\Models\ProductVariant::find($inputVariantId);
+                $variant = ProductVariant::find($inputVariantId);
                 $inputProductId = $variant->product_id;
                 $inputUnitQty = $variant->getBaseQuantity();
             }
@@ -2469,11 +2574,11 @@ class AdminApiController extends Controller
             $inputQty = $validated['input_qty']; // packages or kg
             $inputRawWeight = $inputQty * $inputUnitQty;
 
-            $batches = \App\Models\Batch::where('product_id', $inputProductId)
+            $batches = Batch::where('product_id', $inputProductId)
                 ->where('warehouse_id', $warehouseId)
-                ->when($inputVariantId, function($q) use ($inputVariantId) {
+                ->when($inputVariantId, function ($q) use ($inputVariantId) {
                     return $q->where('product_variant_id', $inputVariantId);
-                }, function($q) {
+                }, function ($q) {
                     return $q->whereNull('product_variant_id');
                 })
                 ->where('remaining_qty', '>', 0)
@@ -2486,7 +2591,9 @@ class AdminApiController extends Controller
             $consumedBatches = [];
 
             foreach ($batches as $batch) {
-                if ($remainingToConsume <= 0) break;
+                if ($remainingToConsume <= 0) {
+                    break;
+                }
 
                 $takeQty = min($batch->remaining_qty, $remainingToConsume);
                 $costForThisTake = $takeQty * $batch->cost_per_unit;
@@ -2501,12 +2608,12 @@ class AdminApiController extends Controller
                 $consumedBatches[] = [
                     'batch_id' => $batch->id,
                     'qty_used' => $takeQty,
-                    'cost' => $costForThisTake
+                    'cost' => $costForThisTake,
                 ];
             }
 
             if (round($remainingToConsume, 4) > 0) {
-                throw new \Exception("Insufficient raw stock in the selected warehouse. Shortfall: " . $remainingToConsume);
+                throw new \Exception('Insufficient raw stock in the selected warehouse. Shortfall: '.$remainingToConsume);
             }
 
             // Pre-process Outputs and Calculate Total Weight
@@ -2516,8 +2623,8 @@ class AdminApiController extends Controller
             foreach ($validated['outputs'] as $outItemReq) {
                 $variantId = $outItemReq['variant_id'];
                 $qty = $outItemReq['qty'];
-                
-                $variant = \App\Models\ProductVariant::find($variantId);
+
+                $variant = ProductVariant::find($variantId);
                 $productId = $variant->product_id;
                 $unitQty = $variant->getBaseQuantity();
 
@@ -2529,14 +2636,14 @@ class AdminApiController extends Controller
                     'variant_id' => $variantId,
                     'qty' => $qty,
                     'weight' => $weight,
-                    'unit_qty' => $unitQty
+                    'unit_qty' => $unitQty,
                 ];
             }
 
             $totalCost = $totalRawCost + $expenses;
 
-            $order = \App\Models\RepackagingOrder::create([
-                'ref_no' => 'RPK-' . strtoupper(\Illuminate\Support\Str::random(6)),
+            $order = RepackagingOrder::create([
+                'ref_no' => 'RPK-'.strtoupper(Str::random(6)),
                 'warehouse_id' => $warehouseId,
                 'date' => $validated['date'],
                 'created_by' => $request->user()->id ?? 1,
@@ -2544,7 +2651,7 @@ class AdminApiController extends Controller
             ]);
 
             foreach ($consumedBatches as $consumed) {
-                \App\Models\RepackagingInput::create([
+                RepackagingInput::create([
                     'repackaging_order_id' => $order->id,
                     'batch_id' => $consumed['batch_id'],
                     'product_id' => $inputProductId,
@@ -2552,7 +2659,7 @@ class AdminApiController extends Controller
                     'qty_used' => $consumed['qty_used'],
                 ]);
 
-                \App\Models\InventoryTransaction::create([
+                InventoryTransaction::create([
                     'warehouse_id' => $warehouseId,
                     'product_id' => $inputProductId,
                     'product_variant_id' => $inputVariantId,
@@ -2561,7 +2668,7 @@ class AdminApiController extends Controller
                     'qty_in' => 0,
                     'qty_out' => $consumed['qty_used'],
                     'cost' => $consumed['cost'],
-                    'reference_type' => \App\Models\RepackagingOrder::class,
+                    'reference_type' => RepackagingOrder::class,
                     'reference_id' => $order->id,
                     'date' => $validated['date'],
                     'created_by' => $request->user()->id ?? 1,
@@ -2574,7 +2681,7 @@ class AdminApiController extends Controller
                 $variantTotalCost = $totalCost * $proportion;
                 $variantUnitCost = $outItem['qty'] > 0 ? ($variantTotalCost / $outItem['qty']) : 0;
 
-                \App\Models\RepackagingOutput::create([
+                RepackagingOutput::create([
                     'repackaging_order_id' => $order->id,
                     'product_id' => $outItem['product_id'],
                     'product_variant_id' => $outItem['variant_id'],
@@ -2584,8 +2691,8 @@ class AdminApiController extends Controller
                     'total_cost' => $variantTotalCost,
                 ]);
 
-                $outputBatch = \App\Models\Batch::create([
-                    'batch_no' => 'B-' . $order->id . '-' . $outItem['product_id'] . '-FIN-' . strtoupper(\Illuminate\Support\Str::random(4)),
+                $outputBatch = Batch::create([
+                    'batch_no' => 'B-'.$order->id.'-'.$outItem['product_id'].'-FIN-'.strtoupper(Str::random(4)),
                     'product_id' => $outItem['product_id'],
                     'product_variant_id' => $outItem['variant_id'],
                     'warehouse_id' => $warehouseId,
@@ -2597,7 +2704,7 @@ class AdminApiController extends Controller
                     'expiry_date' => null,
                 ]);
 
-                \App\Models\InventoryTransaction::create([
+                InventoryTransaction::create([
                     'warehouse_id' => $warehouseId,
                     'product_id' => $outItem['product_id'],
                     'product_variant_id' => $outItem['variant_id'],
@@ -2606,7 +2713,7 @@ class AdminApiController extends Controller
                     'qty_in' => $outItem['qty'],
                     'qty_out' => 0,
                     'cost' => $variantTotalCost,
-                    'reference_type' => \App\Models\RepackagingOrder::class,
+                    'reference_type' => RepackagingOrder::class,
                     'reference_id' => $order->id,
                     'date' => $validated['date'],
                     'created_by' => $request->user()->id ?? 1,
@@ -2615,7 +2722,7 @@ class AdminApiController extends Controller
 
             if ($inputRawWeight != $totalOutputWeight) {
                 $diff = $totalOutputWeight - $inputRawWeight;
-                \App\Models\RepackagingAdjustment::create([
+                RepackagingAdjustment::create([
                     'repackaging_order_id' => $order->id,
                     'type' => $diff > 0 ? 'gain' : 'loss',
                     'qty' => abs($diff),
@@ -2623,26 +2730,26 @@ class AdminApiController extends Controller
                 ]);
             }
 
-            $inventoryRawAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset']);
-            $inventoryFinAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
+            $inventoryRawAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset']);
+            $inventoryFinAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
 
-            $journal = \App\Models\Journal::create([
-                'journal_no' => 'JNL-' . strtoupper(\Illuminate\Support\Str::random(6)),
+            $journal = Journal::create([
+                'journal_no' => 'JNL-'.strtoupper(Str::random(6)),
                 'date' => $validated['date'],
                 'reference_type' => RepackagingOrder::class,
                 'reference_id' => $order->id,
-                'notes' => 'API Repackaging ' . $order->ref_no,
+                'notes' => 'API Repackaging '.$order->ref_no,
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
-            \App\Models\JournalEntry::create([
+            JournalEntry::create([
                 'journal_id' => $journal->id,
                 'account_id' => $inventoryFinAcc->id,
                 'type' => 'debit',
                 'amount' => $totalCost,
             ]);
 
-            \App\Models\JournalEntry::create([
+            JournalEntry::create([
                 'journal_id' => $journal->id,
                 'account_id' => $inventoryRawAcc->id,
                 'type' => 'credit',
@@ -2650,8 +2757,8 @@ class AdminApiController extends Controller
             ]);
 
             if ($expenses > 0) {
-                $cashAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
-                \App\Models\JournalEntry::create([
+                $cashAcc = ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
+                JournalEntry::create([
                     'journal_id' => $journal->id,
                     'account_id' => $cashAcc->id,
                     'type' => 'credit',
@@ -2659,10 +2766,12 @@ class AdminApiController extends Controller
                 ]);
             }
 
-            \Illuminate\Support\Facades\DB::commit();
+            DB::commit();
+
             return response()->json(['message' => 'Repackaging created successfully', 'repackaging_order' => $order], 201);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -2671,14 +2780,14 @@ class AdminApiController extends Controller
     {
         $repackaging->load(['inputs.batch', 'outputs']);
 
-        $outputBatches = \App\Models\Batch::where('batch_no', 'like', 'B-' . $repackaging->id . '-%FIN-%')->get();
+        $outputBatches = Batch::where('batch_no', 'like', 'B-'.$repackaging->id.'-%FIN-%')->get();
         foreach ($outputBatches as $batch) {
             if ($batch->qty_out > 0) {
-                throw new \Exception("Cannot update repackaging because the finished stock has already been consumed.");
+                throw new \Exception('Cannot update repackaging because the finished stock has already been consumed.');
             }
         }
 
-        \App\Models\InventoryTransaction::where('reference_type', RepackagingOrder::class)->where('reference_id', $repackaging->id)->delete();
+        InventoryTransaction::where('reference_type', RepackagingOrder::class)->where('reference_id', $repackaging->id)->delete();
 
         foreach ($outputBatches as $batch) {
             $batch->delete();
@@ -2692,15 +2801,15 @@ class AdminApiController extends Controller
             }
         }
 
-        $journal = \App\Models\Journal::where('reference_type', RepackagingOrder::class)->where('reference_id', $repackaging->id)->first();
+        $journal = Journal::where('reference_type', RepackagingOrder::class)->where('reference_id', $repackaging->id)->first();
         if ($journal) {
-            \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
+            JournalEntry::where('journal_id', $journal->id)->delete();
             $journal->delete();
         }
 
-        \App\Models\RepackagingInput::where('repackaging_order_id', $repackaging->id)->delete();
-        \App\Models\RepackagingOutput::where('repackaging_order_id', $repackaging->id)->delete();
-        \App\Models\RepackagingAdjustment::where('repackaging_order_id', $repackaging->id)->delete();
+        RepackagingInput::where('repackaging_order_id', $repackaging->id)->delete();
+        RepackagingOutput::where('repackaging_order_id', $repackaging->id)->delete();
+        RepackagingAdjustment::where('repackaging_order_id', $repackaging->id)->delete();
     }
 
     public function updateRepackaging(Request $request, $id)
@@ -2720,16 +2829,16 @@ class AdminApiController extends Controller
         $expenses = $validated['expenses'] ?? 0;
 
         try {
-            \Illuminate\Support\Facades\DB::beginTransaction();
+            DB::beginTransaction();
 
-            $order = \App\Models\RepackagingOrder::findOrFail($id);
+            $order = RepackagingOrder::findOrFail($id);
             $this->reverseRepackaging($order);
 
             $warehouseId = $validated['warehouse_id'];
             $inputProductId = $validated['input_product_id'];
             $inputQty = $validated['input_qty'];
 
-            $batches = \App\Models\Batch::where('product_id', $inputProductId)
+            $batches = Batch::where('product_id', $inputProductId)
                 ->where('warehouse_id', $warehouseId)
                 ->where('remaining_qty', '>', 0)
                 ->orderBy('id', 'asc')
@@ -2741,7 +2850,9 @@ class AdminApiController extends Controller
             $consumedBatches = [];
 
             foreach ($batches as $batch) {
-                if ($remainingToConsume <= 0) break;
+                if ($remainingToConsume <= 0) {
+                    break;
+                }
 
                 $takeQty = min($batch->remaining_qty, $remainingToConsume);
                 $costForThisTake = $takeQty * $batch->cost_per_unit;
@@ -2756,12 +2867,12 @@ class AdminApiController extends Controller
                 $consumedBatches[] = [
                     'batch_id' => $batch->id,
                     'qty_used' => $takeQty,
-                    'cost' => $costForThisTake
+                    'cost' => $costForThisTake,
                 ];
             }
 
             if (round($remainingToConsume, 4) > 0) {
-                throw new \Exception("Insufficient raw stock in the selected warehouse.");
+                throw new \Exception('Insufficient raw stock in the selected warehouse.');
             }
 
             // Pre-process Outputs and Calculate Total Weight
@@ -2771,8 +2882,8 @@ class AdminApiController extends Controller
             foreach ($validated['outputs'] as $outItemReq) {
                 $variantId = $outItemReq['variant_id'];
                 $qty = $outItemReq['qty'];
-                
-                $variant = \App\Models\ProductVariant::find($variantId);
+
+                $variant = ProductVariant::find($variantId);
                 $productId = $variant->product_id;
                 $unitQty = $variant->getBaseQuantity();
 
@@ -2784,7 +2895,7 @@ class AdminApiController extends Controller
                     'variant_id' => $variantId,
                     'qty' => $qty,
                     'weight' => $weight,
-                    'unit_qty' => $unitQty
+                    'unit_qty' => $unitQty,
                 ];
             }
 
@@ -2797,14 +2908,14 @@ class AdminApiController extends Controller
             ]);
 
             foreach ($consumedBatches as $consumed) {
-                \App\Models\RepackagingInput::create([
+                RepackagingInput::create([
                     'repackaging_order_id' => $order->id,
                     'batch_id' => $consumed['batch_id'],
                     'product_id' => $inputProductId,
                     'qty_used' => $consumed['qty_used'],
                 ]);
 
-                \App\Models\InventoryTransaction::create([
+                InventoryTransaction::create([
                     'warehouse_id' => $warehouseId,
                     'product_id' => $inputProductId,
                     'batch_id' => $consumed['batch_id'],
@@ -2812,7 +2923,7 @@ class AdminApiController extends Controller
                     'qty_in' => 0,
                     'qty_out' => $consumed['qty_used'],
                     'cost' => $consumed['cost'],
-                    'reference_type' => \App\Models\RepackagingOrder::class,
+                    'reference_type' => RepackagingOrder::class,
                     'reference_id' => $order->id,
                     'date' => $validated['date'],
                     'created_by' => $request->user()->id ?? 1,
@@ -2825,7 +2936,7 @@ class AdminApiController extends Controller
                 $variantTotalCost = $totalCost * $proportion;
                 $variantUnitCost = $outItem['qty'] > 0 ? ($variantTotalCost / $outItem['qty']) : 0;
 
-                \App\Models\RepackagingOutput::create([
+                RepackagingOutput::create([
                     'repackaging_order_id' => $order->id,
                     'product_id' => $outItem['product_id'],
                     'product_variant_id' => $outItem['variant_id'],
@@ -2835,8 +2946,8 @@ class AdminApiController extends Controller
                     'total_cost' => $variantTotalCost,
                 ]);
 
-                $outputBatch = \App\Models\Batch::create([
-                    'batch_no' => 'B-' . $order->id . '-' . $outItem['product_id'] . '-FIN-' . strtoupper(\Illuminate\Support\Str::random(4)),
+                $outputBatch = Batch::create([
+                    'batch_no' => 'B-'.$order->id.'-'.$outItem['product_id'].'-FIN-'.strtoupper(Str::random(4)),
                     'product_id' => $outItem['product_id'],
                     'product_variant_id' => $outItem['variant_id'],
                     'warehouse_id' => $warehouseId,
@@ -2848,7 +2959,7 @@ class AdminApiController extends Controller
                     'expiry_date' => null,
                 ]);
 
-                \App\Models\InventoryTransaction::create([
+                InventoryTransaction::create([
                     'warehouse_id' => $warehouseId,
                     'product_id' => $outItem['product_id'],
                     'product_variant_id' => $outItem['variant_id'],
@@ -2857,7 +2968,7 @@ class AdminApiController extends Controller
                     'qty_in' => $outItem['qty'],
                     'qty_out' => 0,
                     'cost' => $variantTotalCost,
-                    'reference_type' => \App\Models\RepackagingOrder::class,
+                    'reference_type' => RepackagingOrder::class,
                     'reference_id' => $order->id,
                     'date' => $validated['date'],
                     'created_by' => $request->user()->id ?? 1,
@@ -2866,7 +2977,7 @@ class AdminApiController extends Controller
 
             if ($inputQty != $totalOutputWeight) {
                 $diff = $totalOutputWeight - $inputQty;
-                \App\Models\RepackagingAdjustment::create([
+                RepackagingAdjustment::create([
                     'repackaging_order_id' => $order->id,
                     'type' => $diff > 0 ? 'gain' : 'loss',
                     'qty' => abs($diff),
@@ -2874,26 +2985,26 @@ class AdminApiController extends Controller
                 ]);
             }
 
-            $inventoryRawAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset']);
-            $inventoryFinAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
+            $inventoryRawAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset']);
+            $inventoryFinAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
 
-            $journal = \App\Models\Journal::create([
-                'journal_no' => 'JNL-' . strtoupper(\Illuminate\Support\Str::random(6)),
+            $journal = Journal::create([
+                'journal_no' => 'JNL-'.strtoupper(Str::random(6)),
                 'date' => $validated['date'],
                 'reference_type' => RepackagingOrder::class,
                 'reference_id' => $order->id,
-                'notes' => 'API Repackaging ' . $order->ref_no . ' (Updated)',
+                'notes' => 'API Repackaging '.$order->ref_no.' (Updated)',
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
-            \App\Models\JournalEntry::create([
+            JournalEntry::create([
                 'journal_id' => $journal->id,
                 'account_id' => $inventoryFinAcc->id,
                 'type' => 'debit',
                 'amount' => $totalCost,
             ]);
 
-            \App\Models\JournalEntry::create([
+            JournalEntry::create([
                 'journal_id' => $journal->id,
                 'account_id' => $inventoryRawAcc->id,
                 'type' => 'credit',
@@ -2901,8 +3012,8 @@ class AdminApiController extends Controller
             ]);
 
             if ($expenses > 0) {
-                $cashAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
-                \App\Models\JournalEntry::create([
+                $cashAcc = ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
+                JournalEntry::create([
                     'journal_id' => $journal->id,
                     'account_id' => $cashAcc->id,
                     'type' => 'credit',
@@ -2910,10 +3021,12 @@ class AdminApiController extends Controller
                 ]);
             }
 
-            \Illuminate\Support\Facades\DB::commit();
+            DB::commit();
+
             return response()->json(['message' => 'Repackaging updated successfully', 'repackaging_order' => $order], 200);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -2921,20 +3034,20 @@ class AdminApiController extends Controller
     public function destroyRepackaging($id)
     {
         try {
-            \Illuminate\Support\Facades\DB::beginTransaction();
+            DB::beginTransaction();
             $repackaging = RepackagingOrder::findOrFail($id);
             $repackaging->load(['inputs.batch', 'outputs']);
 
             // Prevent reversal if output stock has been consumed
-            $outputBatches = \App\Models\Batch::where('batch_no', 'like', 'B-' . $repackaging->id . '-%FIN-%')->get();
+            $outputBatches = Batch::where('batch_no', 'like', 'B-'.$repackaging->id.'-%FIN-%')->get();
             foreach ($outputBatches as $batch) {
                 if ($batch->qty_out > 0) {
-                    throw new \Exception("Cannot reverse repackaging because the finished stock from this order has already been consumed/sold.");
+                    throw new \Exception('Cannot reverse repackaging because the finished stock from this order has already been consumed/sold.');
                 }
             }
 
             // 1. Delete Inventory Transactions individually to trigger observer
-            $transactions = \App\Models\InventoryTransaction::where('reference_type', RepackagingOrder::class)->where('reference_id', $repackaging->id)->get();
+            $transactions = InventoryTransaction::where('reference_type', RepackagingOrder::class)->where('reference_id', $repackaging->id)->get();
             foreach ($transactions as $txn) {
                 $txn->delete();
             }
@@ -2954,23 +3067,25 @@ class AdminApiController extends Controller
             }
 
             // 4. Delete Accounting Entries
-            $journal = \App\Models\Journal::where('reference_type', RepackagingOrder::class)->where('reference_id', $repackaging->id)->first();
+            $journal = Journal::where('reference_type', RepackagingOrder::class)->where('reference_id', $repackaging->id)->first();
             if ($journal) {
-                \App\Models\JournalEntry::where('journal_id', $journal->id)->delete();
+                JournalEntry::where('journal_id', $journal->id)->delete();
                 $journal->delete();
             }
 
             // 5. Delete Associations
-            \App\Models\RepackagingInput::where('repackaging_order_id', $repackaging->id)->delete();
-            \App\Models\RepackagingOutput::where('repackaging_order_id', $repackaging->id)->delete();
-            \App\Models\RepackagingAdjustment::where('repackaging_order_id', $repackaging->id)->delete();
+            RepackagingInput::where('repackaging_order_id', $repackaging->id)->delete();
+            RepackagingOutput::where('repackaging_order_id', $repackaging->id)->delete();
+            RepackagingAdjustment::where('repackaging_order_id', $repackaging->id)->delete();
 
             $repackaging->delete();
 
-            \Illuminate\Support\Facades\DB::commit();
+            DB::commit();
+
             return response()->json(['message' => 'Repackaging deleted and stock restored successfully']);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
+
             return response()->json(['error' => $e->getMessage()], 400);
         }
     }
@@ -2985,15 +3100,15 @@ class AdminApiController extends Controller
         $assetAccs = ChartOfAccount::where('type', 'asset')->pluck('id');
         $liabilityAccs = ChartOfAccount::where('type', 'liability')->pluck('id');
 
-        $incomeTotal = JournalEntry::whereIn('account_id', $incomeAccs)->where('type', 'credit')->sum('amount') 
+        $incomeTotal = JournalEntry::whereIn('account_id', $incomeAccs)->where('type', 'credit')->sum('amount')
                      - JournalEntry::whereIn('account_id', $incomeAccs)->where('type', 'debit')->sum('amount');
-                     
+
         $expenseTotal = JournalEntry::whereIn('account_id', $expenseAccs)->where('type', 'debit')->sum('amount')
                       - JournalEntry::whereIn('account_id', $expenseAccs)->where('type', 'credit')->sum('amount');
 
-        $totalAssets = JournalEntry::whereIn('account_id', $assetAccs)->where('type', 'debit')->sum('amount') 
+        $totalAssets = JournalEntry::whereIn('account_id', $assetAccs)->where('type', 'debit')->sum('amount')
                      - JournalEntry::whereIn('account_id', $assetAccs)->where('type', 'credit')->sum('amount');
-                     
+
         $totalLiabilities = JournalEntry::whereIn('account_id', $liabilityAccs)->where('type', 'credit')->sum('amount')
                           - JournalEntry::whereIn('account_id', $liabilityAccs)->where('type', 'debit')->sum('amount');
 
@@ -3023,24 +3138,26 @@ class AdminApiController extends Controller
 
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('journal_no', 'like', "%{$search}%")
-                  ->orWhere('notes', 'like', "%{$search}%");
+                    ->orWhere('notes', 'like', "%{$search}%");
             });
         }
 
         $journals = $query->orderBy('date', 'desc')->orderBy('id', 'desc')->paginate($request->get('per_page', 20));
+
         return response()->json(['journals' => $journals]);
     }
 
     public function storeJournal(Request $request)
     {
         $data = $request->all();
-        if (!isset($data['journal_no'])) {
-            $data['journal_no'] = 'JRN-' . time();
+        if (! isset($data['journal_no'])) {
+            $data['journal_no'] = 'JRN-'.time();
         }
         $data['created_by'] = $request->user()->id ?? 1;
         $journal = Journal::create($data);
+
         return response()->json(['message' => 'Journal created', 'journal' => $journal], 201);
     }
 
@@ -3048,34 +3165,39 @@ class AdminApiController extends Controller
     {
         $journal = Journal::findOrFail($id);
         $journal->update($request->all());
+
         return response()->json(['message' => 'Journal updated']);
     }
 
     public function destroyJournal($id)
     {
         Journal::destroy($id);
+
         return response()->json(['message' => 'Journal deleted']);
     }
 
     /**
      * Get activity logs.
      */
-        public function paymentMethods(Request $request)
+    public function paymentMethods(Request $request)
     {
         $methods = ChartOfAccount::where('is_payment_method', true)->get();
+
         return response()->json(['payment_methods' => $methods]);
     }
 
     public function activityLogs(Request $request)
     {
         $logs = ActivityLog::with('user')->orderBy('id', 'desc')->get();
+
         return response()->json(['activity_logs' => $logs]);
     }
 
     public function downloadInvoice($id)
     {
         $sale = Sale::findOrFail($id);
-        return app(\App\Http\Controllers\SaleController::class)->pdf($sale);
+
+        return app(SaleController::class)->pdf($sale);
     }
 
     // ── Investments ─────────────────────────────────────────────────────────
@@ -3083,8 +3205,9 @@ class AdminApiController extends Controller
     public function investmentFormData()
     {
         $accounts = ChartOfAccount::where('is_payment_method', true)->get();
+
         return response()->json([
-            'accounts' => $accounts
+            'accounts' => $accounts,
         ]);
     }
 
@@ -3129,10 +3252,12 @@ class AdminApiController extends Controller
             $this->createInvestmentJournals($investment, $request->user()->id);
 
             DB::commit();
-            return response()->json(['message' => ucfirst($investment->type) . ' recorded successfully.', 'investment' => $investment], 201);
+
+            return response()->json(['message' => ucfirst($investment->type).' recorded successfully.', 'investment' => $investment], 201);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Error recording transaction: ' . $e->getMessage()], 500);
+
+            return response()->json(['message' => 'Error recording transaction: '.$e->getMessage()], 500);
         }
     }
 
@@ -3165,10 +3290,12 @@ class AdminApiController extends Controller
             $this->createInvestmentJournals($investment, $request->user()->id);
 
             DB::commit();
-            return response()->json(['message' => ucfirst($investment->type) . ' updated successfully.', 'investment' => $investment]);
+
+            return response()->json(['message' => ucfirst($investment->type).' updated successfully.', 'investment' => $investment]);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Error updating transaction: ' . $e->getMessage()], 500);
+
+            return response()->json(['message' => 'Error updating transaction: '.$e->getMessage()], 500);
         }
     }
 
@@ -3183,21 +3310,23 @@ class AdminApiController extends Controller
             }
             $investment->delete();
             DB::commit();
+
             return response()->json(['message' => 'Transaction deleted successfully.']);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Error deleting transaction: ' . $e->getMessage()], 500);
+
+            return response()->json(['message' => 'Error deleting transaction: '.$e->getMessage()], 500);
         }
     }
 
     private function createInvestmentJournals(Investment $investment, $userId)
     {
         $journal = Journal::create([
-            'journal_no' => 'JNL-' . strtoupper(Str::random(6)),
+            'journal_no' => 'JNL-'.strtoupper(Str::random(6)),
             'date' => $investment->date,
             'reference_type' => Investment::class,
             'reference_id' => $investment->id,
-            'notes' => ucfirst($investment->type) . ' - ' . ($investment->reference ?? 'N/A'),
+            'notes' => ucfirst($investment->type).' - '.($investment->reference ?? 'N/A'),
             'created_by' => $userId ?? 1,
         ]);
 
@@ -3221,7 +3350,7 @@ class AdminApiController extends Controller
     public function notifications(Request $request)
     {
         $user = $request->user();
-        if (!$user) {
+        if (! $user) {
             return response()->json(['error' => 'Unauthenticated'], 401);
         }
 
@@ -3230,7 +3359,7 @@ class AdminApiController extends Controller
 
         return response()->json([
             'notifications' => $notifications,
-            'unread_count' => $unreadCount
+            'unread_count' => $unreadCount,
         ]);
     }
 
@@ -3243,6 +3372,7 @@ class AdminApiController extends Controller
         if ($user) {
             $user->unreadNotifications->markAsRead();
         }
+
         return response()->json(['success' => true]);
     }
 
@@ -3251,22 +3381,22 @@ class AdminApiController extends Controller
      */
     public function customerLedger(Request $request, $id)
     {
-        $customer = \App\Models\Customer::findOrFail($id);
-        
+        $customer = Customer::findOrFail($id);
+
         $customer->load(['sales' => function ($query) {
             $query->orderBy('date', 'asc');
         }]);
 
-        $arAcc = \App\Models\ChartOfAccount::where('name', 'Accounts Receivable')->first();
-        $advAcc = \App\Models\ChartOfAccount::where('name', 'Customer Advance')->first();
+        $arAcc = ChartOfAccount::where('name', 'Accounts Receivable')->first();
+        $advAcc = ChartOfAccount::where('name', 'Customer Advance')->first();
         $arId = $arAcc ? $arAcc->id : 0;
         $advId = $advAcc ? $advAcc->id : 0;
 
-        $journals = \App\Models\Journal::with(['entries', 'reference'])
-            ->where(function($q) use ($customer) {
-                $q->where('reference_type', \App\Models\Customer::class)->where('reference_id', $customer->id);
-            })->orWhere(function($q) use ($customer) {
-                $q->where('reference_type', \App\Models\Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
+        $journals = Journal::with(['entries', 'reference'])
+            ->where(function ($q) use ($customer) {
+                $q->where('reference_type', Customer::class)->where('reference_id', $customer->id);
+            })->orWhere(function ($q) use ($customer) {
+                $q->where('reference_type', Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
             })
             ->get();
 
@@ -3277,12 +3407,12 @@ class AdminApiController extends Controller
             $debit = 0;
             $credit = 0;
 
-            if ($journal->reference_type == \App\Models\Sale::class) {
+            if ($journal->reference_type == Sale::class) {
                 $sale = $journal->reference;
                 if ($sale && $sale->total >= 0) {
                     $runningBalance += $sale->total;
-                    $ledgerEntries->push((object)[
-                        'id' => $journal->id . '_sale',
+                    $ledgerEntries->push((object) [
+                        'id' => $journal->id.'_sale',
                         'journal' => $journal,
                         'debit' => $sale->total,
                         'credit' => 0,
@@ -3290,30 +3420,31 @@ class AdminApiController extends Controller
                     ]);
                 }
 
-                $initialPaymentAmount = \App\Models\SalePayment::where('sale_id', $sale->id)
-                    ->where(function($q) {
+                $initialPaymentAmount = SalePayment::where('sale_id', $sale->id)
+                    ->where(function ($q) {
                         $q->whereNull('reference')
-                          ->orWhereIn('reference', ['POS Payment', 'Wallet Payment']);
+                            ->orWhereIn('reference', ['POS Payment', 'Wallet Payment']);
                     })
                     ->sum('amount');
 
-                $hasJournal = $journals->contains(function($j) use ($sale) {
-                    return str_contains($j->notes, 'Payment for POS Sale ' . $sale->invoice_no);
+                $hasJournal = $journals->contains(function ($j) use ($sale) {
+                    return str_contains($j->notes, 'Payment for POS Sale '.$sale->invoice_no);
                 });
 
-                if ($initialPaymentAmount > 0 && !$hasJournal) {
+                if ($initialPaymentAmount > 0 && ! $hasJournal) {
                     $runningBalance -= $initialPaymentAmount;
                     $paymentJournal = clone $journal;
-                    $paymentJournal->notes = 'Payment for ' . $sale->invoice_no;
-                    
-                    $ledgerEntries->push((object)[
-                        'id' => $journal->id . '_pay',
+                    $paymentJournal->notes = 'Payment for '.$sale->invoice_no;
+
+                    $ledgerEntries->push((object) [
+                        'id' => $journal->id.'_pay',
                         'journal' => $paymentJournal,
                         'debit' => 0,
                         'credit' => $initialPaymentAmount,
                         'running_balance' => $runningBalance,
                     ]);
                 }
+
                 continue;
             } else {
                 if ($journal->notes == 'Opening Balance') {
@@ -3330,7 +3461,7 @@ class AdminApiController extends Controller
                 if ($debit > $credit) {
                     $debit = $debit - $credit;
                     $credit = 0;
-                } else if ($credit > $debit) {
+                } elseif ($credit > $debit) {
                     $credit = $credit - $debit;
                     $debit = 0;
                 } else {
@@ -3345,13 +3476,13 @@ class AdminApiController extends Controller
 
             if ($internalTransferAmount > 0) {
                 $journal = clone $journal;
-                $journal->notes .= " (Wallet Used: ৳" . number_format($internalTransferAmount, 0) . ")";
+                $journal->notes .= ' (Wallet Used: ৳'.number_format($internalTransferAmount, 0).')';
             }
 
             $runningBalance += $debit;
             $runningBalance -= $credit;
 
-            $ledgerEntries->push((object)[
+            $ledgerEntries->push((object) [
                 'id' => $journal->id,
                 'journal' => $journal,
                 'debit' => $debit,
@@ -3360,18 +3491,18 @@ class AdminApiController extends Controller
             ]);
         }
 
-        $ledgerEntries = $ledgerEntries->sortByDesc(function($entry) {
-            $parts = explode('_', (string)$entry->id);
+        $ledgerEntries = $ledgerEntries->sortByDesc(function ($entry) {
+            $parts = explode('_', (string) $entry->id);
             $journalId = str_pad($parts[0], 10, '0', STR_PAD_LEFT);
             $subSeq = isset($parts[1]) ? $parts[1] : '0';
-            
+
             $seqMap = [
                 'sale' => '1',
                 'pay' => '2',
             ];
             $seq = $seqMap[$subSeq] ?? '0';
 
-            return $entry->journal->date . '_' . $journalId . '_' . $seq;
+            return $entry->journal->date.'_'.$journalId.'_'.$seq;
         })->values();
 
         $perPage = (int) $request->get('per_page', 20);
@@ -3384,11 +3515,11 @@ class AdminApiController extends Controller
         foreach ($itemsForPage as $entry) {
             $formattedLedger[] = [
                 'id' => $entry->id,
-                'date' => $entry->journal->date ? \Carbon\Carbon::parse($entry->journal->date)->format('Y-m-d') : ($entry->journal->created_at ? $entry->journal->created_at->toDateString() : ''),
+                'date' => $entry->journal->date ? Carbon::parse($entry->journal->date)->format('Y-m-d') : ($entry->journal->created_at ? $entry->journal->created_at->toDateString() : ''),
                 'description' => $entry->journal->notes ?? 'Transaction',
                 'debit' => $entry->debit,
                 'credit' => $entry->credit,
-                'balance' => $entry->running_balance
+                'balance' => $entry->running_balance,
             ];
         }
 
@@ -3397,30 +3528,32 @@ class AdminApiController extends Controller
                 'current_page' => $page,
                 'data' => $formattedLedger,
                 'last_page' => (int) ceil($total / max(1, $perPage)),
-                'total' => $total
+                'total' => $total,
             ],
             'total_due' => $customer->total_due,
-            'wallet_balance' => $customer->wallet_balance
+            'wallet_balance' => $customer->wallet_balance,
         ]);
     }
 
     // ── Expense Categories ────────────────────────────────────────────────────────
-    
+
     public function expenseCategoryFormData()
     {
-        $coas = \App\Models\ChartOfAccount::where('type', 'expense')->get(['id', 'name']);
-        $categories = \App\Models\ExpenseCategory::where('status', 1)->get(['id', 'name']);
+        $coas = ChartOfAccount::where('type', 'expense')->get(['id', 'name']);
+        $categories = ExpenseCategory::where('status', 1)->get(['id', 'name']);
+
         return response()->json([
             'chart_of_accounts' => $coas,
-            'categories' => $categories
+            'categories' => $categories,
         ]);
     }
 
     public function expenseCategories(Request $request)
     {
-        $categories = \App\Models\ExpenseCategory::with('chartOfAccount')->paginate($request->get('per_page', 20));
+        $categories = ExpenseCategory::with('chartOfAccount')->paginate($request->get('per_page', 20));
+
         return response()->json([
-            'categories' => $categories
+            'categories' => $categories,
         ]);
     }
 
@@ -3431,43 +3564,46 @@ class AdminApiController extends Controller
             'code' => 'nullable|string|max:50',
             'status' => 'boolean',
             'parent_id' => 'nullable|exists:expense_categories,id',
-            'chart_of_account_id' => 'nullable|exists:chart_of_accounts,id'
+            'chart_of_account_id' => 'nullable|exists:chart_of_accounts,id',
         ]);
 
-        $category = \App\Models\ExpenseCategory::create($validated);
+        $category = ExpenseCategory::create($validated);
+
         return response()->json(['message' => 'Expense category created', 'category' => $category], 201);
     }
 
     public function updateExpenseCategory(Request $request, $id)
     {
-        $category = \App\Models\ExpenseCategory::findOrFail($id);
+        $category = ExpenseCategory::findOrFail($id);
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'code' => 'nullable|string|max:50',
             'status' => 'boolean',
             'parent_id' => 'nullable|exists:expense_categories,id',
-            'chart_of_account_id' => 'nullable|exists:chart_of_accounts,id'
+            'chart_of_account_id' => 'nullable|exists:chart_of_accounts,id',
         ]);
 
         $category->update($validated);
+
         return response()->json(['message' => 'Expense category updated', 'category' => $category]);
     }
 
     public function destroyExpenseCategory($id)
     {
-        $category = \App\Models\ExpenseCategory::findOrFail($id);
+        $category = ExpenseCategory::findOrFail($id);
         if ($category->expenses()->count() > 0) {
             return response()->json(['error' => 'Cannot delete category with associated expenses'], 400);
         }
         $category->delete();
+
         return response()->json(['message' => 'Expense category deleted']);
     }
 
     // ── Expenses ────────────────────────────────────────────────────────────────
-    
+
     public function expenseFormData()
     {
-        $categories = \App\Models\ExpenseCategory::all(['id', 'name', 'code', 'chart_of_account_id']);
+        $categories = ExpenseCategory::all(['id', 'name', 'code', 'chart_of_account_id']);
 
         if ($categories->isEmpty()) {
             $defaultCategories = [
@@ -3481,8 +3617,8 @@ class AdminApiController extends Controller
                 'Miscellaneous',
             ];
             foreach ($defaultCategories as $name) {
-                $acc = \App\Models\ChartOfAccount::firstOrCreate(['name' => $name, 'type' => 'expense']);
-                \App\Models\ExpenseCategory::firstOrCreate(
+                $acc = ChartOfAccount::firstOrCreate(['name' => $name, 'type' => 'expense']);
+                ExpenseCategory::firstOrCreate(
                     ['name' => $name],
                     [
                         'code' => strtoupper(substr(str_replace(' ', '', $name), 0, 4)),
@@ -3490,10 +3626,10 @@ class AdminApiController extends Controller
                     ]
                 );
             }
-            $categories = \App\Models\ExpenseCategory::all(['id', 'name', 'code', 'chart_of_account_id']);
+            $categories = ExpenseCategory::all(['id', 'name', 'code', 'chart_of_account_id']);
         }
 
-        $paymentMethods = \App\Models\ChartOfAccount::where('is_payment_method', 1)
+        $paymentMethods = ChartOfAccount::where('is_payment_method', 1)
             ->orWhereIn('type', ['cash', 'bank'])
             ->get(['id', 'name', 'type']);
 
@@ -3506,12 +3642,12 @@ class AdminApiController extends Controller
 
     public function expenses(Request $request)
     {
-        $query = \App\Models\Expense::with(['category', 'paymentMethod']);
+        $query = Expense::with(['category', 'paymentMethod']);
 
         if ($request->filled('start_date')) {
             $query->whereDate('date', '>=', $request->start_date);
         }
-        
+
         if ($request->filled('end_date')) {
             $query->whereDate('date', '<=', $request->end_date);
         }
@@ -3523,7 +3659,7 @@ class AdminApiController extends Controller
         $expenses = $query->orderBy('date', 'desc')->orderBy('id', 'desc')->paginate($request->get('per_page', 20));
 
         return response()->json([
-            'expenses' => $expenses
+            'expenses' => $expenses,
         ]);
     }
 
@@ -3542,36 +3678,36 @@ class AdminApiController extends Controller
 
         \DB::beginTransaction();
         try {
-            $expense = \App\Models\Expense::create($validated);
+            $expense = Expense::create($validated);
 
-            $category = \App\Models\ExpenseCategory::find($validated['expense_category_id']);
+            $category = ExpenseCategory::find($validated['expense_category_id']);
             $expenseAccId = $category ? $category->chart_of_account_id : null;
-            if (!$expenseAccId && $category) {
-                $acc = \App\Models\ChartOfAccount::firstOrCreate(['name' => $category->name, 'type' => 'expense']);
+            if (! $expenseAccId && $category) {
+                $acc = ChartOfAccount::firstOrCreate(['name' => $category->name, 'type' => 'expense']);
                 $category->chart_of_account_id = $acc->id;
                 $category->save();
                 $expenseAccId = $acc->id;
             }
-            if (!$expenseAccId) {
-                $fallbackAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Operational Expenses', 'type' => 'expense']);
+            if (! $expenseAccId) {
+                $fallbackAcc = ChartOfAccount::firstOrCreate(['name' => 'Operational Expenses', 'type' => 'expense']);
                 $expenseAccId = $fallbackAcc->id;
             }
 
-            $journalNotes = !empty($validated['notes'])
-                ? 'Expense: ' . $validated['notes']
-                : 'Expense (' . ($category->name ?? 'Operational Expense') . ')';
+            $journalNotes = ! empty($validated['notes'])
+                ? 'Expense: '.$validated['notes']
+                : 'Expense ('.($category->name ?? 'Operational Expense').')';
 
-            $journal = \App\Models\Journal::create([
-                'journal_no' => 'EXP-' . strtoupper(\Illuminate\Support\Str::random(6)),
+            $journal = Journal::create([
+                'journal_no' => 'EXP-'.strtoupper(Str::random(6)),
                 'date' => $validated['date'],
-                'reference_type' => \App\Models\Expense::class,
+                'reference_type' => Expense::class,
                 'reference_id' => $expense->id,
                 'notes' => $journalNotes,
                 'created_by' => auth()->id() ?? 1,
             ]);
 
             // Debit Expense Account
-            \App\Models\JournalEntry::create([
+            JournalEntry::create([
                 'journal_id' => $journal->id,
                 'account_id' => $expenseAccId,
                 'type' => 'debit',
@@ -3579,28 +3715,30 @@ class AdminApiController extends Controller
             ]);
 
             // Credit Payment Method Account
-            \App\Models\JournalEntry::create([
+            JournalEntry::create([
                 'journal_id' => $journal->id,
                 'account_id' => $validated['payment_method_id'],
                 'type' => 'credit',
                 'amount' => $validated['amount'],
             ]);
 
-            $expense->reference_type = \App\Models\Journal::class;
+            $expense->reference_type = Journal::class;
             $expense->reference_id = $journal->id;
             $expense->save();
 
             \DB::commit();
+
             return response()->json(['message' => 'Expense created successfully', 'expense' => $expense->load(['category', 'paymentMethod'])], 201);
         } catch (\Exception $e) {
             \DB::rollBack();
-            return response()->json(['error' => 'Failed to create expense: ' . $e->getMessage()], 500);
+
+            return response()->json(['error' => 'Failed to create expense: '.$e->getMessage()], 500);
         }
     }
 
     public function updateExpense(Request $request, $id)
     {
-        $expense = \App\Models\Expense::findOrFail($id);
+        $expense = Expense::findOrFail($id);
 
         $validated = $request->validate([
             'expense_category_id' => 'required|exists:expense_categories,id',
@@ -3615,32 +3753,32 @@ class AdminApiController extends Controller
         try {
             $expense->update($validated);
 
-            $category = \App\Models\ExpenseCategory::find($validated['expense_category_id']);
+            $category = ExpenseCategory::find($validated['expense_category_id']);
             $expenseAccId = $category ? $category->chart_of_account_id : null;
-            if (!$expenseAccId && $category) {
-                $acc = \App\Models\ChartOfAccount::firstOrCreate(['name' => $category->name, 'type' => 'expense']);
+            if (! $expenseAccId && $category) {
+                $acc = ChartOfAccount::firstOrCreate(['name' => $category->name, 'type' => 'expense']);
                 $category->chart_of_account_id = $acc->id;
                 $category->save();
                 $expenseAccId = $acc->id;
             }
-            if (!$expenseAccId) {
-                $fallbackAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Operational Expenses', 'type' => 'expense']);
+            if (! $expenseAccId) {
+                $fallbackAcc = ChartOfAccount::firstOrCreate(['name' => 'Operational Expenses', 'type' => 'expense']);
                 $expenseAccId = $fallbackAcc->id;
             }
 
-            $journalNotes = !empty($validated['notes'])
-                ? 'Expense: ' . $validated['notes']
-                : 'Expense (' . ($category->name ?? 'Operational Expense') . ')';
+            $journalNotes = ! empty($validated['notes'])
+                ? 'Expense: '.$validated['notes']
+                : 'Expense ('.($category->name ?? 'Operational Expense').')';
 
-            $journal = \App\Models\Journal::where('reference_type', \App\Models\Expense::class)
+            $journal = Journal::where('reference_type', Expense::class)
                 ->where('reference_id', $expense->id)
                 ->first();
 
-            if (!$journal) {
-                $journal = \App\Models\Journal::create([
-                    'journal_no' => 'EXP-' . strtoupper(\Illuminate\Support\Str::random(6)),
+            if (! $journal) {
+                $journal = Journal::create([
+                    'journal_no' => 'EXP-'.strtoupper(Str::random(6)),
                     'date' => $validated['date'],
-                    'reference_type' => \App\Models\Expense::class,
+                    'reference_type' => Expense::class,
                     'reference_id' => $expense->id,
                     'notes' => $journalNotes,
                     'created_by' => auth()->id() ?? 1,
@@ -3654,7 +3792,7 @@ class AdminApiController extends Controller
             }
 
             // Debit Expense Account
-            \App\Models\JournalEntry::create([
+            JournalEntry::create([
                 'journal_id' => $journal->id,
                 'account_id' => $expenseAccId,
                 'type' => 'debit',
@@ -3662,7 +3800,7 @@ class AdminApiController extends Controller
             ]);
 
             // Credit Payment Method Account
-            \App\Models\JournalEntry::create([
+            JournalEntry::create([
                 'journal_id' => $journal->id,
                 'account_id' => $validated['payment_method_id'],
                 'type' => 'credit',
@@ -3670,20 +3808,22 @@ class AdminApiController extends Controller
             ]);
 
             \DB::commit();
+
             return response()->json(['message' => 'Expense updated successfully', 'expense' => $expense->load(['category', 'paymentMethod'])]);
         } catch (\Exception $e) {
             \DB::rollBack();
-            return response()->json(['error' => 'Failed to update expense: ' . $e->getMessage()], 500);
+
+            return response()->json(['error' => 'Failed to update expense: '.$e->getMessage()], 500);
         }
     }
 
     public function destroyExpense($id)
     {
-        $expense = \App\Models\Expense::findOrFail($id);
+        $expense = Expense::findOrFail($id);
 
         \DB::beginTransaction();
         try {
-            $journals = \App\Models\Journal::where('reference_type', \App\Models\Expense::class)
+            $journals = Journal::where('reference_type', Expense::class)
                 ->where('reference_id', $expense->id)
                 ->get();
 
@@ -3694,10 +3834,12 @@ class AdminApiController extends Controller
 
             $expense->delete();
             \DB::commit();
+
             return response()->json(['message' => 'Expense deleted successfully']);
         } catch (\Exception $e) {
             \DB::rollBack();
-            return response()->json(['error' => 'Failed to delete expense: ' . $e->getMessage()], 500);
+
+            return response()->json(['error' => 'Failed to delete expense: '.$e->getMessage()], 500);
         }
     }
 
@@ -3705,11 +3847,11 @@ class AdminApiController extends Controller
 
     public function dailySales(Request $request)
     {
-        $startDate = $request->input('start_date', \Carbon\Carbon::now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->input('end_date', \Carbon\Carbon::now()->endOfMonth()->format('Y-m-d'));
+        $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate = $request->input('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
 
-        $sales = \App\Models\Sale::whereBetween('date', [$startDate, $endDate])
-            ->select(\Illuminate\Support\Facades\DB::raw('DATE(date) as sale_date'), \Illuminate\Support\Facades\DB::raw('count(*) as total_orders'), \Illuminate\Support\Facades\DB::raw('sum(total) as total_revenue'))
+        $sales = Sale::whereBetween('date', [$startDate, $endDate])
+            ->select(DB::raw('DATE(date) as sale_date'), DB::raw('count(*) as total_orders'), DB::raw('sum(total) as total_revenue'))
             ->groupBy('sale_date')
             ->orderBy('sale_date', 'desc')
             ->get();
@@ -3719,10 +3861,10 @@ class AdminApiController extends Controller
 
     public function monthlySales(Request $request)
     {
-        $year = $request->input('year', \Carbon\Carbon::now()->year);
+        $year = $request->input('year', Carbon::now()->year);
 
-        $sales = \App\Models\Sale::whereYear('date', $year)
-            ->select(\Illuminate\Support\Facades\DB::raw('MONTH(date) as sale_month'), \Illuminate\Support\Facades\DB::raw('count(*) as total_orders'), \Illuminate\Support\Facades\DB::raw('sum(total) as total_revenue'))
+        $sales = Sale::whereYear('date', $year)
+            ->select(DB::raw('MONTH(date) as sale_month'), DB::raw('count(*) as total_orders'), DB::raw('sum(total) as total_revenue'))
             ->groupBy('sale_month')
             ->orderBy('sale_month', 'desc')
             ->get();
@@ -3732,15 +3874,15 @@ class AdminApiController extends Controller
 
     public function stockSummary(Request $request)
     {
-        $rawBatches = \App\Models\Batch::whereHas('product', function($q) {
+        $rawBatches = Batch::whereHas('product', function ($q) {
             $q->where('type', 'raw');
         })->whereNull('product_variant_id')->with(['product.unit', 'warehouse'])->where('remaining_qty', '>', 0)->get();
 
-        $standaloneBatches = \App\Models\Batch::whereHas('product', function($q) {
+        $standaloneBatches = Batch::whereHas('product', function ($q) {
             $q->where('type', 'finished');
         })->whereNull('product_variant_id')->with(['product.unit', 'warehouse'])->where('remaining_qty', '>', 0)->get();
 
-        $packagedBatches = \App\Models\Batch::whereNotNull('product_variant_id')->with(['productVariant.product', 'warehouse'])->where('remaining_qty', '>', 0)->get();
+        $packagedBatches = Batch::whereNotNull('product_variant_id')->with(['productVariant.product', 'warehouse'])->where('remaining_qty', '>', 0)->get();
 
         return response()->json([
             'raw_batches' => $rawBatches,
@@ -3751,21 +3893,21 @@ class AdminApiController extends Controller
 
     public function warehouseStocks(Request $request)
     {
-        $stocks = \App\Models\WarehouseStock::with([
-            'warehouse', 
-            'productVariant.product', 
+        $stocks = WarehouseStock::with([
+            'warehouse',
+            'productVariant.product',
             'productVariant.unit',
-            'productVariant.product.unit'
+            'productVariant.product.unit',
         ])
-        ->where('stock', '>', 0)
-        ->get();
+            ->where('stock', '>', 0)
+            ->get();
 
-        $batches = \App\Models\Batch::whereHas('product', function($q) {
+        $batches = Batch::whereHas('product', function ($q) {
             $q->whereIn('type', ['raw', 'standalone']);
         })->whereNull('product_variant_id')
-        ->with(['product.unit', 'warehouse'])
-        ->where('remaining_qty', '>', 0)
-        ->get();
+            ->with(['product.unit', 'warehouse'])
+            ->where('remaining_qty', '>', 0)
+            ->get();
 
         $merged = [];
         foreach ($stocks as $s) {
@@ -3773,7 +3915,7 @@ class AdminApiController extends Controller
                 'type' => 'variant',
                 'warehouse' => $s->warehouse,
                 'stock' => $s->stock,
-                'product_variant' => $s->productVariant
+                'product_variant' => $s->productVariant,
             ];
         }
 
@@ -3783,7 +3925,7 @@ class AdminApiController extends Controller
                 'warehouse' => $b->warehouse,
                 'stock' => $b->remaining_qty,
                 'product' => $b->product,
-                'batch_no' => $b->batch_no
+                'batch_no' => $b->batch_no,
             ];
         }
 
@@ -3793,14 +3935,14 @@ class AdminApiController extends Controller
     public function cashbook(Request $request)
     {
         $date = $request->filled('date') ? $request->date : now()->toDateString();
-        
-        $cashAccounts = \App\Models\ChartOfAccount::where('is_payment_method', 1)->get();
+
+        $cashAccounts = ChartOfAccount::where('is_payment_method', 1)->get();
         $cashAccIds = $cashAccounts->pluck('id')->toArray();
 
         $baseOpening = $cashAccounts->sum('opening_balance');
 
-        $priorTransactions = \App\Models\JournalEntry::whereIn('account_id', $cashAccIds)
-            ->whereHas('journal', function($q) use ($date) {
+        $priorTransactions = JournalEntry::whereIn('account_id', $cashAccIds)
+            ->whereHas('journal', function ($q) use ($date) {
                 $q->whereDate('date', '<', $date);
             })
             ->selectRaw('SUM(CASE WHEN type = "debit" THEN amount ELSE 0 END) as total_debit')
@@ -3812,9 +3954,9 @@ class AdminApiController extends Controller
 
         $openingBalance = $baseOpening + $priorDebit - $priorCredit;
 
-        $entries = \App\Models\JournalEntry::whereIn('account_id', $cashAccIds)
+        $entries = JournalEntry::whereIn('account_id', $cashAccIds)
             ->with(['journal', 'account'])
-            ->whereHas('journal', function($q) use ($date) {
+            ->whereHas('journal', function ($q) use ($date) {
                 $q->whereDate('date', $date);
             })
             ->latest()
@@ -3833,36 +3975,39 @@ class AdminApiController extends Controller
             'entries' => $entries,
         ]);
     }
+
     private function consumeStockForSale(Sale $sale, $journalId = null, $userId = 1)
     {
-        $hasTransactions = \App\Models\InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->exists();
-        if ($hasTransactions) return;
+        $hasTransactions = InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->exists();
+        if ($hasTransactions) {
+            return;
+        }
 
         $totalCogs = 0;
-        $items = \App\Models\SaleItem::where('sale_id', $sale->id)->get();
-        
+        $items = SaleItem::where('sale_id', $sale->id)->get();
+
         $groupedItems = [];
         foreach ($items as $item) {
-            if (!isset($groupedItems[$item->product_variant_id])) {
+            if (! isset($groupedItems[$item->product_variant_id])) {
                 $groupedItems[$item->product_variant_id] = [
                     'qty' => 0,
                     'unit_price' => $item->unit_price,
-                    'total_weight' => 0
+                    'total_weight' => 0,
                 ];
             }
             $groupedItems[$item->product_variant_id]['qty'] += $item->qty;
             $groupedItems[$item->product_variant_id]['total_weight'] += $item->total_weight;
         }
 
-        \App\Models\SaleItem::where('sale_id', $sale->id)->delete();
+        SaleItem::where('sale_id', $sale->id)->delete();
 
         foreach ($groupedItems as $variantId => $data) {
             $itemQty = $data['qty'];
             $unitPrice = $data['unit_price'];
-            $variant = \App\Models\ProductVariant::find($variantId);
+            $variant = ProductVariant::find($variantId);
             $unitQty = $variant ? $variant->getBaseQuantity() : 1;
-            
-            $batches = \App\Models\Batch::where('product_variant_id', $variantId)
+
+            $batches = Batch::where('product_variant_id', $variantId)
                 ->where('warehouse_id', $sale->warehouse_id)
                 ->where('remaining_qty', '>', 0)
                 ->orderBy('id', 'asc')
@@ -3872,7 +4017,9 @@ class AdminApiController extends Controller
             $remainingToConsume = $itemQty;
 
             foreach ($batches as $batch) {
-                if ($remainingToConsume <= 0) break;
+                if ($remainingToConsume <= 0) {
+                    break;
+                }
 
                 $takeQty = min($batch->remaining_qty, $remainingToConsume);
                 $cogsForThisTake = $takeQty * $batch->cost_per_unit;
@@ -3884,7 +4031,7 @@ class AdminApiController extends Controller
                 $totalCogs += $cogsForThisTake;
                 $remainingToConsume -= $takeQty;
 
-                \App\Models\SaleItem::create([
+                SaleItem::create([
                     'sale_id' => $sale->id,
                     'product_variant_id' => $variantId,
                     'batch_id' => $batch->id,
@@ -3894,7 +4041,7 @@ class AdminApiController extends Controller
                     'total_weight' => $takeQty * $unitQty,
                 ]);
 
-                \App\Models\InventoryTransaction::create([
+                InventoryTransaction::create([
                     'warehouse_id' => $sale->warehouse_id,
                     'product_id' => $batch->product_id,
                     'product_variant_id' => $variantId,
@@ -3911,26 +4058,26 @@ class AdminApiController extends Controller
             }
 
             if (round($remainingToConsume, 4) > 0) {
-                throw new \Exception("Insufficient finished stock for variant ID: {$variantId}. Shortfall: " . $remainingToConsume);
+                throw new \Exception("Insufficient finished stock for variant ID: {$variantId}. Shortfall: ".$remainingToConsume);
             }
         }
 
         if ($totalCogs > 0) {
-            $journal = \App\Models\Journal::find($journalId);
-            if (!$journal) {
-                $journal = \App\Models\Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->first();
+            $journal = Journal::find($journalId);
+            if (! $journal) {
+                $journal = Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->first();
             }
             if ($journal) {
-                $inventoryFinAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
-                $cogsAcc = \App\Models\ChartOfAccount::firstOrCreate(['name' => 'Cost of Goods Sold', 'type' => 'expense']);
-                
-                \App\Models\JournalEntry::create([
+                $inventoryFinAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset']);
+                $cogsAcc = ChartOfAccount::firstOrCreate(['name' => 'Cost of Goods Sold', 'type' => 'expense']);
+
+                JournalEntry::create([
                     'journal_id' => $journal->id,
                     'account_id' => $cogsAcc->id,
                     'type' => 'debit',
                     'amount' => $totalCogs,
                 ]);
-                \App\Models\JournalEntry::create([
+                JournalEntry::create([
                     'journal_id' => $journal->id,
                     'account_id' => $inventoryFinAcc->id,
                     'type' => 'credit',

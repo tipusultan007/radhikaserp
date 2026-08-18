@@ -39,6 +39,57 @@ class ExpenseController extends Controller
         return view('expenses.index', compact('expenses', 'categories', 'paymentMethods'));
     }
 
+    public function export(Request $request)
+    {
+        $query = Expense::with(['category', 'paymentMethod']);
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('date', '>=', $request->start_date);
+        }
+        
+        if ($request->filled('end_date')) {
+            $query->whereDate('date', '<=', $request->end_date);
+        }
+        
+        if ($request->filled('category_id')) {
+            $query->where('expense_category_id', $request->category_id);
+        }
+        
+        if ($request->filled('payment_method_id')) {
+            $query->where('payment_method_id', $request->payment_method_id);
+        }
+
+        $expenses = $query->latest('date')->get();
+
+        $headers = array(
+            "Content-type"        => "text/csv",
+            "Content-Disposition" => "attachment; filename=expenses_export_" . date('Y-m-d_H-i-s') . ".csv",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
+        );
+
+        $callback = function() use($expenses) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, array('Date', 'Category', 'Amount', 'Payment Method', 'Reference', 'Notes', 'Created At'));
+
+            foreach ($expenses as $expense) {
+                fputcsv($file, array(
+                    $expense->date,
+                    $expense->category->name ?? 'N/A',
+                    $expense->amount,
+                    $expense->paymentMethod->name ?? 'N/A',
+                    $expense->reference ?? '',
+                    $expense->notes ?? '',
+                    $expense->created_at->format('Y-m-d H:i:s')
+                ));
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -89,7 +140,10 @@ class ExpenseController extends Controller
             ]);
 
             try {
-                $admins = \App\Models\User::all();
+                $admins = \App\Models\User::role(['Admin', 'Accountant', 'Manager'])->get();
+                if ($admins->isEmpty()) {
+                    $admins = \App\Models\User::where('id', 1)->get();
+                }
                 \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\AdminAlertNotification(
                     'New Expense Recorded',
                     "Expense of {$validated['amount']} has been recorded.",
