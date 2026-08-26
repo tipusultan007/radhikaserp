@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class SalaryPayment extends Model
 {
+    use \App\Traits\LogsActivity;
     protected $fillable = [
         'user_id',
         'payment_type',

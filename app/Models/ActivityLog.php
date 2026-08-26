@@ -6,10 +6,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 
-#[Fillable(['user_id', 'action', 'reference_type', 'reference_id', 'description'])]
+#[Fillable(['user_id', 'action', 'reference_type', 'reference_id', 'description', 'properties'])]
 class ActivityLog extends Model
 {
     use HasFactory;
+
+    protected $casts = [
+        'properties' => 'array',
+    ];
 
     public function user()
     {
@@ -21,3 +25,4 @@ class ActivityLog extends Model
         return $this->morphTo();
     }
 }
+

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class Investment extends Model
 {
     use HasFactory;
+    use \App\Traits\LogsActivity;
 
     protected $fillable = [
         'date',

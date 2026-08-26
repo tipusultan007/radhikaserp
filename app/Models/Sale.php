@@ -86,4 +86,35 @@ class Sale extends Model
     {
         return $this->morphMany(InventoryTransaction::class, 'reference');
     }
+
+    /**
+     * Generate the next daily invoice number (INV-YYYYMMDDXXX)
+     *
+     * @param string|\DateTimeInterface|null $date
+     * @return string
+     */
+    public static function generateInvoiceNo($date = null): string
+    {
+        $date = $date ? \Carbon\Carbon::parse($date) : \Carbon\Carbon::today();
+        $dateStr = $date->format('Ymd');
+        $prefix = 'INV-' . $dateStr;
+
+        // Query only the single latest invoice record for this day (O(1) memory)
+        $lastInvoice = self::where('invoice_no', 'like', 'INV-' . $dateStr . '%')
+            ->orderByRaw('LENGTH(invoice_no) DESC, invoice_no DESC')
+            ->lockForUpdate()
+            ->value('invoice_no');
+
+        $nextSerial = 1;
+        if ($lastInvoice && preg_match('/INV-' . $dateStr . '-?(\d+)/i', $lastInvoice, $matches)) {
+            $nextSerial = ((int) $matches[1]) + 1;
+        }
+
+        do {
+            $invoiceNo = $prefix . str_pad($nextSerial, 3, '0', STR_PAD_LEFT);
+            $nextSerial++;
+        } while (self::where('invoice_no', $invoiceNo)->exists());
+
+        return $invoiceNo;
+    }
 }

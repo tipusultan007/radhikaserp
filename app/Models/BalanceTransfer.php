@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class BalanceTransfer extends Model
 {
     use HasFactory;
+    use \App\Traits\LogsActivity;
 
     protected $fillable = [
         'transfer_no',

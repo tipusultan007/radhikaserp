@@ -35,14 +35,25 @@
 <div class="invoice-box">
 
     <!-- Header -->
+    @php
+        $logoPath = null;
+        if (file_exists(public_path('logo.png'))) {
+            $logoPath = public_path('logo.png');
+        } elseif (file_exists(public_path('images/logo.png'))) {
+            $logoPath = public_path('images/logo.png');
+        } elseif (file_exists(public_path('build/images/radhikas-logo.png'))) {
+            $logoPath = public_path('build/images/radhikas-logo.png');
+        }
+        $logoDataUri = $logoPath ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath)) : null;
+    @endphp
     <table class="header-table">
         <tr>
-            <td style="width: 15%;">
-                @if(file_exists(public_path('build/images/radhikas-logo.png')))
-                    <img src="{{ public_path('build/images/radhikas-logo.png') }}" height="70">
+            <td style="width: 20%; vertical-align: middle;">
+                @if($logoDataUri)
+                    <img src="{{ $logoDataUri }}" style="max-height: 70px; max-width: 120px;">
                 @endif
             </td>
-            <td class="company-info" style="width: 85%; text-align: right;">
+            <td class="company-info" style="width: 80%; text-align: right; vertical-align: top;">
                 <h2>Radhikas Trade International</h2>
                 <p>88/89, Sadarghat Road, Chattogram, Bangladesh 4000</p>
                 <p><b>Phone</b>: 018 9770 1188, 019 9984 8389, 017 3222 6604</p>

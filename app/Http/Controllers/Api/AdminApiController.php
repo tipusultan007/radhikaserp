@@ -425,7 +425,7 @@ class AdminApiController extends Controller
 
             // Create Sale
             $sale = Sale::create([
-                'invoice_no' => 'INV-'.strtoupper(Str::random(6)),
+                'invoice_no' => Sale::generateInvoiceNo($validated['date'] ?? null),
                 'customer_id' => $validated['customer_id'],
                 'warehouse_id' => $warehouseId,
                 'date' => $validated['date'],
