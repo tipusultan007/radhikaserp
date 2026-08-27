@@ -68,6 +68,9 @@
             <td style="width: 60%; vertical-align: top;">
                 <h3 style="border-bottom: 1px solid #eee; width: 50%;">Bill To:</h3>
                 <p style="margin-bottom: 2px;"><strong style="font-size: 14px;">{{ $sale->customer->name ?? 'Walk-in Customer' }}</strong></p>
+                @if(isset($sale->customer) && $sale->customer->company)
+                    <p style="margin: 0; color: #555;"><b>{{ $sale->customer->company }}</b></p>
+                @endif
                 <p style="margin: 0; color: #555;">{{ $sale->customer->address ?? '' }}</p>
                 <p style="margin: 0; color: #555;">Phone: {{ $sale->customer->phone ?? 'N/A' }}</p>
             </td>

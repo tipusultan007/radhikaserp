@@ -120,6 +120,10 @@
                              <div class="card-body py-2 px-3">
                                  <form action="{{ route('sales.index') }}" method="GET">
                                      <div class="row gy-2 gx-2 align-items-end">
+                                         <div class="col-md-3">
+                                             <label for="search" class="form-label mb-1">Search Customer / Invoice</label>
+                                             <input type="text" class="form-control" id="search" name="search" value="{{ request('search') }}" placeholder="Name, Phone, Company, or Inv#...">
+                                         </div>
                                          <div class="col-md-2">
                                              <label for="start_date" class="form-label mb-1">Start Date</label>
                                              <input type="text" class="form-control flatpickr-date" id="start_date" name="start_date" value="{{ request('start_date') }}" placeholder="YYYY-MM-DD">
@@ -128,13 +132,13 @@
                                              <label for="end_date" class="form-label mb-1">End Date</label>
                                              <input type="text" class="form-control flatpickr-date" id="end_date" name="end_date" value="{{ request('end_date') }}" placeholder="YYYY-MM-DD">
                                          </div>
-                                         <div class="col-md-2">
+                                         <div class="col-md-3">
                                              <label for="customer_id" class="form-label mb-1">Customer</label>
                                              <select class="form-control select2" id="customer_id" name="customer_id" data-toggle="select2">
                                                  <option value="">All Customers</option>
                                                  @foreach($customers as $cust)
                                                      <option value="{{ $cust->id }}" {{ request('customer_id') == $cust->id ? 'selected' : '' }}>
-                                                         {{ $cust->name }} ({{ $cust->phone }})
+                                                         {{ $cust->name }} ({{ $cust->phone }}){{ $cust->company ? ' - ' . $cust->company : '' }}
                                                      </option>
                                                  @endforeach
                                              </select>
@@ -168,7 +172,7 @@
                                                  <option value="0" {{ request('is_promotional') == '0' ? 'selected' : '' }}>Regular Only</option>
                                              </select>
                                          </div>
-                                         <div class="col-md-12 text-end mt-2">
+                                         <div class="col-md-6 text-end ms-auto mt-2">
                                              <button type="submit" class="btn btn-primary"><i class="ri-search-line me-1"></i> Filter</button>
                                              <a href="{{ route('sales.index') }}" class="btn btn-danger ms-1"><i class="ri-refresh-line me-1"></i> Reset</a>
                                          </div>
@@ -212,6 +216,10 @@
                                                      <a href="{{ route('customers.show', $sale->customer_id) }}" class="text-body fw-semibold">
                                                          {{ $sale->customer->name }}
                                                      </a>
+                                                     @if($sale->customer->company)
+                                                         <br><small class="text-muted"><i class="ri-building-line me-1"></i>{{ $sale->customer->company }}</small>
+                                                     @endif
+                                                     <br><small class="text-muted"><i class="ri-phone-line me-1"></i>{{ $sale->customer->phone }}</small>
                                                  @else
                                                      N/A
                                                  @endif

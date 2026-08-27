@@ -22,7 +22,8 @@ class CustomerController extends Controller
             $query->where(function($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                   ->orWhere('phone', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('company', 'like', "%{$search}%");
             });
         }
 
@@ -46,8 +47,9 @@ class CustomerController extends Controller
         $customers = Customer::where('name', 'like', "%{$search}%")
             ->orWhere('phone', 'like', "%{$search}%")
             ->orWhere('email', 'like', "%{$search}%")
+            ->orWhere('company', 'like', "%{$search}%")
             ->limit(10)
-            ->get(['id', 'name', 'phone', 'total_due']);
+            ->get(['id', 'name', 'phone', 'company', 'total_due']);
             
         return response()->json($customers);
     }
@@ -61,7 +63,8 @@ class CustomerController extends Controller
             $query->where(function($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                   ->orWhere('phone', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('company', 'like', "%{$search}%");
             });
         }
 
@@ -211,7 +214,7 @@ class CustomerController extends Controller
         $arId = $arAcc ? $arAcc->id : 0;
         $advId = $advAcc ? $advAcc->id : 0;
         
-        $journals = Journal::with(['entries', 'reference'])
+        $journals = Journal::with(['entries.account', 'reference'])
             ->where(function($q) use ($customer) {
                 $q->where('reference_type', Customer::class)->where('reference_id', $customer->id);
             })->orWhere(function($q) use ($customer) {
@@ -246,16 +249,18 @@ class CustomerController extends Controller
                         'debit' => $sale->total,
                         'credit' => 0,
                         'running_balance' => $runningBalance,
+                        'payment_method' => null,
                     ]);
                 }
 
                 // Initial POS Payment (Credit) - fallback for old sales without journals
-                $initialPaymentAmount = \App\Models\SalePayment::where('sale_id', $sale->id)
+                $initialPayments = \App\Models\SalePayment::where('sale_id', $sale->id)
                     ->where(function($q) {
                         $q->whereNull('reference')
                           ->orWhereIn('reference', ['POS Payment', 'Wallet Payment']);
                     })
-                    ->sum('amount');
+                    ->get();
+                $initialPaymentAmount = $initialPayments->sum('amount');
 
                 $hasJournal = $journals->contains(function($j) use ($sale) {
                     return str_contains($j->notes, 'Payment for POS Sale ' . $sale->invoice_no);
@@ -267,12 +272,21 @@ class CustomerController extends Controller
                     $paymentJournal = clone $journal;
                     $paymentJournal->notes = 'Payment for ' . $sale->invoice_no;
                     
+                    $initialPaymentMethods = $initialPayments->map(function($p) {
+                        if (is_numeric($p->method)) {
+                            $coa = \App\Models\ChartOfAccount::find($p->method);
+                            return $coa ? $coa->name : $p->method;
+                        }
+                        return $p->method;
+                    })->filter()->unique()->implode(', ');
+                    
                     $ledgerEntries->push((object)[
                         'id' => $journal->id . '_pay',
                         'journal' => $paymentJournal,
                         'debit' => 0,
                         'credit' => $initialPaymentAmount,
                         'running_balance' => $runningBalance,
+                        'payment_method' => $initialPaymentMethods ?: 'Cash',
                     ]);
                 }
                 
@@ -314,6 +328,37 @@ class CustomerController extends Controller
                 $journal->notes .= " (Wallet Used: ৳" . number_format($internalTransferAmount, 0) . ")";
             }
 
+            // Identify Payment Method if entry is a payment / credit
+            $paymentMethod = null;
+            if ($credit > 0 || $journal->reference_type == \App\Models\SalePayment::class || ($journal->reference_type == Customer::class && $journal->notes != 'Opening Balance')) {
+                $paymentAccNames = $journal->entries
+                    ->where('type', 'debit')
+                    ->filter(function($entry) use ($arId) {
+                        return $entry->account_id != $arId;
+                    })
+                    ->map(function($entry) {
+                        return $entry->account ? $entry->account->name : null;
+                    })
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                if (!empty($paymentAccNames)) {
+                    $paymentMethod = implode(', ', $paymentAccNames);
+                } elseif ($journal->reference_type == \App\Models\SalePayment::class && $journal->reference) {
+                    $methodVal = $journal->reference->method;
+                    if (is_numeric($methodVal)) {
+                        $coa = \App\Models\ChartOfAccount::find($methodVal);
+                        $paymentMethod = $coa ? $coa->name : $methodVal;
+                    } else {
+                        $paymentMethod = $methodVal;
+                    }
+                } elseif ($internalTransferAmount > 0) {
+                    $paymentMethod = 'Wallet Balance';
+                }
+            }
+
             $runningBalance += $debit;
             $runningBalance -= $credit;
             
@@ -326,6 +371,7 @@ class CustomerController extends Controller
                 'debit' => $debit,
                 'credit' => $credit,
                 'running_balance' => $runningBalance,
+                'payment_method' => $paymentMethod,
             ]);
         }
 

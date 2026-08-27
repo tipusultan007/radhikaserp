@@ -35,7 +35,7 @@
                                  <div class="col-sm-5">
                                      <div class="input-group dropdown" id="searchDropdown">
                                          <input type="text" class="form-control" name="search" id="searchInput"
-                                             placeholder="Search by Name, Email, or Phone..."
+                                             placeholder="Search by Name, Company, Email, or Phone..."
                                              value="{{ request('search') }}" autocomplete="off"
                                              data-bs-toggle="dropdown" aria-expanded="false">
                                          <button class="btn btn-primary" type="submit"><i class="ri-search-line"></i></button>
@@ -185,9 +185,10 @@
                             data.forEach(customer => {
                                 const li = document.createElement('li');
                                 const dueText = parseFloat(customer.total_due) > 0 ? `<span class="text-danger float-end">Due: ${parseFloat(customer.total_due).toLocaleString()} TK</span>` : '';
+                                const companyText = customer.company ? `<span class="badge bg-light text-secondary border ms-1 font-11">${customer.company}</span>` : '';
                                 li.innerHTML = `<a class="dropdown-item py-2 border-bottom" href="/customers/${customer.id}" target="_blank">
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <div class="fw-bold text-dark">${customer.name}</div>
+                                        <div class="fw-bold text-dark">${customer.name} ${companyText}</div>
                                         ${dueText}
                                     </div>
                                     <small class="text-muted"><i class="ri-phone-line"></i> ${customer.phone}</small>

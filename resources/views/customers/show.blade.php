@@ -5,7 +5,7 @@
     <div class="row">
         <div class="col-12">
             <div class="page-title-box justify-content-between d-flex align-items-md-center flex-md-row flex-column">
-                <h4 class="page-title">Customer Details: {{ $customer->name }}</h4>
+                <h4 class="page-title">Customer Details: {{ $customer->name }}{{ $customer->company ? ' (' . $customer->company . ')' : '' }}</h4>
                 <ol class="breadcrumb m-0">
                     <li class="breadcrumb-item"><a href="{{ route('home') }}">ERP</a></li>
                     <li class="breadcrumb-item"><a href="{{ route('customers.index') }}">Customers</a></li>
@@ -22,8 +22,12 @@
                 <div class="card-body">
                     <h4 class="header-title mb-3">Information</h4>
                     <p><strong>Name:</strong> {{ $customer->name }}</p>
+                    <p><strong>Company:</strong> {{ $customer->company ?: '—' }}</p>
                     <p><strong>Phone:</strong> {{ $customer->phone }}</p>
-                    <p><strong>Address:</strong> {{ $customer->address ?: 'N/A' }}</p>
+                    <p><strong>Email:</strong> {{ $customer->email ?: '—' }}</p>
+                    <p><strong>District:</strong> {{ $customer->district ?: '—' }}</p>
+                    <p><strong>Customer Type:</strong> <span class="badge bg-soft-info text-info text-capitalize">{{ str_replace('_', ' ', $customer->customer_type ?? 'customer') }}</span></p>
+                    <p><strong>Address:</strong> {{ $customer->address ?: '—' }}</p>
                     <hr>
                     <p><strong>Credit Limit:</strong> <span class="text-success">৳{{ number_format($customer->credit_limit, 0) }}</span></p>
                     <p><strong>Opening Balance:</strong> ৳{{ number_format($customer->opening_balance, 0) }}</p>
@@ -129,6 +133,7 @@
                                             <th>Date</th>
                                             <th>Journal Ref</th>
                                             <th>Notes</th>
+                                            <th>Payment Method</th>
                                             <th class="text-end text-danger">Debit</th>
                                             <th class="text-end text-success">Credit</th>
                                             <th class="text-end">Running Balance</th>
@@ -147,6 +152,13 @@
                                                     @endif
                                                 </td>
                                                 <td>{{ $entry->journal->notes }}</td>
+                                                <td>
+                                                    @if(!empty($entry->payment_method))
+                                                        <span class="badge bg-soft-info text-info font-12"><i class="ri-bank-card-line me-1"></i>{{ $entry->payment_method }}</span>
+                                                    @else
+                                                        <span class="text-muted">—</span>
+                                                    @endif
+                                                </td>
                                                 <td class="text-end text-danger">{{ $entry->debit > 0 ? '৳' . number_format($entry->debit, 0) : '-' }}</td>
                                                 <td class="text-end text-success">{{ $entry->credit > 0 ? '৳' . number_format($entry->credit, 0) : '-' }}</td>
                                                 <td class="text-end fw-bold">৳{{ number_format($entry->running_balance, 0) }}</td>
@@ -171,12 +183,12 @@
                                                 </td>
                                             </tr>
                                         @empty
-                                            <tr><td colspan="6" class="text-center">No ledger entries found.</td></tr>
+                                            <tr><td colspan="8" class="text-center">No ledger entries found.</td></tr>
                                         @endforelse
                                     </tbody>
                                     <tfoot>
                                         <tr class="table-light">
-                                            <th colspan="3" class="text-end">Total:</th>
+                                            <th colspan="4" class="text-end">Total:</th>
                                             <th class="text-end text-danger fs-5">৳ {{ number_format($totalDebit, 0) }}</th>
                                             <th class="text-end text-success fs-5">৳ {{ number_format($totalCredit, 0) }}</th>
                                             <th class="text-end text-danger fs-4">৳ {{ number_format($finalRunningBalance, 0) }}</th>

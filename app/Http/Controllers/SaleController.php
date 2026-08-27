@@ -35,6 +35,18 @@ class SaleController extends Controller
         if ($request->filled('invoice_no')) {
             $query->where('invoice_no', 'like', '%' . $request->invoice_no . '%');
         }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('invoice_no', 'like', "%{$search}%")
+                  ->orWhereHas('customer', function($cq) use ($search) {
+                      $cq->where('name', 'like', "%{$search}%")
+                         ->orWhere('phone', 'like', "%{$search}%")
+                         ->orWhere('company', 'like', "%{$search}%");
+                  });
+            });
+        }
         
         if ($request->filled('customer_id')) {
             $query->where('customer_id', $request->customer_id);
@@ -126,6 +138,18 @@ class SaleController extends Controller
         
         if ($request->filled('invoice_no')) {
             $query->where('invoice_no', 'like', '%' . $request->invoice_no . '%');
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('invoice_no', 'like', "%{$search}%")
+                  ->orWhereHas('customer', function($cq) use ($search) {
+                      $cq->where('name', 'like', "%{$search}%")
+                         ->orWhere('phone', 'like', "%{$search}%")
+                         ->orWhere('company', 'like', "%{$search}%");
+                  });
+            });
         }
         
         if ($request->filled('customer_id')) {

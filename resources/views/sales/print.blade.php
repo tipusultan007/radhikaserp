@@ -141,6 +141,9 @@
                 <td>
                     <div class="section-title">Bill To:</div>
                     <strong>{{ $sale->customer->name ?? 'Walk-in Customer' }}</strong><br>
+                    @if(isset($sale->customer) && $sale->customer->company)
+                        <p class="mb-0"><b>{{ $sale->customer->company }}</b></p>
+                    @endif
                     @if(isset($sale->customer) && $sale->customer->address)
                         {{ $sale->customer->address }}<br>
                     @endif

@@ -328,6 +328,17 @@ class AdminApiController extends Controller
         if ($request->filled('invoice_no')) {
             $query->where('invoice_no', 'LIKE', '%'.$request->invoice_no.'%');
         }
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('invoice_no', 'LIKE', '%'.$search.'%')
+                    ->orWhereHas('customer', function ($cq) use ($search) {
+                        $cq->where('name', 'LIKE', '%'.$search.'%')
+                            ->orWhere('phone', 'LIKE', '%'.$search.'%')
+                            ->orWhere('company', 'LIKE', '%'.$search.'%');
+                    });
+            });
+        }
         if ($request->filled('customer_id')) {
             $query->where('customer_id', $request->customer_id);
         }
@@ -1143,7 +1154,9 @@ class AdminApiController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
-                    ->orWhere('phone', 'LIKE', "%{$search}%");
+                    ->orWhere('phone', 'LIKE', "%{$search}%")
+                    ->orWhere('email', 'LIKE', "%{$search}%")
+                    ->orWhere('company', 'LIKE', "%{$search}%");
             });
         }
 

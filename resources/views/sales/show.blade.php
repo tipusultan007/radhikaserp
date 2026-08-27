@@ -85,6 +85,9 @@
                              <div class="col-md-4">
                                  <h5 class="text-muted text-uppercase mb-3">Bill To</h5>
                                  <h4 class="font-size-16 mb-1">{{ $sale->customer->name ?? 'Walk-in Customer' }}</h4>
+                                 @if(isset($sale->customer) && $sale->customer->company)
+                                    <p class="mb-0"><b>{{ $sale->customer->company }}</b></p>
+                                 @endif
                                  @if(isset($sale->customer) && $sale->customer->address)
                                     <p class="mb-0">{{ $sale->customer->address }}</p>
                                  @endif
