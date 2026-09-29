@@ -9,7 +9,7 @@ class BatchController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Batch::with(['product', 'warehouse', 'purchase'])->latest('id');
+        $query = Batch::with(['product', 'productVariant', 'warehouse', 'purchase'])->latest('id');
 
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;

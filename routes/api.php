@@ -94,6 +94,12 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         ->middleware('permission:view customers');
     Route::get('/customers/{id}/payments', [AdminApiController::class, 'customerPayments'])
         ->middleware('permission:view customers');
+    Route::get('/customer-targets', [AdminApiController::class, 'customerTargets'])
+        ->middleware('permission:view customers');
+    Route::get('/customer-targets/{id}', [AdminApiController::class, 'customerTargetDetails'])
+        ->middleware('permission:view customers');
+    Route::post('/customer-targets/{id}/disburse/{customerId}', [AdminApiController::class, 'disburseCustomerBonus'])
+        ->middleware('permission:view customers');
 
     // ── Suppliers ─────────────────────────────────────────────────────────────
     Route::get('/suppliers', [AdminApiController::class, 'suppliers'])
@@ -220,6 +226,8 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     // ── Repackaging ───────────────────────────────────────────────────────────
     Route::get('/repackaging-form-data', [AdminApiController::class, 'repackagingFormData'])
         ->middleware('permission:view repackaging');
+    Route::get('/repackaging/stock-check', [AdminApiController::class, 'repackagingStockCheck'])
+        ->middleware('permission:view repackaging');
     Route::get('/repackaging', [AdminApiController::class, 'repackaging'])
         ->middleware('permission:view repackaging');
     Route::get('/repackaging/{id}', [AdminApiController::class, 'showRepackaging'])
@@ -301,6 +309,7 @@ Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
     Route::get('/dues', [CustomerApiController::class, 'dues']);
     Route::get('/ledger', [CustomerApiController::class, 'ledger']);
     Route::post('/change-password', [CustomerApiController::class, 'changePassword']);
+    Route::get('/monthly-target', [CustomerApiController::class, 'monthlyTarget']);
     Route::get('/notifications', [CustomerApiController::class, 'notifications']);
     Route::post('/notifications/mark-read', [CustomerApiController::class, 'markNotificationsRead']);
 });

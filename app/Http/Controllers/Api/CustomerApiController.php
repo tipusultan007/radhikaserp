@@ -5,9 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
+use App\Models\CustomerTargetScheme;
+use App\Services\CustomerTargetService;
 use Illuminate\Support\Facades\DB;
 
 class CustomerApiController extends Controller
@@ -17,11 +20,9 @@ class CustomerApiController extends Controller
      */
     public function products()
     {
-        $variantsWithStock = \Illuminate\Support\Facades\DB::table('batches')
-            ->select('product_variant_id')
-            ->groupBy('product_variant_id')
-            ->havingRaw('SUM(remaining_qty) > 0')
-            ->pluck('product_variant_id');
+        $variantsWithStock = ProductVariant::where('status', true)
+            ->where('current_stock', '>', 0)
+            ->pluck('id');
 
         $products = Product::with(['unit', 'variants' => function ($query) use ($variantsWithStock) {
             $query->where('status', true)
@@ -440,6 +441,59 @@ class CustomerApiController extends Controller
             'ledger' => $formattedLedger,
             'total_due' => $customer->total_due,
             'wallet_balance' => $customer->wallet_balance
+        ]);
+    }
+
+    /**
+     * Get active monthly purchase target and progress for authenticated customer.
+     */
+    public function monthlyTarget(Request $request, CustomerTargetService $targetService)
+    {
+        $customer = $request->user();
+
+        // Find active schemes for current month or active ongoing schemes
+        $currentMonth = now()->format('Y-m');
+        $schemes = CustomerTargetScheme::with(['items.product.unit', 'items.productVariant.unit'])
+            ->where('status', 'active')
+            ->where(function ($q) use ($currentMonth) {
+                $q->where('target_month', $currentMonth)
+                  ->orWhere(function ($sq) {
+                      $sq->whereDate('start_date', '<=', now())
+                         ->where(function ($ssq) {
+                             $ssq->whereNull('end_date')
+                                 ->orWhereDate('end_date', '>=', now());
+                         });
+                  });
+            })
+            ->latest()
+            ->get();
+
+        $results = [];
+        foreach ($schemes as $scheme) {
+            $progress = $targetService->calculateCustomerProgress($customer, $scheme);
+
+            $results[] = [
+                'scheme_id' => $scheme->id,
+                'name' => $scheme->name,
+                'target_month' => $scheme->target_month,
+                'start_date' => $scheme->start_date ? $scheme->start_date->format('Y-m-d') : null,
+                'end_date' => $scheme->end_date ? $scheme->end_date->format('Y-m-d') : null,
+                'is_ongoing' => is_null($scheme->end_date),
+                'description' => $scheme->description,
+                'total_target_qty' => $progress['total_target_qty'],
+                'total_achieved_qty' => $progress['total_achieved_qty'],
+                'progress_percent' => $progress['progress_percent'],
+                'is_target_met' => $progress['is_target_met'],
+                'total_bonus_amount' => $progress['total_bonus_amount'],
+                'bonus_status' => $progress['bonus_record'] ? $progress['bonus_record']->status : ($progress['is_target_met'] ? 'qualified' : 'in_progress'),
+                'disbursed_at' => $progress['bonus_record'] && $progress['bonus_record']->disbursed_at ? $progress['bonus_record']->disbursed_at->toIso8601String() : null,
+                'items' => $progress['items_breakdown'],
+            ];
+        }
+
+        return response()->json([
+            'wallet_balance' => (float) $customer->wallet_balance,
+            'active_targets' => $results,
         ]);
     }
 }

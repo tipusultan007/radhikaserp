@@ -51,13 +51,24 @@
                                  </tr>
                                  <tr>
                                      <th class="ps-0" scope="row">Current Stock:</th>
-                                     <td class="text-muted">
-                                         @if($productVariant->current_stock > 0)
-                                             <span class="badge bg-success">{{ (float)$productVariant->current_stock }}</span>
-                                         @else
-                                             <span class="badge bg-danger">{{ (float)$productVariant->current_stock }}</span>
-                                         @endif
-                                     </td>
+                                      <td class="text-muted">
+                                          @if($productVariant->current_stock > 0)
+                                              <span class="badge bg-success">{{ (float)$productVariant->current_stock }}</span>
+                                          @else
+                                              <span class="badge bg-danger">{{ (float)$productVariant->current_stock }}</span>
+                                          @endif
+                                          @if($productVariant->warehouseStocks && $productVariant->warehouseStocks->count() > 0)
+                                              <div class="mt-1 d-flex flex-wrap gap-1">
+                                                  @foreach($productVariant->warehouseStocks as $ws)
+                                                      @if((float)$ws->stock != 0)
+                                                          <span class="badge bg-light text-dark border" style="font-size: 11px;">
+                                                              {{ $ws->warehouse->name ?? 'WH' }}: {{ (float)$ws->stock }}
+                                                          </span>
+                                                      @endif
+                                                  @endforeach
+                                              </div>
+                                          @endif
+                                      </td>
                                  </tr>
                              </tbody>
                          </table>

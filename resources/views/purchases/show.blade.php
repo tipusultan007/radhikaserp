@@ -134,7 +134,7 @@
                                  <thead class="table-light">
                                      <tr>
                                          <th width="5%">#</th>
-                                         <th>Product (Raw Stock)</th>
+                                         <th>Item / Package Variant</th>
                                          <th class="text-end" width="15%">Quantity</th>
                                          <th class="text-end" width="20%">Unit Cost</th>
                                          <th class="text-end" width="20%">Total Cost</th>
@@ -146,9 +146,19 @@
                                              <td class="fw-semibold text-muted">{{ $index + 1 }}</td>
                                              <td>
                                                  <span class="fw-semibold text-dark">{{ $item->product->name }}</span>
+                                                 @if($item->productVariant)
+                                                     <span class="badge bg-success-subtle text-success ms-1">
+                                                         {{ $item->productVariant->name }} ({{ $item->productVariant->unit_qty }} {{ $item->productVariant->unit ? $item->productVariant->unit->short_name : '' }})
+                                                     </span>
+                                                 @else
+                                                     <span class="badge bg-secondary-subtle text-secondary ms-1">Bulk Raw</span>
+                                                 @endif
                                              </td>
                                              <td class="text-end">
-                                                 <span class="badge bg-primary-subtle text-primary px-2 py-1 fs-13">{{ number_format($item->qty, 3) }} {{ $item->product && $item->product->unit ? $item->product->unit->short_name : 'Unit' }}</span>
+                                                 @php
+                                                     $uName = $item->productVariant && $item->productVariant->unit ? $item->productVariant->unit->short_name : ($item->product && $item->product->unit ? $item->product->unit->short_name : 'Unit');
+                                                 @endphp
+                                                 <span class="badge bg-primary-subtle text-primary px-2 py-1 fs-13">{{ number_format($item->qty, 3) }} {{ $uName }}</span>
                                              </td>
                                              <td class="text-end">{{ number_format($item->unit_cost, 0) }}</td>
                                              <td class="text-end fw-semibold">{{ number_format($item->total_cost, 0) }}</td>

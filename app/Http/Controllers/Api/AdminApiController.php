@@ -8,6 +8,9 @@ use App\Models\ActivityLog;
 use App\Models\Batch;
 use App\Models\ChartOfAccount;
 use App\Models\Customer;
+use App\Models\CustomerBonus;
+use App\Models\CustomerTargetItem;
+use App\Models\CustomerTargetScheme;
 use App\Models\District;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
@@ -39,6 +42,7 @@ use App\Notifications\CustomerAlertNotification;
 use App\Services\SmsService;
 use App\Services\SteadfastService;
 use App\Services\StockReconciliationService;
+use App\Services\CustomerTargetService;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -1500,25 +1504,27 @@ class AdminApiController extends Controller
     {
         $suppliers = Supplier::all();
         $warehouses = Warehouse::all();
-        $products = Product::with('unit')->where('type', 'raw')->get();
+        $products = Product::with('unit')->get();
+        $variants = ProductVariant::with(['product.unit', 'unit'])->get();
 
         return response()->json([
             'suppliers' => $suppliers,
             'warehouses' => $warehouses,
             'products' => $products,
+            'variants' => $variants,
         ]);
     }
 
     public function purchases(Request $request)
     {
-        $purchases = Purchase::with(['supplier', 'warehouse', 'items.product.unit'])->orderBy('date', 'desc')->get();
+        $purchases = Purchase::with(['supplier', 'warehouse', 'items.product.unit', 'items.productVariant.unit'])->orderBy('date', 'desc')->get();
 
         return response()->json(['purchases' => $purchases]);
     }
 
     public function showPurchase($id)
     {
-        $purchase = Purchase::with(['supplier', 'warehouse', 'items.product.unit'])->findOrFail($id);
+        $purchase = Purchase::with(['supplier', 'warehouse', 'items.product.unit', 'items.productVariant.unit'])->findOrFail($id);
 
         return response()->json(['purchase' => $purchase]);
     }
@@ -1530,7 +1536,9 @@ class AdminApiController extends Controller
             'warehouse_id' => 'required|exists:warehouses,id',
             'date' => 'required|date',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.item_id' => 'nullable|string',
+            'items.*.product_id' => 'nullable|exists:products,id',
+            'items.*.product_variant_id' => 'nullable|exists:product_variants,id',
             'items.*.qty' => 'required|numeric|min:0.001',
             'items.*.unit_cost' => 'nullable|numeric|min:0',
         ]);
@@ -1538,10 +1546,59 @@ class AdminApiController extends Controller
         try {
             DB::beginTransaction();
 
+            $parsedItems = [];
             $totalCost = 0;
+            $rawCostTotal = 0;
+            $finCostTotal = 0;
+
             foreach ($validated['items'] as $item) {
                 $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float) $item['unit_cost'] : 0;
-                $totalCost += $item['qty'] * $unitCost;
+                $qty = (float) $item['qty'];
+                $lineTotal = $qty * $unitCost;
+                $totalCost += $lineTotal;
+
+                $productId = $item['product_id'] ?? null;
+                $variantId = $item['product_variant_id'] ?? null;
+
+                if (!empty($item['item_id'])) {
+                    $parts = explode('_', $item['item_id']);
+                    if (count($parts) === 2) {
+                        if ($parts[0] === 'variant') {
+                            $variantId = $parts[1];
+                        } elseif ($parts[0] === 'product') {
+                            $productId = $parts[1];
+                        }
+                    }
+                }
+
+                $product = null;
+                if ($variantId) {
+                    $variant = ProductVariant::with('product')->find($variantId);
+                    if ($variant) {
+                        $productId = $variant->product_id;
+                        $product = $variant->product;
+                    }
+                } elseif ($productId) {
+                    $product = Product::find($productId);
+                }
+
+                if (!$productId) {
+                    throw new \Exception('Invalid product or variant specified in purchase items.');
+                }
+
+                if ($variantId || ($product && $product->type === 'finished')) {
+                    $finCostTotal += $lineTotal;
+                } else {
+                    $rawCostTotal += $lineTotal;
+                }
+
+                $parsedItems[] = [
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
+                    'qty' => $qty,
+                    'unit_cost' => $unitCost,
+                    'line_total' => $lineTotal,
+                ];
             }
 
             $purchase = Purchase::create([
@@ -1557,36 +1614,46 @@ class AdminApiController extends Controller
                 $supplier->increment('total_payable', $totalCost);
             }
 
-            foreach ($validated['items'] as $item) {
-                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float) $item['unit_cost'] : 0;
-                $lineTotal = $item['qty'] * $unitCost;
+            foreach ($parsedItems as $item) {
+                $productId = $item['product_id'];
+                $variantId = $item['product_variant_id'];
+                $qty = $item['qty'];
+                $unitCost = $item['unit_cost'];
+                $lineTotal = $item['line_total'];
 
                 PurchaseItem::create([
                     'purchase_id' => $purchase->id,
-                    'product_id' => $item['product_id'],
-                    'qty' => $item['qty'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
+                    'qty' => $qty,
                     'unit_cost' => $unitCost,
                     'total_cost' => $lineTotal,
                 ]);
 
+                $batchPrefix = $variantId 
+                    ? ('B-PUR-'.$purchase->id.'-V'.$variantId.'-')
+                    : ('B-PUR-'.$purchase->id.'-P'.$productId.'-');
+
                 $batch = Batch::create([
-                    'batch_no' => 'B-'.$purchase->id.'-'.$item['product_id'].'-'.strtoupper(Str::random(4)),
-                    'product_id' => $item['product_id'],
+                    'batch_no' => $batchPrefix . strtoupper(Str::random(4)),
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
                     'warehouse_id' => $validated['warehouse_id'],
                     'purchase_id' => $purchase->id,
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $qty,
                     'qty_out' => 0,
-                    'remaining_qty' => $item['qty'],
+                    'remaining_qty' => $qty,
                     'cost_per_unit' => $unitCost,
                     'expiry_date' => null,
                 ]);
 
                 InventoryTransaction::create([
                     'warehouse_id' => $validated['warehouse_id'],
-                    'product_id' => $item['product_id'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
                     'batch_id' => $batch->id,
                     'type' => 'purchase',
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $qty,
                     'qty_out' => 0,
                     'cost' => $lineTotal,
                     'reference_type' => Purchase::class,
@@ -1596,7 +1663,8 @@ class AdminApiController extends Controller
                 ]);
             }
 
-            $inventoryAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
+            $rawInventoryAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
+            $finInventoryAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset'], ['parent_id' => null]);
             $payableAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Payable', 'type' => 'liability'], ['parent_id' => null]);
 
             $journal = Journal::create([
@@ -1608,8 +1676,15 @@ class AdminApiController extends Controller
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
-            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $inventoryAcc->id, 'type' => 'debit', 'amount' => $totalCost]);
-            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $payableAcc->id, 'type' => 'credit', 'amount' => $totalCost]);
+            if ($rawCostTotal > 0) {
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $rawInventoryAcc->id, 'type' => 'debit', 'amount' => $rawCostTotal]);
+            }
+            if ($finCostTotal > 0) {
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $finInventoryAcc->id, 'type' => 'debit', 'amount' => $finCostTotal]);
+            }
+            if ($totalCost > 0) {
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $payableAcc->id, 'type' => 'credit', 'amount' => $totalCost]);
+            }
 
             DB::commit();
 
@@ -1628,7 +1703,9 @@ class AdminApiController extends Controller
             'warehouse_id' => 'required|exists:warehouses,id',
             'date' => 'required|date',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.item_id' => 'nullable|string',
+            'items.*.product_id' => 'nullable|exists:products,id',
+            'items.*.product_variant_id' => 'nullable|exists:product_variants,id',
             'items.*.qty' => 'required|numeric|min:0.001',
             'items.*.unit_cost' => 'nullable|numeric|min:0',
         ]);
@@ -1664,10 +1741,59 @@ class AdminApiController extends Controller
             $purchase->items()->delete();
 
             // Apply new data
+            $parsedItems = [];
             $totalCost = 0;
+            $rawCostTotal = 0;
+            $finCostTotal = 0;
+
             foreach ($validated['items'] as $item) {
                 $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float) $item['unit_cost'] : 0;
-                $totalCost += $item['qty'] * $unitCost;
+                $qty = (float) $item['qty'];
+                $lineTotal = $qty * $unitCost;
+                $totalCost += $lineTotal;
+
+                $productId = $item['product_id'] ?? null;
+                $variantId = $item['product_variant_id'] ?? null;
+
+                if (!empty($item['item_id'])) {
+                    $parts = explode('_', $item['item_id']);
+                    if (count($parts) === 2) {
+                        if ($parts[0] === 'variant') {
+                            $variantId = $parts[1];
+                        } elseif ($parts[0] === 'product') {
+                            $productId = $parts[1];
+                        }
+                    }
+                }
+
+                $product = null;
+                if ($variantId) {
+                    $variant = ProductVariant::with('product')->find($variantId);
+                    if ($variant) {
+                        $productId = $variant->product_id;
+                        $product = $variant->product;
+                    }
+                } elseif ($productId) {
+                    $product = Product::find($productId);
+                }
+
+                if (!$productId) {
+                    throw new \Exception('Invalid product or variant specified in purchase items.');
+                }
+
+                if ($variantId || ($product && $product->type === 'finished')) {
+                    $finCostTotal += $lineTotal;
+                } else {
+                    $rawCostTotal += $lineTotal;
+                }
+
+                $parsedItems[] = [
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
+                    'qty' => $qty,
+                    'unit_cost' => $unitCost,
+                    'line_total' => $lineTotal,
+                ];
             }
 
             $purchase->update([
@@ -1682,36 +1808,46 @@ class AdminApiController extends Controller
                 $supplier->increment('total_payable', $totalCost);
             }
 
-            foreach ($validated['items'] as $item) {
-                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float) $item['unit_cost'] : 0;
-                $lineTotal = $item['qty'] * $unitCost;
+            foreach ($parsedItems as $item) {
+                $productId = $item['product_id'];
+                $variantId = $item['product_variant_id'];
+                $qty = $item['qty'];
+                $unitCost = $item['unit_cost'];
+                $lineTotal = $item['line_total'];
 
                 PurchaseItem::create([
                     'purchase_id' => $purchase->id,
-                    'product_id' => $item['product_id'],
-                    'qty' => $item['qty'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
+                    'qty' => $qty,
                     'unit_cost' => $unitCost,
                     'total_cost' => $lineTotal,
                 ]);
 
+                $batchPrefix = $variantId 
+                    ? ('B-PUR-'.$purchase->id.'-V'.$variantId.'-')
+                    : ('B-PUR-'.$purchase->id.'-P'.$productId.'-');
+
                 $batch = Batch::create([
-                    'batch_no' => 'B-'.$purchase->id.'-'.$item['product_id'].'-'.strtoupper(Str::random(4)),
-                    'product_id' => $item['product_id'],
+                    'batch_no' => $batchPrefix . strtoupper(Str::random(4)),
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
                     'warehouse_id' => $validated['warehouse_id'],
                     'purchase_id' => $purchase->id,
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $qty,
                     'qty_out' => 0,
-                    'remaining_qty' => $item['qty'],
+                    'remaining_qty' => $qty,
                     'cost_per_unit' => $unitCost,
                     'expiry_date' => null,
                 ]);
 
                 InventoryTransaction::create([
                     'warehouse_id' => $validated['warehouse_id'],
-                    'product_id' => $item['product_id'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
                     'batch_id' => $batch->id,
                     'type' => 'purchase',
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $qty,
                     'qty_out' => 0,
                     'cost' => $lineTotal,
                     'reference_type' => Purchase::class,
@@ -1722,7 +1858,8 @@ class AdminApiController extends Controller
             }
 
             // Create Accounting Entry
-            $inventoryAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
+            $rawInventoryAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
+            $finInventoryAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset'], ['parent_id' => null]);
             $payableAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Payable', 'type' => 'liability'], ['parent_id' => null]);
 
             $journal = Journal::create([
@@ -1734,19 +1871,15 @@ class AdminApiController extends Controller
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
-            JournalEntry::create([
-                'journal_id' => $journal->id,
-                'account_id' => $inventoryAcc->id,
-                'type' => 'debit',
-                'amount' => $totalCost,
-            ]);
-
-            JournalEntry::create([
-                'journal_id' => $journal->id,
-                'account_id' => $payableAcc->id,
-                'type' => 'credit',
-                'amount' => $totalCost,
-            ]);
+            if ($rawCostTotal > 0) {
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $rawInventoryAcc->id, 'type' => 'debit', 'amount' => $rawCostTotal]);
+            }
+            if ($finCostTotal > 0) {
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $finInventoryAcc->id, 'type' => 'debit', 'amount' => $finCostTotal]);
+            }
+            if ($totalCost > 0) {
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $payableAcc->id, 'type' => 'credit', 'amount' => $totalCost]);
+            }
 
             DB::commit();
 
@@ -2524,6 +2657,39 @@ class AdminApiController extends Controller
             'input_products' => $inputProducts,
             'variants' => $variants,
         ]);
+    }
+
+    public function repackagingStockCheck(Request $request)
+    {
+        $warehouseId = $request->get('warehouse_id');
+        $item = $request->get('item'); // product_X or variant_Y
+
+        if (!$warehouseId || !$item) {
+            return response()->json(['stock' => 0]);
+        }
+
+        $parts = explode('_', $item);
+        if (count($parts) !== 2) {
+            return response()->json(['stock' => 0]);
+        }
+
+        $type = $parts[0];
+        $id = $parts[1];
+
+        $query = Batch::where('warehouse_id', $warehouseId)
+            ->where('remaining_qty', '>', 0);
+
+        if ($type === 'product') {
+            $query->where('product_id', $id)->whereNull('product_variant_id');
+        } elseif ($type === 'variant') {
+            $query->where('product_variant_id', $id);
+        } else {
+            return response()->json(['stock' => 0]);
+        }
+
+        $totalStock = (float) $query->sum('remaining_qty');
+
+        return response()->json(['stock' => $totalStock]);
     }
 
     public function repackaging(Request $request)
@@ -4097,6 +4263,57 @@ class AdminApiController extends Controller
                     'amount' => $totalCogs,
                 ]);
             }
+        }
+    }
+
+    // ── Customer Monthly Targets & Bonuses ─────────────────────────────────────
+
+    public function customerTargets(Request $request)
+    {
+        $query = CustomerTargetScheme::with(['creator', 'items.product', 'items.productVariant'])
+            ->withCount('items');
+
+        if ($request->filled('month')) {
+            $query->where('target_month', $request->month);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $schemes = $query->latest('target_month')->latest('id')->paginate($request->get('per_page', 20));
+
+        return response()->json($schemes);
+    }
+
+    public function customerTargetDetails($id, Request $request, CustomerTargetService $targetService)
+    {
+        $scheme = CustomerTargetScheme::with(['creator', 'items.product.unit', 'items.productVariant.unit'])->findOrFail($id);
+        $report = $targetService->getSchemeReport($scheme, $request->search);
+
+        return response()->json([
+            'scheme' => $scheme,
+            'report' => $report,
+        ]);
+    }
+
+    public function disburseCustomerBonus($id, $customerId, Request $request, CustomerTargetService $targetService)
+    {
+        $scheme = CustomerTargetScheme::findOrFail($id);
+        $customer = Customer::findOrFail($customerId);
+
+        try {
+            $bonus = $targetService->disburseBonus($scheme, $customer, $request->user(), $request->input('notes'));
+
+            return response()->json([
+                'message' => "Bonus of BDT {$bonus->bonus_amount} disbursed to {$customer->name}'s wallet.",
+                'bonus' => $bonus,
+                'wallet_balance' => (float) $customer->fresh()->wallet_balance,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
         }
     }
 }

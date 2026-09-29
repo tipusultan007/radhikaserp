@@ -66,7 +66,12 @@
                                      @foreach ($batches as $batch)
                                          <tr>
                                              <td><b>{{ $batch->batch_no }}</b></td>
-                                             <td>{{ $batch->product->name ?? 'N/A' }}</td>
+                                             <td>
+                                                 {{ $batch->product->name ?? 'N/A' }}
+                                                 @if($batch->productVariant)
+                                                     <span class="badge bg-light text-dark border ms-1">{{ $batch->productVariant->name }}</span>
+                                                 @endif
+                                             </td>
                                              <td>{{ $batch->warehouse->name ?? 'N/A' }}</td>
                                              <td>{{ number_format($batch->qty_in, 3) }}</td>
                                              <td>{{ number_format($batch->qty_out, 3) }}</td>

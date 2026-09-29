@@ -10,12 +10,13 @@ class ProductVariantController extends Controller
 {
     public function index()
     {
-        $products = Product::with(['variants', 'variants.unit'])->whereHas('variants')->get();
+        $products = Product::with(['variants', 'variants.unit', 'variants.warehouseStocks.warehouse'])->whereHas('variants')->get();
         return view('product_variants.index', compact('products'));
     }
 
     public function show(ProductVariant $productVariant)
     {
+        $productVariant->load('warehouseStocks.warehouse');
         $transactions = \App\Models\InventoryTransaction::with(['warehouse', 'batch', 'creator'])
             ->where('product_variant_id', $productVariant->id)
             ->orderBy('date', 'desc')

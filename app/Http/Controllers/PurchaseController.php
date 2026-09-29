@@ -12,6 +12,7 @@ use App\Models\ChartOfAccount;
 use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -28,8 +29,9 @@ class PurchaseController extends Controller
     {
         $suppliers = Supplier::all();
         $warehouses = Warehouse::all();
-        $products = Product::whereIn('type', ['raw', 'finished'])->get();
-        return view('purchases.create', compact('suppliers', 'warehouses', 'products'));
+        $products = Product::with(['variants.unit', 'unit'])->where('status', true)->get();
+        $variants = ProductVariant::with(['product.unit', 'unit'])->where('status', true)->get();
+        return view('purchases.create', compact('suppliers', 'warehouses', 'products', 'variants'));
     }
 
     public function store(Request $request)
@@ -42,16 +44,54 @@ class PurchaseController extends Controller
             'delivery_cost' => 'nullable|numeric|min:0',
             'cost_breakdown' => 'nullable|array',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.item_id' => 'nullable|string',
+            'items.*.product_id' => 'nullable|exists:products,id',
+            'items.*.product_variant_id' => 'nullable|exists:product_variants,id',
             'items.*.qty' => 'required|numeric|min:0.001',
             'items.*.unit_cost' => 'nullable|numeric|min:0',
         ]);
 
         DB::transaction(function () use ($validated, $request) {
             $totalCost = 0;
+            $parsedItems = [];
+
             foreach ($validated['items'] as $item) {
+                $rawItemId = $item['item_id'] ?? null;
+                $productId = $item['product_id'] ?? null;
+                $variantId = $item['product_variant_id'] ?? null;
+
+                if ($rawItemId) {
+                    $parts = explode('_', $rawItemId);
+                    if ($parts[0] === 'variant') {
+                        $variantId = (int)$parts[1];
+                        $variant = \App\Models\ProductVariant::find($variantId);
+                        $productId = $variant ? $variant->product_id : null;
+                    } elseif ($parts[0] === 'product') {
+                        $productId = (int)$parts[1];
+                        $variantId = null;
+                    }
+                } elseif ($variantId) {
+                    $variant = \App\Models\ProductVariant::find($variantId);
+                    $productId = $variant ? $variant->product_id : $productId;
+                }
+
+                if (!$productId) {
+                    throw new \Exception("Product not found for one of the purchase items.");
+                }
+
+                $product = \App\Models\Product::find($productId);
                 $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float)$item['unit_cost'] : 0;
-                $totalCost += $item['qty'] * $unitCost;
+                $lineTotal = $item['qty'] * $unitCost;
+                $totalCost += $lineTotal;
+
+                $parsedItems[] = [
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
+                    'product' => $product,
+                    'qty' => (float)$item['qty'],
+                    'unit_cost' => $unitCost,
+                    'line_total' => $lineTotal,
+                ];
             }
 
             $purchaseType = $validated['purchase_type'];
@@ -97,41 +137,65 @@ class PurchaseController extends Controller
                 $supplier->increment('total_payable', $totalCost);
             }
 
-            foreach ($validated['items'] as $item) {
-                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float)$item['unit_cost'] : 0;
-                $lineTotal = $item['qty'] * $unitCost;
+            $rawCostTotal = 0;
+            $finCostTotal = 0;
+
+            foreach ($parsedItems as $item) {
+                $productId = $item['product_id'];
+                $variantId = $item['product_variant_id'];
+                $qty = $item['qty'];
+                $unitCost = $item['unit_cost'];
+                $lineTotal = $item['line_total'];
+
+                if ($variantId || ($item['product'] && $item['product']->type === 'finished')) {
+                    $finCostTotal += $lineTotal;
+                } else {
+                    $rawCostTotal += $lineTotal;
+                }
+
+                // Landed cost distributed proportionally
+                $allocatedLanded = ($totalCost > 0 && $totalLandedCost > 0) ? (($lineTotal / $totalCost) * $totalLandedCost) : 0;
+                $effectiveTotal = $lineTotal + $allocatedLanded;
+                $effectiveUnitCost = $qty > 0 ? ($effectiveTotal / $qty) : $unitCost;
 
                 // 2. Create Purchase Item
                 PurchaseItem::create([
                     'purchase_id' => $purchase->id,
-                    'product_id' => $item['product_id'],
-                    'qty' => $item['qty'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
+                    'qty' => $qty,
                     'unit_cost' => $unitCost,
                     'total_cost' => $lineTotal,
                 ]);
 
                 // 3. Generate Batch
+                $batchPrefix = $variantId 
+                    ? ('B-PUR-' . $purchase->id . '-V' . $variantId . '-')
+                    : ('B-PUR-' . $purchase->id . '-P' . $productId . '-');
+
                 $batch = Batch::create([
-                    'batch_no' => 'B-' . $purchase->id . '-' . $item['product_id'] . '-' . strtoupper(Str::random(4)),
-                    'product_id' => $item['product_id'],
+                    'batch_no' => $batchPrefix . strtoupper(Str::random(4)),
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
                     'warehouse_id' => $validated['warehouse_id'],
                     'purchase_id' => $purchase->id,
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $qty,
                     'qty_out' => 0,
-                    'remaining_qty' => $item['qty'],
-                    'cost_per_unit' => $unitCost,
+                    'remaining_qty' => $qty,
+                    'cost_per_unit' => $effectiveUnitCost,
                     'expiry_date' => null, 
                 ]);
 
                 // 4. Inventory Transaction (Ledger)
                 InventoryTransaction::create([
                     'warehouse_id' => $validated['warehouse_id'],
-                    'product_id' => $item['product_id'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
                     'batch_id' => $batch->id,
                     'type' => 'purchase',
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $qty,
                     'qty_out' => 0,
-                    'cost' => $lineTotal,
+                    'cost' => $effectiveTotal,
                     'reference_type' => Purchase::class,
                     'reference_id' => $purchase->id,
                     'date' => $validated['date'],
@@ -140,8 +204,12 @@ class PurchaseController extends Controller
             }
 
             // 5. Accounting Entry
-            $inventoryAcc = ChartOfAccount::firstOrCreate(
+            $inventoryRawAcc = ChartOfAccount::firstOrCreate(
                 ['name' => 'Inventory (Raw)', 'type' => 'asset'],
+                ['parent_id' => null]
+            );
+            $inventoryFinAcc = ChartOfAccount::firstOrCreate(
+                ['name' => 'Inventory (Finished)', 'type' => 'asset'],
                 ['parent_id' => null]
             );
             $payableAcc = ChartOfAccount::firstOrCreate(
@@ -158,12 +226,23 @@ class PurchaseController extends Controller
                 'created_by' => auth()->id() ?? 1,
             ]);
 
-            JournalEntry::create([
-                'journal_id' => $journal->id,
-                'account_id' => $inventoryAcc->id,
-                'type' => 'debit',
-                'amount' => $totalCost,
-            ]);
+            if ($rawCostTotal > 0) {
+                JournalEntry::create([
+                    'journal_id' => $journal->id,
+                    'account_id' => $inventoryRawAcc->id,
+                    'type' => 'debit',
+                    'amount' => $rawCostTotal,
+                ]);
+            }
+
+            if ($finCostTotal > 0) {
+                JournalEntry::create([
+                    'journal_id' => $journal->id,
+                    'account_id' => $inventoryFinAcc->id,
+                    'type' => 'debit',
+                    'amount' => $finCostTotal,
+                ]);
+            }
 
             JournalEntry::create([
                 'journal_id' => $journal->id,
@@ -178,7 +257,7 @@ class PurchaseController extends Controller
 
     public function show(Purchase $purchase)
     {
-        $purchase->load(['items.product', 'supplier', 'warehouse']);
+        $purchase->load(['items.product.unit', 'items.productVariant.unit', 'supplier', 'warehouse']);
         
         $relatedPayments = Journal::where('reference_type', Supplier::class)
             ->where('reference_id', $purchase->supplier_id)
@@ -194,13 +273,14 @@ class PurchaseController extends Controller
 
     public function edit(Purchase $purchase)
     {
-        $purchase->load(['items.product', 'supplier', 'warehouse']);
+        $purchase->load(['items.product.unit', 'items.productVariant.unit', 'supplier', 'warehouse']);
         $suppliers = Supplier::all();
         $warehouses = Warehouse::all();
-        $products = Product::where('type', 'raw')->get();
+        $products = Product::with(['variants.unit', 'unit'])->where('status', true)->get();
+        $variants = ProductVariant::with(['product.unit', 'unit'])->where('status', true)->get();
         $hasConsumedStock = Batch::where('purchase_id', $purchase->id)->where('qty_out', '>', 0)->exists();
 
-        return view('purchases.edit', compact('purchase', 'suppliers', 'warehouses', 'products', 'hasConsumedStock'));
+        return view('purchases.edit', compact('purchase', 'suppliers', 'warehouses', 'products', 'variants', 'hasConsumedStock'));
     }
 
     public function update(Request $request, Purchase $purchase)
@@ -213,7 +293,9 @@ class PurchaseController extends Controller
             'delivery_cost' => 'nullable|numeric|min:0',
             'cost_breakdown' => 'nullable|array',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.item_id' => 'nullable|string',
+            'items.*.product_id' => 'nullable|exists:products,id',
+            'items.*.product_variant_id' => 'nullable|exists:product_variants,id',
             'items.*.qty' => 'required|numeric|min:0.001',
             'items.*.unit_cost' => 'nullable|numeric|min:0',
         ]);
@@ -224,9 +306,45 @@ class PurchaseController extends Controller
             $this->reversePurchase($purchase);
 
             $totalCost = 0;
+            $parsedItems = [];
+
             foreach ($validated['items'] as $item) {
+                $rawItemId = $item['item_id'] ?? null;
+                $productId = $item['product_id'] ?? null;
+                $variantId = $item['product_variant_id'] ?? null;
+
+                if ($rawItemId) {
+                    $parts = explode('_', $rawItemId);
+                    if ($parts[0] === 'variant') {
+                        $variantId = (int)$parts[1];
+                        $variant = \App\Models\ProductVariant::find($variantId);
+                        $productId = $variant ? $variant->product_id : null;
+                    } elseif ($parts[0] === 'product') {
+                        $productId = (int)$parts[1];
+                        $variantId = null;
+                    }
+                } elseif ($variantId) {
+                    $variant = \App\Models\ProductVariant::find($variantId);
+                    $productId = $variant ? $variant->product_id : $productId;
+                }
+
+                if (!$productId) {
+                    throw new \Exception("Product not found for one of the purchase items.");
+                }
+
+                $product = \App\Models\Product::find($productId);
                 $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float)$item['unit_cost'] : 0;
-                $totalCost += $item['qty'] * $unitCost;
+                $lineTotal = $item['qty'] * $unitCost;
+                $totalCost += $lineTotal;
+
+                $parsedItems[] = [
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
+                    'product' => $product,
+                    'qty' => (float)$item['qty'],
+                    'unit_cost' => $unitCost,
+                    'line_total' => $lineTotal,
+                ];
             }
 
             $purchaseType = $validated['purchase_type'];
@@ -270,38 +388,61 @@ class PurchaseController extends Controller
                 $supplier->increment('total_payable', $totalCost);
             }
 
-            foreach ($validated['items'] as $item) {
-                $unitCost = (isset($item['unit_cost']) && $item['unit_cost'] !== '') ? (float)$item['unit_cost'] : 0;
-                $lineTotal = $item['qty'] * $unitCost;
+            $rawCostTotal = 0;
+            $finCostTotal = 0;
+
+            foreach ($parsedItems as $item) {
+                $productId = $item['product_id'];
+                $variantId = $item['product_variant_id'];
+                $qty = $item['qty'];
+                $unitCost = $item['unit_cost'];
+                $lineTotal = $item['line_total'];
+
+                if ($variantId || ($item['product'] && $item['product']->type === 'finished')) {
+                    $finCostTotal += $lineTotal;
+                } else {
+                    $rawCostTotal += $lineTotal;
+                }
+
+                $allocatedLanded = ($totalCost > 0 && $totalLandedCost > 0) ? (($lineTotal / $totalCost) * $totalLandedCost) : 0;
+                $effectiveTotal = $lineTotal + $allocatedLanded;
+                $effectiveUnitCost = $qty > 0 ? ($effectiveTotal / $qty) : $unitCost;
 
                 PurchaseItem::create([
                     'purchase_id' => $purchase->id,
-                    'product_id' => $item['product_id'],
-                    'qty' => $item['qty'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
+                    'qty' => $qty,
                     'unit_cost' => $unitCost,
                     'total_cost' => $lineTotal,
                 ]);
 
+                $batchPrefix = $variantId 
+                    ? ('B-PUR-' . $purchase->id . '-V' . $variantId . '-')
+                    : ('B-PUR-' . $purchase->id . '-P' . $productId . '-');
+
                 $batch = Batch::create([
-                    'batch_no' => 'B-' . $purchase->id . '-' . $item['product_id'] . '-' . strtoupper(Str::random(4)),
-                    'product_id' => $item['product_id'],
+                    'batch_no' => $batchPrefix . strtoupper(Str::random(4)),
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
                     'warehouse_id' => $validated['warehouse_id'],
                     'purchase_id' => $purchase->id,
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $qty,
                     'qty_out' => 0,
-                    'remaining_qty' => $item['qty'],
-                    'cost_per_unit' => $unitCost,
+                    'remaining_qty' => $qty,
+                    'cost_per_unit' => $effectiveUnitCost,
                     'expiry_date' => null,
                 ]);
 
                 InventoryTransaction::create([
                     'warehouse_id' => $validated['warehouse_id'],
-                    'product_id' => $item['product_id'],
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
                     'batch_id' => $batch->id,
                     'type' => 'purchase',
-                    'qty_in' => $item['qty'],
+                    'qty_in' => $qty,
                     'qty_out' => 0,
-                    'cost' => $lineTotal,
+                    'cost' => $effectiveTotal,
                     'reference_type' => Purchase::class,
                     'reference_id' => $purchase->id,
                     'date' => $validated['date'],
@@ -310,7 +451,8 @@ class PurchaseController extends Controller
             }
 
             // Accounting Entry
-            $inventoryAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
+            $inventoryRawAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Raw)', 'type' => 'asset'], ['parent_id' => null]);
+            $inventoryFinAcc = ChartOfAccount::firstOrCreate(['name' => 'Inventory (Finished)', 'type' => 'asset'], ['parent_id' => null]);
             $payableAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Payable', 'type' => 'liability'], ['parent_id' => null]);
 
             $journal = Journal::create([
@@ -322,12 +464,23 @@ class PurchaseController extends Controller
                 'created_by' => auth()->id() ?? 1,
             ]);
 
-            JournalEntry::create([
-                'journal_id' => $journal->id,
-                'account_id' => $inventoryAcc->id,
-                'type' => 'debit',
-                'amount' => $totalCost,
-            ]);
+            if ($rawCostTotal > 0) {
+                JournalEntry::create([
+                    'journal_id' => $journal->id,
+                    'account_id' => $inventoryRawAcc->id,
+                    'type' => 'debit',
+                    'amount' => $rawCostTotal,
+                ]);
+            }
+
+            if ($finCostTotal > 0) {
+                JournalEntry::create([
+                    'journal_id' => $journal->id,
+                    'account_id' => $inventoryFinAcc->id,
+                    'type' => 'debit',
+                    'amount' => $finCostTotal,
+                ]);
+            }
 
             JournalEntry::create([
                 'journal_id' => $journal->id,
@@ -375,8 +528,11 @@ class PurchaseController extends Controller
             $supplier->decrement('total_payable', $purchase->total_cost);
         }
 
-        // 2. Delete Inventory Transactions
-        InventoryTransaction::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->delete();
+        // 2. Delete Inventory Transactions using model delete so observer fires and reverts warehouse stock / variant current stock
+        $txns = InventoryTransaction::where('reference_type', Purchase::class)->where('reference_id', $purchase->id)->get();
+        foreach ($txns as $txn) {
+            $txn->delete();
+        }
 
         // 3. Delete Batches
         Batch::where('purchase_id', $purchase->id)->delete();

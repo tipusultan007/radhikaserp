@@ -6,6 +6,7 @@ use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductVariantController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerTargetController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\SaleController;
@@ -142,6 +143,20 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::delete('customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
     });
 
+    // ─── Customer Monthly Targets & Bonuses ──────────────────────────────────────
+    Route::group(['middleware' => ['permission:view customers']], function () {
+        Route::get('customer-targets', [CustomerTargetController::class, 'index'])->name('customer-targets.index');
+        Route::get('customer-targets/create', [CustomerTargetController::class, 'create'])->name('customer-targets.create');
+        Route::post('customer-targets', [CustomerTargetController::class, 'store'])->name('customer-targets.store');
+        Route::get('customer-targets/{customerTarget}', [CustomerTargetController::class, 'show'])->name('customer-targets.show');
+        Route::get('customer-targets/{customerTarget}/edit', [CustomerTargetController::class, 'edit'])->name('customer-targets.edit');
+        Route::put('customer-targets/{customerTarget}', [CustomerTargetController::class, 'update'])->name('customer-targets.update');
+        Route::delete('customer-targets/{customerTarget}', [CustomerTargetController::class, 'destroy'])->name('customer-targets.destroy');
+        Route::post('customer-targets/{customerTarget}/disburse/{customer}', [CustomerTargetController::class, 'disburse'])->name('customer-targets.disburse');
+        Route::post('customer-targets/{customerTarget}/disburse-all', [CustomerTargetController::class, 'disburseAll'])->name('customer-targets.disburse-all');
+        Route::post('customer-targets/{customerTarget}/stop', [CustomerTargetController::class, 'stop'])->name('customer-targets.stop');
+    });
+
     // ─── Suppliers ──────────────────────────────────────────────────────────────
     Route::group(['middleware' => ['permission:create suppliers']], function () {
         Route::get('suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');
@@ -194,6 +209,8 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
     });
     Route::group(['middleware' => ['permission:edit sales']], function () {
+        Route::post('/sales/sync-steadfast', [SaleController::class, 'syncSteadfast'])->name('sales.syncSteadfast');
+        Route::post('/sales/{sale}/sync-steadfast', [SaleController::class, 'syncSingleSteadfast'])->name('sales.syncSingleSteadfast');
         Route::get('/sales/{sale}/edit', [SaleController::class, 'edit'])->name('sales.edit');
         Route::put('/sales/{sale}', [SaleController::class, 'update'])->name('sales.update');
         Route::patch('/sales/{sale}', [SaleController::class, 'update']);
@@ -221,6 +238,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
 
     // ─── Repackaging ────────────────────────────────────────────────────────────
     Route::group(['middleware' => ['permission:create repackaging']], function () {
+        Route::get('repackaging/stock-check', [App\Http\Controllers\RepackagingController::class, 'stockCheck'])->name('repackaging.stock-check');
         Route::get('repackaging/create', [App\Http\Controllers\RepackagingController::class, 'create'])->name('repackaging.create');
         Route::post('repackaging', [App\Http\Controllers\RepackagingController::class, 'store'])->name('repackaging.store');
     });
@@ -284,6 +302,10 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::post('/stock-reconciliation/reconcile', [App\Http\Controllers\StockReconciliationController::class, 'reconcile'])->name('stock-reconciliation.reconcile');
         Route::get('/stock-reconciliation/physical-audit', [App\Http\Controllers\StockReconciliationController::class, 'physicalAudit'])->name('stock-reconciliation.physical-audit');
         Route::post('/stock-reconciliation/physical-audit', [App\Http\Controllers\StockReconciliationController::class, 'storePhysicalAudit'])->name('stock-reconciliation.store-physical-audit');
+
+        // ─── Stock Integrity & Verification Hub ─────────────────────────────────────
+        Route::get('/stock-verification', [App\Http\Controllers\StockVerificationController::class, 'index'])->name('stock-verification.index');
+        Route::get('/stock-verification/print', [App\Http\Controllers\StockVerificationController::class, 'printReport'])->name('stock-verification.print');
     });
 
     // ─── Journals & Accounting ──────────────────────────────────────────────────

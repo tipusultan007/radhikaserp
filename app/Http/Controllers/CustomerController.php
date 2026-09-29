@@ -108,7 +108,7 @@ class CustomerController extends Controller
             'phone' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'password' => 'nullable|string|min:6',
-            'address' => 'required|string',
+            'address' => 'nullable|string',
             'customer_type' => 'nullable|in:customer,dealer,special_dealer',
         ]);
 

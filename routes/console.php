@@ -11,3 +11,6 @@ Artisan::command('inspire', function () {
 // Schedule daily payment reminders for customers with due balances
 Schedule::command('dues:send-reminders')->dailyAt('09:00');
 
+// Synchronize Steadfast Courier delivery statuses
+Schedule::command('steadfast:sync')->everyThirtyMinutes();
+

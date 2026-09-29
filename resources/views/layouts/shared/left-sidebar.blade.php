@@ -160,6 +160,12 @@
                     <span> Stock Reconciliation </span>
                 </a>
             </li>
+            <li class="side-nav-item">
+                <a href="{{ route('stock-verification.index') }}" class="side-nav-link">
+                    <i class="ri-shield-check-fill text-success"></i>
+                    <span> Stock Verification Hub </span>
+                </a>
+            </li>
             @endcan
 
             @can('view journals')
@@ -210,6 +216,12 @@
                 <a href="{{ route('customers.index') }}" class="side-nav-link">
                     <i class="ri-contacts-fill"></i>
                     <span> Customers </span>
+                </a>
+            </li>
+            <li class="side-nav-item">
+                <a href="{{ route('customer-targets.index') }}" class="side-nav-link">
+                    <i class="ri-trophy-line"></i>
+                    <span> Monthly Targets & Bonus </span>
                 </a>
             </li>
             <li class="side-nav-item">

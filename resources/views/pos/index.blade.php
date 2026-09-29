@@ -116,7 +116,7 @@
                              </div>
 
                              <hr>
-                             <h5 class="header-title mb-3"><i class="ri-truck-fill text-primary"></i> Shipping & Delivery</h5>
+                             <h5 class="header-title mb-3"><i class="ri-truck-fill text-primary"></i> Shipping & Fulfillment</h5>
 
                              <div class="mb-3">
                                  <label class="form-label">Delivery Method</label>
@@ -141,7 +141,15 @@
                                  <textarea name="shipping_address" class="form-control" rows="2" placeholder="Leave blank to use customer's default address"></textarea>
                              </div>
 
-                             <hr>
+                              <div class="mb-3 form-check form-switch bg-light p-2 rounded ps-5 border">
+                                  <input type="checkbox" name="delivered_now" class="form-check-input" id="deliveredNow" value="1" checked>
+                                  <label class="form-check-label fw-bold text-success" for="deliveredNow">
+                                      <i class="ri-checkbox-circle-line me-1"></i> Delivered Now (Deduct Stock Immediately)
+                                  </label>
+                                  <small class="d-block text-muted fs-11 mt-1">Uncheck if this is an Advance Invoice / Pending Order (no stock will be deducted now).</small>
+                              </div>
+
+                              <hr>
                              <h5 class="header-title mb-3"><i class="ri-money-dollar-circle-fill text-success"></i> Billing & Payment</h5>
 
                              <div class="row">
@@ -183,7 +191,7 @@
                              </div>
 
                              <div class="mt-4 d-grid">
-                                 <button type="submit" class="btn btn-primary btn-lg shadow-sm"><i class="ri-checkbox-circle-fill"></i> Complete Sale</button>
+                                 <button type="submit" id="submitSaleBtn" class="btn btn-primary btn-lg shadow-sm"><i class="ri-checkbox-circle-fill"></i> Complete Sale</button>
                              </div>
                          </div>
                      </div>
@@ -280,8 +288,13 @@
         if (isPromotionalCheckbox) {
             isPromotionalCheckbox.addEventListener('change', function() {
                 handlePromotionalState();
-                updateFullPayment();
+                calculateTotal();
             });
+        }
+
+
+
+        if (isPromotionalCheckbox) {
             handlePromotionalState();
         }
 
@@ -401,6 +414,7 @@
                         data.forEach(item => {
                             const option = new Option(item.text, item.id, false, false);
                             option.dataset.stock = item.stock;
+                            option.dataset.total_stock = item.total_stock;
                             option.dataset.price = item.price;
                             option.dataset.dealer_price = item.dealer_price;
                             option.dataset.special_dealer_price = item.special_dealer_price;
@@ -513,7 +527,10 @@
                         data.forEach(item => {
                             const option = new Option(item.text, item.id, false, false);
                             option.dataset.stock = item.stock;
+                            option.dataset.total_stock = item.total_stock;
                             option.dataset.price = item.price;
+                            option.dataset.dealer_price = item.dealer_price;
+                            option.dataset.special_dealer_price = item.special_dealer_price;
                             option.dataset.unit_qty = item.unit_qty;
                             newSelect.append(option);
                         });
@@ -546,7 +563,18 @@
                 },
                 body: JSON.stringify({ name: name, phone: phone, email: email, customer_type: customerType, password: password, address: address })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        if (response.status === 422 && err.errors) {
+                            const messages = Object.values(err.errors).flat().join('\n');
+                            throw new Error(messages);
+                        }
+                        throw new Error(err.message || 'An error occurred.');
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = 'Save Customer';
@@ -569,7 +597,7 @@
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = 'Save Customer';
                 console.error('Error:', error);
-                alert('An error occurred.');
+                alert('Error: ' + error.message);
             });
         });
     });

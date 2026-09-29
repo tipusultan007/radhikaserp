@@ -17,12 +17,33 @@
             </div>
          </div>
 
-         <div class="row mb-2">
-             <div class="col-12 text-end">
-                 <a href="{{ route('pos.index') }}" class="btn btn-primary rounded-pill mb-2"><i class="ri-add-line me-1"></i> Add New Sale</a>
-                 <a href="{{ route('sales.export', request()->all()) }}" class="btn btn-success rounded-pill mb-2"><i class="ri-file-excel-2-line me-1"></i> Export Excel</a>
+          @if(session('success'))
+             <div class="alert alert-success alert-dismissible fade show" role="alert">
+                 <i class="ri-check-line me-1"></i> {{ session('success') }}
+                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
              </div>
-         </div>
+          @endif
+          @if(session('error'))
+             <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                 <i class="ri-error-warning-line me-1"></i> {{ session('error') }}
+                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+             </div>
+          @endif
+
+          <div class="row mb-2">
+              <div class="col-12 text-end">
+                  @can('edit sales')
+                  <form action="{{ route('sales.syncSteadfast') }}" method="POST" class="d-inline">
+                      @csrf
+                      <button type="submit" class="btn btn-outline-info rounded-pill mb-2 me-1" onclick="return confirm('Check Steadfast API and update status for all pending consignments?')">
+                          <i class="ri-refresh-line me-1"></i> Sync Steadfast
+                      </button>
+                  </form>
+                  @endcan
+                  <a href="{{ route('pos.index') }}" class="btn btn-primary rounded-pill mb-2"><i class="ri-add-line me-1"></i> Add New Sale</a>
+                  <a href="{{ route('sales.export', request()->all()) }}" class="btn btn-success rounded-pill mb-2"><i class="ri-file-excel-2-line me-1"></i> Export Excel</a>
+              </div>
+          </div>
 
          <div class="row">
              <div class="col-md mb-3">
@@ -248,15 +269,19 @@
                                              </td>
                                              <td>
                                                  @if($sale->delivery_status == 'pending')
-                                                     <span class="badge bg-warning">Pending</span>
+                                                     <span class="badge bg-warning text-dark"><i class="ri-time-line me-1"></i>Pending</span>
+                                                     <div class="text-warning text-nowrap mt-1" style="font-size: 11px;"><i class="ri-archive-line me-1"></i>Stock Pending</div>
                                                  @elseif($sale->delivery_status == 'accepted')
                                                      <span class="badge bg-secondary">Accepted</span>
                                                  @elseif($sale->delivery_status == 'processing')
                                                      <span class="badge bg-info">Processing</span>
+                                                     <div class="text-muted text-nowrap mt-1" style="font-size: 11px;"><i class="ri-archive-line me-1"></i>Stock Pending</div>
                                                  @elseif($sale->delivery_status == 'dispatched')
                                                      <span class="badge bg-primary">Dispatched</span>
+                                                     <div class="text-success text-nowrap mt-1" style="font-size: 11px;"><i class="ri-check-line me-1"></i>Stock Deducted</div>
                                                  @elseif($sale->delivery_status == 'delivered')
                                                      <span class="badge bg-success">Delivered</span>
+                                                     <div class="text-success text-nowrap mt-1" style="font-size: 11px;"><i class="ri-check-line me-1"></i>Stock Deducted</div>
                                                  @elseif($sale->delivery_status == 'cancelled')
                                                      <span class="badge bg-danger">Cancelled</span>
                                                  @else
@@ -276,12 +301,33 @@
                                                          <li><a class="dropdown-item text-info" href="{{ route('sales.show', $sale->id) }}"><i class="ri-eye-fill me-2"></i> View</a></li>
                                                          <li><a class="dropdown-item text-success" href="javascript:void(0);" onclick="viewPayments({{ $sale->id }}, '{{ $sale->invoice_no }}')"><i class="ri-money-dollar-box-line me-2"></i> Manage Payments</a></li>
                                                          <li><a class="dropdown-item text-primary" href="{{ route('sales.edit', $sale->id) }}"><i class="ri-edit-box-line me-2"></i> Edit</a></li>
-                                                         @if($sale->source == 'customer' && ($sale->delivery_status == 'pending' || empty($sale->delivery_status)))
+                                                         @if(in_array($sale->delivery_status, ['pending', 'processing', 'accepted']) || empty($sale->delivery_status))
                                                          <li>
                                                              <form action="{{ route('sales.updateDetails', $sale->id) }}" method="POST" class="d-inline">
                                                                  @csrf
-                                                                 <input type="hidden" name="delivery_status" value="accepted">
-                                                                 <button type="submit" class="dropdown-item text-success"><i class="ri-check-double-line me-2"></i> Mark as Accepted</button>
+                                                                 <input type="hidden" name="delivery_status" value="delivered">
+                                                                 <button type="submit" class="dropdown-item text-success" onclick="return confirm('Mark as Delivered? This will deduct product stock from warehouse.')">
+                                                                     <i class="ri-truck-line me-2"></i> Deliver & Deduct Stock
+                                                                 </button>
+                                                             </form>
+                                                         </li>
+                                                         <li>
+                                                             <form action="{{ route('sales.updateDetails', $sale->id) }}" method="POST" class="d-inline">
+                                                                 @csrf
+                                                                 <input type="hidden" name="delivery_status" value="dispatched">
+                                                                 <button type="submit" class="dropdown-item text-primary" onclick="return confirm('Mark as Dispatched? This will deduct product stock from warehouse.')">
+                                                                     <i class="ri-flight-takeoff-line me-2"></i> Dispatch & Deduct Stock
+                                                                 </button>
+                                                             </form>
+                                                         </li>
+                                                         @elseif(in_array($sale->delivery_status, ['dispatched', 'delivered']))
+                                                         <li>
+                                                             <form action="{{ route('sales.updateDetails', $sale->id) }}" method="POST" class="d-inline">
+                                                                 @csrf
+                                                                 <input type="hidden" name="delivery_status" value="pending">
+                                                                 <button type="submit" class="dropdown-item text-warning" onclick="return confirm('Revert to Pending? This will RESTORE the stock back to warehouse inventory.')">
+                                                                     <i class="ri-arrow-go-back-line me-2"></i> Revert to Pending (Restore Stock)
+                                                                 </button>
                                                              </form>
                                                          </li>
                                                          @endif

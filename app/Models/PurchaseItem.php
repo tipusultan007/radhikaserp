@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 
-#[Fillable(['purchase_id', 'product_id', 'qty', 'unit_cost', 'total_cost'])]
+#[Fillable(['purchase_id', 'product_id', 'product_variant_id', 'qty', 'unit_cost', 'total_cost'])]
 class PurchaseItem extends Model
 {
     use HasFactory;
@@ -25,5 +25,10 @@ class PurchaseItem extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function productVariant()
+    {
+        return $this->belongsTo(ProductVariant::class);
     }
 }

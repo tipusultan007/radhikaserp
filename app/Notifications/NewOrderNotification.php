@@ -19,6 +19,35 @@ class NewOrderNotification extends Notification
     public function __construct($sale)
     {
         $this->sale = $sale;
+
+        $sendFcm = function () use ($sale) {
+            try {
+                $messaging = app('firebase.messaging');
+                $title = 'New Customer Order';
+                $message = "Order #{$sale->invoice_no} placed by " . ($sale->customer ? $sale->customer->name : 'Customer') . " (৳" . number_format($sale->total, 2) . ")";
+
+                $messageObj = \Kreait\Firebase\Messaging\CloudMessage::new()
+                    ->withTopic('admins')
+                    ->withNotification(\Kreait\Firebase\Messaging\Notification::create($title, $message))
+                    ->withData([
+                        'type' => 'order',
+                        'title' => $title,
+                        'message' => $message,
+                        'sale_id' => (string) $sale->id,
+                        'invoice_no' => (string) $sale->invoice_no,
+                        'total' => (string) $sale->total,
+                    ]);
+                $messaging->send($messageObj);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Firebase NewOrderNotification Error: ' . $e->getMessage());
+            }
+        };
+
+        if (app()->runningInConsole()) {
+            $sendFcm();
+        } else {
+            app()->terminating($sendFcm);
+        }
     }
 
     /**

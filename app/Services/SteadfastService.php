@@ -4,6 +4,9 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Models\Sale;
+use App\Models\InventoryTransaction;
+use App\Http\Controllers\SaleController;
 
 class SteadfastService
 {
@@ -140,5 +143,196 @@ class SteadfastService
         }
 
         throw new \Exception($errorMessage);
+    }
+
+    /**
+     * Fetch status for a given consignment ID from Steadfast.
+     *
+     * @param string|int $consignmentId
+     * @return string|null
+     */
+    public static function checkStatusByCid($consignmentId)
+    {
+        $baseUrl = rtrim(trim(config('services.steadfast.url', 'https://portal.packzy.com/api/v1')), '/');
+        $apiKey = config('services.steadfast.api_key');
+        $secretKey = config('services.steadfast.secret_key');
+
+        if (empty($apiKey) || empty($secretKey) || empty($consignmentId)) {
+            return null;
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'Api-Key' => $apiKey,
+                'Secret-Key' => $secretKey,
+            ])->get("{$baseUrl}/status_by_cid/{$consignmentId}");
+
+            if ($response->successful()) {
+                $data = $response->json();
+                return $data['delivery_status'] ?? null;
+            } else {
+                Log::warning("Steadfast status_by_cid failed for {$consignmentId}", [
+                    'status' => $response->status(),
+                    'body' => $response->body()
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error("Exception checking Steadfast status for CID {$consignmentId}: " . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Map Steadfast API status to ERP delivery_status.
+     *
+     * @param string $steadfastStatus
+     * @return string|null
+     */
+    public static function mapDeliveryStatus($steadfastStatus)
+    {
+        switch (strtolower(trim($steadfastStatus))) {
+            case 'delivered':
+            case 'partial_delivered':
+                return 'delivered';
+            case 'cancelled':
+            case 'returned':
+                return 'cancelled';
+            case 'in_transit':
+            case 'active':
+            case 'pickup_completed':
+                return 'shipped';
+            case 'pending':
+            case 'in_review':
+                return 'processing';
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Sync delivery status for a specific sale.
+     *
+     * @param Sale $sale
+     * @return bool True if sale status was updated or stock was consumed
+     */
+    public static function syncSaleStatus(Sale $sale)
+    {
+        if (!$sale->consignment_id) {
+            return false;
+        }
+
+        $remoteStatus = self::checkStatusByCid($sale->consignment_id);
+        if (!$remoteStatus) {
+            return false;
+        }
+
+        $newDeliveryStatus = self::mapDeliveryStatus($remoteStatus);
+        if (!$newDeliveryStatus) {
+            return false;
+        }
+
+        $oldStatus = $sale->delivery_status;
+
+        $hasInventoryTxns = InventoryTransaction::where('reference_type', Sale::class)
+            ->where('reference_id', $sale->id)
+            ->exists();
+
+        $statusChanged = ($oldStatus !== $newDeliveryStatus);
+        $needsStockConsumption = in_array($newDeliveryStatus, ['shipped', 'delivered']) && !$hasInventoryTxns;
+
+        if (!$statusChanged && !$needsStockConsumption) {
+            return false;
+        }
+
+        $sale->delivery_status = $newDeliveryStatus;
+
+        if ($newDeliveryStatus === 'shipped' && !$sale->dispatched_at) {
+            $sale->dispatched_at = now();
+            $sale->dispatched_by = $sale->dispatched_by ?? 1;
+        }
+
+        if ($newDeliveryStatus === 'delivered') {
+            if (!$sale->dispatched_at) {
+                $sale->dispatched_at = now();
+                $sale->dispatched_by = $sale->dispatched_by ?? 1;
+            }
+            if (!$sale->delivered_at) {
+                $sale->delivered_at = now();
+                $sale->delivered_by = $sale->delivered_by ?? 1;
+            }
+        }
+
+        $updates = $sale->tracking_updates ?? [];
+        $updates[] = [
+            'status' => $remoteStatus,
+            'message' => "Status synced from Steadfast API: {$remoteStatus}",
+            'date' => now()->toDateTimeString()
+        ];
+        $sale->tracking_updates = $updates;
+
+        $sale->save();
+
+        // Handle Stock Consumption or Reversion
+        $isDispatchedOrDelivered = in_array($newDeliveryStatus, ['shipped', 'delivered']);
+
+        if ($isDispatchedOrDelivered && !$hasInventoryTxns) {
+            SaleController::consumeStockForSale($sale);
+        } elseif (!$isDispatchedOrDelivered && $hasInventoryTxns && in_array($newDeliveryStatus, ['cancelled', 'pending'])) {
+            SaleController::revertStockForSale($sale);
+        }
+
+        \App\Models\ActivityLog::create([
+            'user_id' => auth()->id() ?? 1,
+            'action' => 'steadfast_sync',
+            'reference_type' => Sale::class,
+            'reference_id' => $sale->id,
+            'description' => "Synced with Steadfast API: '{$oldStatus}' -> '{$newDeliveryStatus}' (Remote: '{$remoteStatus}')",
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Synchronize all pending Steadfast consignments.
+     *
+     * @param bool $all If true, syncs all sales with a consignment ID regardless of current status
+     * @return array ['total' => int, 'updated' => int, 'errors' => int]
+     */
+    public static function syncPendingSales($all = false)
+    {
+        $query = Sale::whereNotNull('consignment_id');
+
+        if (!$all) {
+            $query->where(function ($q) {
+                $q->whereNotIn('delivery_status', ['delivered', 'cancelled'])
+                  ->orWhereNull('delivery_status')
+                  ->orWhere(function ($sub) {
+                      $sub->where('delivery_status', 'delivered')
+                          ->whereDoesntHave('inventoryTransactions');
+                  });
+            });
+        }
+
+        $sales = $query->get();
+        $updated = 0;
+        $errors = 0;
+
+        foreach ($sales as $sale) {
+            try {
+                if (self::syncSaleStatus($sale)) {
+                    $updated++;
+                }
+            } catch (\Exception $e) {
+                $errors++;
+                Log::error("Failed to sync sale #{$sale->invoice_no} (CID: {$sale->consignment_id}): " . $e->getMessage());
+            }
+        }
+
+        return [
+            'total' => $sales->count(),
+            'updated' => $updated,
+            'errors' => $errors
+        ];
     }
 }

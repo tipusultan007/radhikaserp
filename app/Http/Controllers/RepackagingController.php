@@ -45,12 +45,76 @@ class RepackagingController extends Controller
         return view('repackaging.index', compact('orders', 'warehouses'));
     }
 
+    public function stockCheck(Request $request)
+    {
+        $warehouseId = $request->input('warehouse_id');
+        $itemString = $request->input('input_item');
+
+        if (!$warehouseId || !$itemString) {
+            return response()->json(['stock' => 0, 'formatted' => '0']);
+        }
+
+        $parts = explode('_', $itemString);
+        $type = $parts[0];
+        $id = $parts[1] ?? null;
+
+        if (!$id) {
+            return response()->json(['stock' => 0, 'formatted' => '0']);
+        }
+
+        if ($type === 'variant') {
+            $variant = ProductVariant::with(['product.unit', 'unit'])->find($id);
+            if (!$variant) {
+                return response()->json(['stock' => 0, 'formatted' => '0']);
+            }
+
+            $stock = (float)Batch::where('warehouse_id', $warehouseId)
+                ->where('product_variant_id', $id)
+                ->sum('remaining_qty');
+
+            $unitQty = $variant->getBaseQuantity() ?: 1;
+            $pkgUnit = $variant->unit ? $variant->unit->short_name : ($variant->product && $variant->product->unit ? $variant->product->unit->short_name : 'Pack');
+            $rawUnit = $variant->product && $variant->product->unit ? $variant->product->unit->short_name : 'kg';
+            $totalRawWeight = $stock * $unitQty;
+
+            return response()->json([
+                'stock' => $stock,
+                'unit_name' => $pkgUnit,
+                'unit_qty' => (float)$unitQty,
+                'total_weight' => (float)$totalRawWeight,
+                'raw_unit' => $rawUnit,
+                'formatted' => number_format($stock, 2) . ' ' . $pkgUnit . ' (' . number_format($totalRawWeight, 2) . ' ' . $rawUnit . ')'
+            ]);
+        } else {
+            $product = Product::with('unit')->find($id);
+            if (!$product) {
+                return response()->json(['stock' => 0, 'formatted' => '0']);
+            }
+
+            $stock = (float)Batch::where('warehouse_id', $warehouseId)
+                ->where('product_id', $id)
+                ->whereNull('product_variant_id')
+                ->sum('remaining_qty');
+
+            $unitName = $product->unit ? $product->unit->short_name : 'kg';
+
+            return response()->json([
+                'stock' => $stock,
+                'unit_name' => $unitName,
+                'unit_qty' => 1,
+                'total_weight' => $stock,
+                'raw_unit' => $unitName,
+                'formatted' => number_format($stock, 2) . ' ' . $unitName
+            ]);
+        }
+    }
+
     public function create()
     {
         $warehouses = Warehouse::all();
-        $inputProducts = Product::whereIn('type', ['raw', 'finished'])->get();
-        $finishedProducts = Product::where('type', 'finished')->get();
-        $variants = ProductVariant::with('product')->get();
+        $inputProducts = Product::with('unit')->whereIn('type', ['raw', 'finished'])->where('status', true)->get();
+        $finishedProducts = Product::with('unit')->where('type', 'finished')->where('status', true)->get();
+        $variants = ProductVariant::with(['product.unit', 'unit'])->where('status', true)->get();
         return view('repackaging.create', compact('warehouses', 'inputProducts', 'finishedProducts', 'variants'));
     }
 

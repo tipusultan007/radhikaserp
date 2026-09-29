@@ -31,6 +31,11 @@ class ProductVariant extends Model
         return $this->belongsTo(Unit::class);
     }
 
+    public function warehouseStocks()
+    {
+        return $this->hasMany(WarehouseStock::class);
+    }
+
     public function getBaseQuantity()
     {
         if ($this->unit) {

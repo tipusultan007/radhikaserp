@@ -136,7 +136,7 @@
                                 <table class="table table-hover table-bordered mb-0" id="itemsTable">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Product (Raw Material) <span class="text-danger">*</span></th>
+                                            <th>Item / Variant (Package Size) <span class="text-danger">*</span></th>
                                             <th width="15%">Quantity <span class="text-danger">*</span></th>
                                             <th width="20%">Unit Cost</th>
                                             <th width="15%" class="text-end">Subtotal</th>
@@ -151,18 +151,56 @@
                                         @foreach($displayItems as $index => $item)
                                             @php
                                                 $prodId = is_array($item) ? ($item['product_id'] ?? null) : $item->product_id;
+                                                $varId = is_array($item) ? ($item['product_variant_id'] ?? null) : $item->product_variant_id;
+                                                $rawItemId = is_array($item) ? ($item['item_id'] ?? null) : null;
+                                                if ($rawItemId) {
+                                                    $curVal = $rawItemId;
+                                                } elseif ($varId) {
+                                                    $curVal = 'variant_' . $varId;
+                                                } elseif ($prodId) {
+                                                    $curVal = 'product_' . $prodId;
+                                                } else {
+                                                    $curVal = '';
+                                                }
+
                                                 $qtyVal = is_array($item) ? ($item['qty'] ?? '') : $item->qty;
                                                 $costVal = is_array($item) ? ($item['unit_cost'] ?? 0) : $item->unit_cost;
-                                                $selectedProd = $products->firstWhere('id', $prodId);
-                                                $unitName = $selectedProd && $selectedProd->unit ? $selectedProd->unit->short_name : 'Unit';
+                                                $selectedVar = $varId ? $variants->firstWhere('id', $varId) : null;
+                                                $selectedProd = $prodId ? $products->firstWhere('id', $prodId) : null;
+                                                $unitName = $selectedVar && $selectedVar->unit ? $selectedVar->unit->short_name : ($selectedProd && $selectedProd->unit ? $selectedProd->unit->short_name : 'Unit');
                                             @endphp
                                             <tr class="item-row">
                                                 <td>
-                                                    <select name="items[{{ $index }}][product_id]" class="form-select product-select" required>
-                                                        <option value="">Search Product...</option>
-                                                        @foreach($products as $product)
-                                                            <option value="{{ $product->id }}" data-unit="{{ $product->unit ? $product->unit->short_name : 'Unit' }}" {{ $prodId == $product->id ? 'selected' : '' }}>{{ $product->name }} ({{ $product->unit ? $product->unit->short_name : 'Unit' }})</option>
-                                                        @endforeach
+                                                    <select name="items[{{ $index }}][item_id]" class="form-select product-select" required>
+                                                        <option value="">Search Item...</option>
+                                                        <optgroup label="Packaged Variants (Ready to Sell)">
+                                                            @foreach($variants as $variant)
+                                                                @php
+                                                                    $vName = $variant->product->name;
+                                                                    if ($variant->name !== $variant->product->name && $variant->name !== 'Default') {
+                                                                        $vName .= ' - ' . $variant->name;
+                                                                    }
+                                                                    $uName = $variant->unit ? $variant->unit->short_name : ($variant->product->unit ? $variant->product->unit->short_name : 'Pack');
+                                                                @endphp
+                                                                <option value="variant_{{ $variant->id }}" 
+                                                                    data-unit="{{ $uName }}"
+                                                                    {{ $curVal == 'variant_' . $variant->id ? 'selected' : '' }}>
+                                                                    {{ $vName }} ({{ $variant->unit_qty }} {{ $uName }})
+                                                                </option>
+                                                            @endforeach
+                                                        </optgroup>
+                                                        <optgroup label="Bulk / Raw Products">
+                                                            @foreach($products as $product)
+                                                                @php
+                                                                    $pUnit = $product->unit ? $product->unit->short_name : 'Unit';
+                                                                @endphp
+                                                                <option value="product_{{ $product->id }}" 
+                                                                    data-unit="{{ $pUnit }}"
+                                                                    {{ $curVal == 'product_' . $product->id ? 'selected' : '' }}>
+                                                                    {{ $product->name }} (Bulk / {{ $pUnit }})
+                                                                </option>
+                                                            @endforeach
+                                                        </optgroup>
                                                     </select>
                                                 </td>
                                                 <td>
@@ -173,7 +211,6 @@
                                                 </td>
                                                 <td>
                                                     <div class="input-group input-group-sm">
-                                                        
                                                         <input type="number" step="any" min="0" name="items[{{ $index }}][unit_cost]" class="form-control item-cost" placeholder="0.00" value="{{ $costVal }}">
                                                     </div>
                                                 </td>
@@ -302,8 +339,28 @@
 <script>
 $(document).ready(function() {
     let rowIdx = {{ count($displayItems) }};
-
-    let productOptionsHtml = `<option value="">Search Product...</option>@foreach($products as $product)<option value="{{ $product->id }}" data-unit="{{ $product->unit ? $product->unit->short_name : 'Unit' }}">{{ addslashes($product->name) }} ({{ $product->unit ? $product->unit->short_name : 'Unit' }})</option>@endforeach`;
+    // Clean product options template
+    let productOptionsHtml = `<option value="">Search Item...</option>` +
+        `<optgroup label="Packaged Variants (Ready to Sell)">` +
+        `@foreach($variants as $variant)` +
+        `@php
+            $vName = $variant->product->name;
+            if ($variant->name !== $variant->product->name && $variant->name !== 'Default') {
+                $vName .= ' - ' . $variant->name;
+            }
+            $uName = $variant->unit ? $variant->unit->short_name : ($variant->product->unit ? $variant->product->unit->short_name : 'Pack');
+        @endphp` +
+        `<option value="variant_{{ $variant->id }}" data-unit="{{ $uName }}">{{ addslashes($vName) }} ({{ $variant->unit_qty }} {{ $uName }})</option>` +
+        `@endforeach` +
+        `</optgroup>` +
+        `<optgroup label="Bulk / Raw Products">` +
+        `@foreach($products as $product)` +
+        `@php
+            $pUnit = $product->unit ? $product->unit->short_name : 'Unit';
+        @endphp` +
+        `<option value="product_{{ $product->id }}" data-unit="{{ $pUnit }}">{{ addslashes($product->name) }} (Bulk / {{ $pUnit }})</option>` +
+        `@endforeach` +
+        `</optgroup>`;
 
     // Initialize Select2 on existing elements
     $('.select2').select2({ width: '100%' });
@@ -381,7 +438,7 @@ $(document).ready(function() {
         let newRow = `
         <tr class="item-row">
             <td>
-                <select name="items[${rowIdx}][product_id]" class="form-select product-select" required>
+                <select name="items[${rowIdx}][item_id]" class="form-select product-select" required>
                     ${productOptionsHtml}
                 </select>
             </td>

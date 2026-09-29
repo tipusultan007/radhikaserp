@@ -62,11 +62,11 @@
         </tr>
     </table>
 
-    <!-- Billing Info -->
+    <!-- Billing & Shipping Info -->
     <table style="margin-bottom: 20px;">
         <tr>
-            <td style="width: 60%; vertical-align: top;">
-                <h3 style="border-bottom: 1px solid #eee; width: 50%;">Bill To:</h3>
+            <td style="width: @if($sale->shipping_address) 35% @else 60% @endif; vertical-align: top;">
+                <h3 style="border-bottom: 1px solid #eee; width: 70%;">Bill To:</h3>
                 <p style="margin-bottom: 2px;"><strong style="font-size: 14px;">{{ $sale->customer->name ?? 'Walk-in Customer' }}</strong></p>
                 @if(isset($sale->customer) && $sale->customer->company)
                     <p style="margin: 0; color: #555;"><b>{{ $sale->customer->company }}</b></p>
@@ -74,7 +74,17 @@
                 <p style="margin: 0; color: #555;">{{ $sale->customer->address ?? '' }}</p>
                 <p style="margin: 0; color: #555;">Phone: {{ $sale->customer->phone ?? 'N/A' }}</p>
             </td>
-            <td style="width: 40%; vertical-align: top; text-align: right;">
+            @if($sale->shipping_address)
+            <td style="width: 30%; vertical-align: top; padding-left: 15px;">
+                <h3 style="border-bottom: 1px solid #eee; width: 70%;">Ship To:</h3>
+                <p style="margin-bottom: 2px;"><strong style="font-size: 13px;">{{ $sale->customer->name ?? 'Recipient' }}</strong></p>
+                <p style="margin: 0; color: #555;">{{ $sale->shipping_address }}</p>
+                @if(isset($sale->customer) && $sale->customer->phone)
+                    <p style="margin: 0; color: #555;">Phone: {{ $sale->customer->phone }}</p>
+                @endif
+            </td>
+            @endif
+            <td style="width: @if($sale->shipping_address) 35% @else 40% @endif; vertical-align: top; text-align: right;">
                 <h2 style="color: #0d6efd; margin: 0;">INVOICE</h2>
                 <p style="margin: 2px 0;"><strong>No:</strong> {{ $sale->invoice_no }}</p>
                 <p style="margin: 2px 0;"><strong>Date:</strong> {{ $sale->date->format('d M, Y') }}</p>

@@ -103,19 +103,23 @@
                                          @endforeach
                                      </optgroup>
                                  </select>
-                                 <small class="text-muted mt-1 d-block"><i class="ri-information-line"></i> FIFO logic consumes oldest batches automatically.</small>
-                             </div>
-                             
-                             <div class="mb-3">
-                                 <label class="form-label fw-semibold">Total Quantity to Consume <span class="text-danger">*</span></label>
-                                 <div class="input-group input-group-lg">
-                                     <input type="number" step="0.001" min="0.001" name="input_qty" id="input_qty" class="form-control" placeholder="0.00" required>
-                                     <span class="input-group-text fw-bold text-danger" id="input_unit_display">Unit</span>
-                                 </div>
-                                 <div class="mt-2 text-end">
-                                    <span class="badge bg-danger-subtle text-danger fs-13 px-2 py-1" id="input_summary" style="display:none;"></span>
-                                 </div>
-                             </div>
+                                  <small class="text-muted mt-1 d-block"><i class="ri-information-line"></i> FIFO logic consumes oldest batches automatically.</small>
+                                  <div id="stock_availability_wrapper" class="mt-2" style="display: none;">
+                                      <span class="badge fs-12 px-2 py-1" id="stock_availability_badge"></span>
+                                  </div>
+                              </div>
+                              
+                              <div class="mb-3">
+                                  <label class="form-label fw-semibold">Total Quantity to Consume <span class="text-danger">*</span></label>
+                                  <div class="input-group input-group-lg">
+                                      <input type="number" step="0.001" min="0.001" name="input_qty" id="input_qty" class="form-control" placeholder="0.00" required>
+                                      <span class="input-group-text fw-bold text-danger" id="input_unit_display">Unit</span>
+                                  </div>
+                                  <div class="mt-2 d-flex justify-content-between align-items-center">
+                                     <span class="text-danger fs-12 fw-semibold" id="stock_warning" style="display:none;"><i class="ri-error-warning-line"></i> Input quantity exceeds available warehouse stock!</span>
+                                     <span class="badge bg-danger-subtle text-danger fs-13 px-2 py-1 ms-auto" id="input_summary" style="display:none;"></span>
+                                  </div>
+                              </div>
                          </div>
                      </div>
                  </div>
@@ -252,6 +256,63 @@ $(document).ready(function() {
     
     // Initialize Select2
     $('.select2').select2({ width: '100%' });
+
+    let currentAvailableStock = null;
+
+    function updateAvailableStock() {
+        let whId = $('select[name="warehouse_id"]').val();
+        let inputItem = $('#input_item').val();
+
+        if (!whId || !inputItem) {
+            $('#stock_availability_wrapper').hide();
+            currentAvailableStock = null;
+            $('#stock_warning').hide();
+            return;
+        }
+
+        fetch(`{{ route('repackaging.stock-check') }}?warehouse_id=${whId}&input_item=${inputItem}`)
+            .then(res => res.json())
+            .then(data => {
+                currentAvailableStock = parseFloat(data.stock) || 0;
+                let badge = $('#stock_availability_badge');
+                if (currentAvailableStock > 0) {
+                    badge.removeClass('bg-danger-subtle text-danger').addClass('bg-success-subtle text-success');
+                    badge.html(`<i class="ri-checkbox-circle-line me-1"></i> Available in Warehouse: <strong>${data.formatted}</strong>`);
+                } else {
+                    badge.removeClass('bg-success-subtle text-success').addClass('bg-danger-subtle text-danger');
+                    badge.html(`<i class="ri-close-circle-line me-1"></i> Available in Warehouse: <strong>0 (Out of Stock)</strong>`);
+                }
+                $('#stock_availability_wrapper').show();
+                checkStockExceeded();
+            })
+            .catch(err => {
+                console.error('Error fetching stock:', err);
+            });
+    }
+
+    function checkStockExceeded() {
+        if (currentAvailableStock !== null) {
+            let inputQty = parseFloat($('#input_qty').val()) || 0;
+            if (inputQty > currentAvailableStock) {
+                $('#stock_warning').show();
+                $('#submitBtn').prop('disabled', true);
+            } else {
+                $('#stock_warning').hide();
+                $('#submitBtn').prop('disabled', false);
+            }
+        } else {
+            $('#stock_warning').hide();
+            $('#submitBtn').prop('disabled', false);
+        }
+    }
+
+    $(document).on('change', 'select[name="warehouse_id"], #input_item', function() {
+        updateAvailableStock();
+    });
+
+    $(document).on('keyup change', '#input_qty', function() {
+        checkStockExceeded();
+    });
 
     function calculateYield() {
         // Input logic

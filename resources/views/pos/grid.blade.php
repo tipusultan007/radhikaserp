@@ -192,6 +192,14 @@
                                  <textarea name="shipping_address" class="form-control form-control-sm" rows="1" placeholder="Leave blank to use customer's default address"></textarea>
                              </div>
 
+                             <div class="mb-3 form-check form-switch bg-light p-2 rounded ps-5 border">
+                                 <input type="checkbox" name="delivered_now" class="form-check-input" id="deliveredNowGrid" value="1" checked>
+                                 <label class="form-check-label fw-bold text-success fs-12" for="deliveredNowGrid">
+                                     <i class="ri-checkbox-circle-line me-1"></i> Delivered Now (Deduct Stock)
+                                 </label>
+                                 <small class="d-block text-muted fs-11">Uncheck for Advance Invoice (Pending stock).</small>
+                             </div>
+
                              <!-- Billing & Payment -->
                              <h6 class="header-title mb-2"><i class="ri-money-dollar-circle-fill text-success me-1"></i> Billing & Payment</h6>
                              <div class="row g-2 mb-2">
@@ -401,8 +409,22 @@
                     imgHtml = `<div class="pos-product-placeholder rounded-top"><i class="ri-image-line"></i></div>`;
                 }
 
-                const stockBadgeClass = product.total_stock > 0 ? 'bg-success' : 'bg-danger';
-                const stockText = product.total_stock > 0 ? `Stock: ${product.total_stock}` : 'Out of stock';
+                let stockBadgeHtml = '';
+                if (product.variants.length === 1) {
+                    const v = product.variants[0];
+                    const isAvail = v.stock > 0;
+                    const stockClass = isAvail ? 'bg-success' : (v.total_stock > 0 ? 'bg-warning text-dark' : 'bg-danger');
+                    const text = v.stock === v.total_stock
+                        ? `Stock: ${v.stock}`
+                        : `WH: ${v.stock} | Total: ${v.total_stock}`;
+                    stockBadgeHtml = `<span class="badge ${stockClass} fs-11" title="Warehouse Stock vs Total Stock">${text}</span>`;
+                } else {
+                    const hasWhStock = product.variants.some(v => v.stock > 0);
+                    const hasTotalStock = product.variants.some(v => v.total_stock > 0);
+                    const stockClass = hasWhStock ? 'bg-success' : (hasTotalStock ? 'bg-warning text-dark' : 'bg-danger');
+                    const text = hasWhStock ? 'In Stock' : (hasTotalStock ? 'Other WH Only' : 'Out of stock');
+                    stockBadgeHtml = `<span class="badge ${stockClass} fs-11">${text}</span>`;
+                }
 
                 col.innerHTML = `
                     <div class="card h-100 pos-product-card rounded shadow-sm overflow-hidden mb-0" data-product-id="${product.id}">
@@ -413,7 +435,7 @@
                                 <small class="text-muted d-block fs-11">${product.variants.length} Variant(s)</small>
                             </div>
                             <div class="mt-2 d-flex justify-content-between align-items-center">
-                                <span class="badge ${stockBadgeClass} fs-11">${stockText}</span>
+                                ${stockBadgeHtml}
                                 <i class="ri-add-circle-fill text-primary font-18"></i>
                             </div>
                         </div>
@@ -457,9 +479,23 @@
                 }
 
                 const isAvailable = variant.stock > 0;
-                const stockBadge = isAvailable 
-                    ? `<span class="badge bg-soft-success text-success">${variant.stock} ${variant.unit_name}</span>`
-                    : `<span class="badge bg-soft-danger text-danger">0 ${variant.unit_name}</span>`;
+                let stockBadge = '';
+                if (variant.stock === variant.total_stock) {
+                    stockBadge = isAvailable 
+                        ? `<span class="badge bg-soft-success text-success">${variant.stock} ${variant.unit_name}</span>`
+                        : `<span class="badge bg-soft-danger text-danger">0 ${variant.unit_name}</span>`;
+                } else {
+                    stockBadge = `
+                        <div class="d-flex flex-column align-items-start gap-1">
+                            <span class="badge ${isAvailable ? 'bg-soft-success text-success' : 'bg-soft-danger text-danger'}">
+                                WH: ${variant.stock} ${variant.unit_name}
+                            </span>
+                            <span class="badge bg-light text-muted border" style="font-size: 10px;">
+                                Total: ${variant.total_stock} ${variant.unit_name}
+                            </span>
+                        </div>
+                    `;
+                }
 
                 tr.innerHTML = `
                     <td>
@@ -469,29 +505,27 @@
                     <td>${stockBadge}</td>
                     <td><strong class="text-primary fs-13">৳${price.toFixed(0)}</strong></td>
                     <td class="text-end">
-                        <button type="button" class="btn btn-sm ${isAvailable ? 'btn-primary' : 'btn-secondary'} add-to-cart-btn" ${!isAvailable ? 'disabled' : ''}>
+                        <button type="button" class="btn btn-sm ${isAvailable ? 'btn-primary' : 'btn-outline-primary'} add-to-cart-btn">
                             <i class="ri-shopping-cart-2-line me-1"></i> Add
                         </button>
                     </td>
                 `;
 
-                if (isAvailable) {
-                    tr.querySelector('.add-to-cart-btn').addEventListener('click', function(e) {
-                        addToCart(product, variant, price);
+                tr.querySelector('.add-to-cart-btn').addEventListener('click', function(e) {
+                    addToCart(product, variant, price);
 
-                        const btn = this;
-                        const originalHtml = btn.innerHTML;
-                        btn.innerHTML = '<i class="ri-check-line me-1"></i> Added';
-                        btn.classList.remove('btn-primary');
-                        btn.classList.add('btn-success');
+                    const btn = this;
+                    const originalHtml = btn.innerHTML;
+                    btn.innerHTML = '<i class="ri-check-line me-1"></i> Added';
+                    btn.classList.remove('btn-primary', 'btn-outline-primary');
+                    btn.classList.add('btn-success');
 
-                        setTimeout(() => {
-                            btn.innerHTML = originalHtml;
-                            btn.classList.remove('btn-success');
-                            btn.classList.add('btn-primary');
-                        }, 800);
-                    });
-                }
+                    setTimeout(() => {
+                        btn.innerHTML = originalHtml;
+                        btn.classList.remove('btn-success');
+                        btn.classList.add(isAvailable ? 'btn-primary' : 'btn-outline-primary');
+                    }, 800);
+                });
 
                 tbody.appendChild(tr);
             });
@@ -721,7 +755,18 @@
                 },
                 body: JSON.stringify({ name: name, phone: phone, email: email, customer_type: customerType })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        if (response.status === 422 && err.errors) {
+                            const messages = Object.values(err.errors).flat().join('\n');
+                            throw new Error(messages);
+                        }
+                        throw new Error(err.message || 'An error occurred.');
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = 'Save Customer';
@@ -742,7 +787,7 @@
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = 'Save Customer';
                 console.error('Error:', error);
-                alert('An error occurred.');
+                alert('Error: ' + error.message);
             });
         });
 

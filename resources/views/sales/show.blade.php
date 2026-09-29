@@ -229,6 +229,50 @@
              </div>
              <!-- Sidebar -->
              <div class="col-lg-4">
+                 <!-- Stock & Delivery Status Card -->
+                 @php
+                     $isStockDeducted = in_array($sale->delivery_status, ['dispatched', 'delivered']);
+                 @endphp
+                 @if($isStockDeducted)
+                     <div class="alert alert-success d-flex align-items-center mb-3 py-2 px-3">
+                         <i class="ri-checkbox-circle-fill fs-18 me-2 text-success"></i>
+                         <div>
+                             <strong class="d-block text-success">Stock Deducted</strong>
+                             <span class="fs-12 text-muted">Items consumed from warehouse stock ({{ ucfirst($sale->delivery_status) }}).</span>
+                         </div>
+                     </div>
+                 @else
+                     <div class="alert alert-warning d-flex align-items-center mb-3 py-2 px-3">
+                         <i class="ri-time-line fs-18 me-2 text-warning"></i>
+                         <div>
+                             <strong class="d-block text-warning">Stock Pending Fulfillment</strong>
+                             <span class="fs-12 text-muted">Stock will be deducted once status is updated to <strong>Dispatched</strong> or <strong>Delivered</strong>.</span>
+                         </div>
+                     </div>
+                 @endif
+
+                  @if($sale->consignment_id)
+                      <div class="card mb-3 border-info border">
+                          <div class="card-body p-3">
+                              <div class="d-flex align-items-center justify-content-between mb-2">
+                                  <div>
+                                      <span class="badge bg-info-subtle text-info fs-12 fw-semibold"><i class="ri-truck-line me-1"></i> Steadfast Courier</span>
+                                  </div>
+                                  <form action="{{ route('sales.syncSingleSteadfast', $sale->id) }}" method="POST" class="d-inline">
+                                      @csrf
+                                      <button type="submit" class="btn btn-sm btn-outline-info rounded-pill">
+                                          <i class="ri-refresh-line me-1"></i> Sync Status
+                                      </button>
+                                  </form>
+                              </div>
+                              <div class="fs-13 text-muted">
+                                  <div><strong>Consignment ID:</strong> <code>{{ $sale->consignment_id }}</code></div>
+                                  <div><strong>Current Status:</strong> <span class="badge bg-primary">{{ ucfirst($sale->delivery_status ?? 'Pending') }}</span></div>
+                              </div>
+                          </div>
+                      </div>
+                  @endif
+
                  <!-- Status and Notes Update Form -->
                  <div class="card mb-4">
                      <div class="card-header bg-light">
@@ -248,13 +292,16 @@
                              <div class="mb-3">
                                  <label class="form-label">Delivery Status</label>
                                  <select name="delivery_status" class="form-select">
-                                     <option value="pending" {{ empty($sale->delivery_status) || $sale->delivery_status == 'pending' ? 'selected' : '' }}>Pending</option>
+                                     <option value="pending" {{ empty($sale->delivery_status) || $sale->delivery_status == 'pending' ? 'selected' : '' }}>Pending (No stock deduction)</option>
                                      <option value="accepted" {{ $sale->delivery_status == 'accepted' ? 'selected' : '' }}>Accepted</option>
                                      <option value="processing" {{ $sale->delivery_status == 'processing' ? 'selected' : '' }}>Processing</option>
-                                     <option value="dispatched" {{ $sale->delivery_status == 'dispatched' ? 'selected' : '' }}>Dispatched</option>
-                                     <option value="delivered" {{ $sale->delivery_status == 'delivered' ? 'selected' : '' }}>Delivered</option>
+                                     <option value="dispatched" {{ $sale->delivery_status == 'dispatched' ? 'selected' : '' }}>Dispatched (Deducts stock)</option>
+                                     <option value="delivered" {{ $sale->delivery_status == 'delivered' ? 'selected' : '' }}>Delivered (Deducts stock)</option>
                                      <option value="cancelled" {{ $sale->delivery_status == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
                                  </select>
+                                 <small class="text-muted d-block mt-1 fs-11">
+                                     <i class="ri-information-line"></i> Marking <strong>Dispatched</strong> or <strong>Delivered</strong> consumes stock. Reverting restores stock.
+                                 </small>
                              </div>
                              <div class="mb-3">
                                  <label class="form-label">Order Notes</label>

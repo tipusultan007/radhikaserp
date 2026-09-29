@@ -274,10 +274,11 @@ class SaleController extends Controller
         ->get();
 
         $data = $products->map(function ($product) use ($stocks) {
-            $totalStock = 0;
-            $variantsData = $product->variants->map(function ($variant) use ($product, $stocks, &$totalStock) {
-                $stock = isset($stocks[$variant->id]) ? (float)$stocks[$variant->id] : 0;
-                $totalStock += $stock;
+            $totalWarehouseStock = 0;
+            $variantsData = $product->variants->map(function ($variant) use ($product, $stocks, &$totalWarehouseStock) {
+                $whStock = isset($stocks[$variant->id]) ? (float)$stocks[$variant->id] : 0;
+                $totalWarehouseStock += $whStock;
+                $totalStock = (float)$variant->current_stock;
                 
                 $displayName = $variant->name;
                 if ($variant->name === 'Default' || $variant->name === $product->name) {
@@ -293,7 +294,8 @@ class SaleController extends Controller
                     'price' => (float)$variant->price,
                     'dealer_price' => (float)$variant->dealer_price,
                     'special_dealer_price' => (float)$variant->special_dealer_price,
-                    'stock' => $stock,
+                    'stock' => $whStock,
+                    'total_stock' => $totalStock,
                 ];
             })->values();
 
@@ -303,7 +305,7 @@ class SaleController extends Controller
                 'sku' => $product->sku,
                 'image_url' => $product->image_url,
                 'unit_name' => $product->unit->name ?? '',
-                'total_stock' => $totalStock,
+                'total_stock' => $totalWarehouseStock,
                 'variants' => $variantsData,
             ];
         });
@@ -343,24 +345,28 @@ class SaleController extends Controller
 
         $options = [];
         foreach ($variants as $variant) {
-            $stock = $stocksArray[$variant->id] ?? 0;
-            if ($stock > 0) {
-                $displayName = $variant->product->name;
-                // If variant name is different from product name, display both
-                if ($variant->name !== $variant->product->name && $variant->name !== 'Default') {
-                    $displayName .= ' - ' . $variant->name;
-                }
-
-                $options[] = [
-                    'id' => $variant->id,
-                    'text' => $displayName . ' (Stock: ' . (float)$stock . ')',
-                    'stock' => $stock,
-                    'price' => $variant->price,
-                    'dealer_price' => $variant->dealer_price,
-                    'special_dealer_price' => $variant->special_dealer_price,
-                    'unit_qty' => $variant->unit_qty
-                ];
+            $whStock = (float)($stocksArray[$variant->id] ?? 0);
+            $totalStock = (float)$variant->current_stock;
+            $displayName = $variant->product ? $variant->product->name : 'Unknown Product';
+            // If variant name is different from product name, display both
+            if ($variant->name !== ($variant->product ? $variant->product->name : '') && $variant->name !== 'Default') {
+                $displayName .= ' - ' . $variant->name;
             }
+
+            $stockLabel = ($whStock === $totalStock)
+                ? "(Stock: {$whStock})"
+                : "(WH: {$whStock} | Total: {$totalStock})";
+
+            $options[] = [
+                'id' => $variant->id,
+                'text' => "{$displayName} {$stockLabel}",
+                'stock' => $whStock,
+                'total_stock' => $totalStock,
+                'price' => $variant->price,
+                'dealer_price' => $variant->dealer_price,
+                'special_dealer_price' => $variant->special_dealer_price,
+                'unit_qty' => $variant->unit_qty
+            ];
         }
 
         return response()->json($options);
@@ -383,6 +389,9 @@ class SaleController extends Controller
             'items.*.unit_price' => 'required|numeric|min:1',
             'delivery_method' => 'nullable|string|in:pickup,own_delivery,steadfast',
             'delivery_type' => 'nullable|integer|in:0,1',
+            'order_type' => 'nullable|string|in:direct,invoice',
+            'delivery_status' => 'nullable|string|in:pending,delivered,processing,dispatched,cancelled',
+            'delivered_now' => 'nullable|boolean',
         ]);
 
         $discount = $validated['discount'] ?? 0;
@@ -614,21 +623,36 @@ class SaleController extends Controller
                 ]);
             }
 
-            // COGS & Inventory Reduction: Dispatch Steadfast or consume counter/POS sales immediately
+            // COGS & Inventory Reduction: Check if marked as "Delivered Now"
+            $isDeliveredNow = $request->boolean('delivered_now', false);
+
             if ($sale->delivery_method === 'steadfast') {
                 \App\Services\SteadfastService::dispatchSale($sale);
-            } else {
+            } elseif ($isDeliveredNow) {
+                // Immediate counter sale: Delivered Now is checked -> Deduct stock immediately
                 $sale->delivery_status = 'delivered';
                 $sale->dispatched_at = now();
                 $sale->delivered_at = now();
+                $sale->dispatched_by = auth()->id() ?? 1;
+                $sale->delivered_by = auth()->id() ?? 1;
                 $sale->save();
 
                 $this->consumeStockForSale($sale);
+            } else {
+                // Advance Invoice / Pending Order: Delivered Now is UNCHECKED -> Keep as Pending, DO NOT deduct stock
+                $sale->delivery_status = 'pending';
+                $sale->dispatched_at = null;
+                $sale->delivered_at = null;
+                $sale->save();
             }
 
             DB::commit();
 
-            return redirect()->route('sales.index')->with('success', 'Sale completed successfully. Invoice: ' . $sale->invoice_no);
+            $msg = ($sale->delivery_status === 'pending')
+                ? 'Advance Invoice created successfully (Status: Pending, stock pending fulfillment). Invoice: ' . $sale->invoice_no
+                : 'Sale completed successfully. Invoice: ' . $sale->invoice_no;
+
+            return redirect()->route('sales.index')->with('success', $msg);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -965,27 +989,48 @@ class SaleController extends Controller
         $validated = $request->validate([
             'payment_status' => 'nullable|in:paid,partial,due',
             'delivery_status' => 'nullable|string',
+            'status' => 'nullable|string',
             'notes' => 'nullable|string',
         ]);
 
+        $newDeliveryStatus = $validated['delivery_status'] ?? $validated['status'] ?? null;
+
         try {
+            DB::beginTransaction();
+
             $oldStatus = $sale->getOriginal('delivery_status');
+
             if (isset($validated['payment_status'])) {
                 $sale->payment_status = $validated['payment_status'];
             }
-            if (isset($validated['delivery_status'])) {
-                $sale->delivery_status = $validated['delivery_status'];
-                if ($validated['delivery_status'] === 'delivered' && !$sale->delivered_at) {
-                    $sale->delivered_at = now();
-                    $sale->delivered_by = auth()->id() ?? 1;
+
+            if ($newDeliveryStatus) {
+                $sale->delivery_status = $newDeliveryStatus;
+
+                if ($newDeliveryStatus === 'dispatched' && !$sale->dispatched_at) {
+                    $sale->dispatched_at = now();
+                    $sale->dispatched_by = auth()->id() ?? 1;
+                }
+
+                if ($newDeliveryStatus === 'delivered') {
+                    if (!$sale->dispatched_at) {
+                        $sale->dispatched_at = now();
+                        $sale->dispatched_by = auth()->id() ?? 1;
+                    }
+                    if (!$sale->delivered_at) {
+                        $sale->delivered_at = now();
+                        $sale->delivered_by = auth()->id() ?? 1;
+                    }
                 }
             }
+
             if (isset($validated['notes'])) {
                 $sale->notes = $validated['notes'];
             }
+
             $sale->save();
 
-            if (isset($validated['delivery_status'])) {
+            if ($newDeliveryStatus) {
                 $wasDispatched = in_array($oldStatus, ['dispatched', 'delivered']);
                 $isDispatched = in_array($sale->delivery_status, ['dispatched', 'delivered']);
 
@@ -998,10 +1043,32 @@ class SaleController extends Controller
                 } elseif (!$isDispatched && $wasDispatched) {
                     $this->revertStockForSale($sale);
                 }
+
+                \App\Models\ActivityLog::create([
+                    'user_id' => auth()->id() ?? 1,
+                    'action' => 'status_updated',
+                    'reference_type' => Sale::class,
+                    'reference_id' => $sale->id,
+                    'description' => "Delivery status changed from " . ucfirst($oldStatus ?? 'pending') . " to " . ucfirst($newDeliveryStatus),
+                ]);
+            }
+
+            DB::commit();
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Delivery status updated to ' . ucfirst($newDeliveryStatus ?? $sale->delivery_status) . ' successfully.',
+                    'delivery_status' => $sale->delivery_status
+                ]);
             }
 
             return back()->with('success', 'Sale details updated successfully.');
         } catch (\Exception $e) {
+            DB::rollBack();
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+            }
             return back()->withErrors(['error' => 'Failed to update details: ' . $e->getMessage()]);
         }
     }
@@ -1023,6 +1090,37 @@ class SaleController extends Controller
                 return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
             }
             return back()->withErrors(['error' => 'Failed to delete sale: ' . $e->getMessage()]);
+        }
+    }
+
+    public function syncSteadfast(Request $request)
+    {
+        try {
+            $result = \App\Services\SteadfastService::syncPendingSales();
+            $msg = "Steadfast sync complete: {$result['updated']} order(s) updated out of {$result['total']} checked.";
+            if ($result['errors'] > 0) {
+                $msg .= " ({$result['errors']} errors encountered)";
+            }
+            return back()->with('success', $msg);
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Steadfast sync failed: ' . $e->getMessage()]);
+        }
+    }
+
+    public function syncSingleSteadfast(Request $request, Sale $sale)
+    {
+        try {
+            if (!$sale->consignment_id) {
+                return back()->withErrors(['error' => 'This sale has no Steadfast Consignment ID.']);
+            }
+            $updated = \App\Services\SteadfastService::syncSaleStatus($sale);
+            if ($updated) {
+                return back()->with('success', "Steadfast status synced: Current status is " . ucfirst($sale->delivery_status));
+            } else {
+                return back()->with('success', "Steadfast status verified: Status remains " . ucfirst($sale->delivery_status));
+            }
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Steadfast sync failed: ' . $e->getMessage()]);
         }
     }
 
@@ -1070,6 +1168,13 @@ class SaleController extends Controller
         // 4. Delete Payments
         SalePayment::where('sale_id', $sale->id)->delete();
 
+        // Also delete payment journals (PAY-XXXXXX) linked to this sale's invoice
+        $paymentJournals = Journal::where('notes', 'Payment for POS Sale ' . $sale->invoice_no)->get();
+        foreach ($paymentJournals as $payJournal) {
+            JournalEntry::where('journal_id', $payJournal->id)->delete();
+            $payJournal->delete();
+        }
+
         if ($journal) {
             JournalEntry::where('journal_id', $journal->id)->delete();
             $journal->delete();
@@ -1079,7 +1184,7 @@ class SaleController extends Controller
         SaleItem::where('sale_id', $sale->id)->delete();
     }
 
-    private function consumeStockForSale(Sale $sale)
+    public static function consumeStockForSale(Sale $sale)
     {
         $hasTransactions = InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->exists();
         if ($hasTransactions) return;
@@ -1283,7 +1388,7 @@ class SaleController extends Controller
         }
     }
 
-    private function revertStockForSale(Sale $sale)
+    public static function revertStockForSale(Sale $sale)
     {
         $items = SaleItem::where('sale_id', $sale->id)->get();
         foreach ($items as $item) {

@@ -31,4 +31,9 @@ class Customer extends Authenticatable
     {
         return $this->hasMany(Sale::class);
     }
+
+    public function bonuses()
+    {
+        return $this->hasMany(CustomerBonus::class);
+    }
 }

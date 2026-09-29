@@ -64,6 +64,17 @@
                                                  @else
                                                      <span class="badge bg-danger">{{ (float)$variant->current_stock }}</span>
                                                  @endif
+                                                 @if($variant->warehouseStocks && $variant->warehouseStocks->count() > 0)
+                                                     <div class="mt-1 d-flex flex-wrap gap-1">
+                                                         @foreach($variant->warehouseStocks as $ws)
+                                                             @if((float)$ws->stock != 0)
+                                                                 <span class="badge bg-light text-dark border" style="font-size: 10px;" title="Warehouse: {{ $ws->warehouse->name ?? 'WH' }}">
+                                                                     {{ $ws->warehouse->name ?? 'WH' }}: {{ (float)$ws->stock }}
+                                                                 </span>
+                                                             @endif
+                                                         @endforeach
+                                                     </div>
+                                                 @endif
                                              </td>
                                              <td>
                                                  @if ($variant->status)

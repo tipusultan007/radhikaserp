@@ -9,6 +9,9 @@
                 <p class="text-muted fs-13 mb-0">Reconcile raw materials, variants, repackagings, and batch inventory directly from transaction ledgers</p>
             </div>
             <div class="d-flex gap-2">
+                <a href="{{ route('stock-verification.index') }}" class="btn btn-success">
+                    <i class="ri-shield-check-fill me-1"></i> Stock Verification Hub
+                </a>
                 <a href="{{ route('stock-reconciliation.physical-audit') }}" class="btn btn-outline-primary">
                     <i class="ri-survey-line me-1"></i> Physical Stock Take
                 </a>

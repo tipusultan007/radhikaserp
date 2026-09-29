@@ -148,12 +148,18 @@ class StockTransferController extends Controller
             elseif ($action === 'receive' && $stock_transfer->status === 'sent') {
                 // Add to Destination
                 foreach ($stock_transfer->items as $item) {
-                    // We generate a new batch at the destination warehouse based on standard cost
+                    // Carry over exact cost from source transfer_out transactions
                     $variant = ProductVariant::find($item->product_variant_id);
                     
-                    // Approximate cost from latest batches or assume 0 for simplicity in this demo if not tracking perfect transit cost
-                    $latestBatch = Batch::where('product_variant_id', $variant->id)->latest()->first();
-                    $costPerUnit = $latestBatch ? $latestBatch->cost_per_unit : 0;
+                    $sourceTxns = InventoryTransaction::where('reference_type', StockTransfer::class)
+                        ->where('reference_id', $stock_transfer->id)
+                        ->where('type', 'transfer_out')
+                        ->where('product_variant_id', $variant->id)
+                        ->get();
+                    
+                    $totalCost = $sourceTxns->sum('cost');
+                    $totalQty = $sourceTxns->sum('qty_out');
+                    $costPerUnit = $totalQty > 0 ? ($totalCost / $totalQty) : 0;
 
                     $newBatch = Batch::create([
                         'batch_no' => 'B-TRF-' . $stock_transfer->id . '-' . $variant->id . '-' . strtoupper(Str::random(4)),

@@ -48,7 +48,9 @@ class RoutingController extends Controller
             ->take(5)
             ->get();
             
-        $lowStockAlerts = \App\Models\Batch::where('remaining_qty', '<=', 10)->count();
+        $lowStockAlerts = \App\Models\Batch::where('remaining_qty', '<=', 10)
+            ->where('remaining_qty', '>', 0)
+            ->count();
 
         // Monthly Financial Comparison
         $thisMonthSales = \App\Models\Sale::whereMonth('date', \Carbon\Carbon::today()->month)
