@@ -451,30 +451,30 @@ class CustomerApiController extends Controller
     {
         $customer = $request->user();
 
-        // Find active schemes for current month or active ongoing schemes
-        $currentMonth = now()->format('Y-m');
+        // Find active and completed schemes where this customer is targeted (or global target items)
         $schemes = CustomerTargetScheme::with(['items.product.unit', 'items.productVariant.unit'])
-            ->where('status', 'active')
-            ->where(function ($q) use ($currentMonth) {
-                $q->where('target_month', $currentMonth)
-                  ->orWhere(function ($sq) {
-                      $sq->whereDate('start_date', '<=', now())
-                         ->where(function ($ssq) {
-                             $ssq->whereNull('end_date')
-                                 ->orWhereDate('end_date', '>=', now());
-                         });
-                  });
+            ->whereIn('status', ['active', 'completed'])
+            ->whereHas('items', function ($q) use ($customer) {
+                $q->where('customer_id', $customer->id)
+                  ->orWhereNull('customer_id');
             })
             ->latest()
             ->get();
 
-        $results = [];
+        $activeTargets = [];
+        $pastTargets = [];
+
         foreach ($schemes as $scheme) {
             $progress = $targetService->calculateCustomerProgress($customer, $scheme);
 
-            $results[] = [
+            if (empty($progress['items_breakdown'])) {
+                continue;
+            }
+
+            $targetData = [
                 'scheme_id' => $scheme->id,
                 'name' => $scheme->name,
+                'status' => $scheme->status,
                 'target_month' => $scheme->target_month,
                 'start_date' => $scheme->start_date ? $scheme->start_date->format('Y-m-d') : null,
                 'end_date' => $scheme->end_date ? $scheme->end_date->format('Y-m-d') : null,
@@ -489,11 +489,18 @@ class CustomerApiController extends Controller
                 'disbursed_at' => $progress['bonus_record'] && $progress['bonus_record']->disbursed_at ? $progress['bonus_record']->disbursed_at->toIso8601String() : null,
                 'items' => $progress['items_breakdown'],
             ];
+
+            if ($scheme->status === 'active') {
+                $activeTargets[] = $targetData;
+            } else {
+                $pastTargets[] = $targetData;
+            }
         }
 
         return response()->json([
             'wallet_balance' => (float) $customer->wallet_balance,
-            'active_targets' => $results,
+            'active_targets' => $activeTargets,
+            'past_targets' => $pastTargets,
         ]);
     }
 }

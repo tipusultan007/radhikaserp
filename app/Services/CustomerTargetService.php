@@ -49,7 +49,7 @@ class CustomerTargetService
 
         // Filter items: customer-specific rows for this customer OR global rows (no customer_id)
         $schemeItems = $scheme->items()
-            ->with(['product', 'productVariant', 'customer'])
+            ->with(['product.unit', 'productVariant.unit', 'customer'])
             ->where(function ($q) use ($customer) {
                 $q->where('customer_id', $customer->id)
                   ->orWhereNull('customer_id');
@@ -106,6 +106,8 @@ class CustomerTargetService
                 'item_id' => $targetItem->id,
                 'product_id' => $targetItem->product_id,
                 'product_name' => $targetItem->product ? $targetItem->product->name : 'N/A',
+                'product_image' => $targetItem->product ? $targetItem->product->image_url : null,
+                'unit' => $targetItem->product && $targetItem->product->unit ? $targetItem->product->unit->name : 'pcs',
                 'product_variant_id' => $targetItem->product_variant_id,
                 'variant_name' => $targetItem->productVariant ? $targetItem->productVariant->name : 'All Variants',
                 'target_qty' => $targetQty,
