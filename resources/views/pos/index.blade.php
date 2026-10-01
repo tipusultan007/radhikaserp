@@ -442,8 +442,28 @@
 
         // Update price when variant changes
         $('#cart-items').on('change', '.variant-select', function(e) {
-            const selectedOption = this.options[this.selectedIndex];
+            const currentSelect = this;
+            const variantId = this.value;
             const tr = $(this).closest('tr');
+
+            if (variantId) {
+                let duplicateTr = null;
+                $('#cart-items .variant-select').not(currentSelect).each(function() {
+                    if (this.value === variantId) {
+                        duplicateTr = $(this).closest('tr');
+                        return false;
+                    }
+                });
+
+                if (duplicateTr) {
+                    alert('This product variant is already in the cart. Please adjust the quantity in the existing row.');
+                    $(currentSelect).val('').trigger('change.select2');
+                    duplicateTr.find('.qty-input').focus().select();
+                    return;
+                }
+            }
+
+            const selectedOption = this.options[this.selectedIndex];
             const priceInput = tr.find('.price-input')[0];
             const qtyInput = tr.find('.qty-input')[0];
             

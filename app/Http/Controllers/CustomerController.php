@@ -7,9 +7,12 @@ use App\Models\Journal;
 use App\Models\JournalEntry;
 use App\Models\ChartOfAccount;
 use App\Models\Sale;
+use App\Models\StatementToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class CustomerController extends Controller
 {
@@ -203,16 +206,67 @@ class CustomerController extends Controller
         }
     }
 
-    public function show(Customer $customer)
+    public function show(Customer $customer, Request $request)
     {
         $customer->load(['sales' => function ($query) {
             $query->orderBy('date', 'desc');
         }]);
 
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+
+        $statementData = $this->getCustomerStatementData($customer, $startDate, $endDate);
+
+        // For on-screen display, reverse to newest first, while preserving running balance
+        $ledgerEntries = $statementData['entries']->sortByDesc(function($entry) {
+            $parts = explode('_', $entry->id);
+            $journalId = str_pad($parts[0], 10, '0', STR_PAD_LEFT);
+            $subSeq = isset($parts[1]) ? $parts[1] : '0';
+            return $entry->date . '_' . $journalId . '_' . $subSeq;
+        })->values();
+
+        $paymentMethods = ChartOfAccount::where('is_payment_method', true)->get();
+
+        $openingBalance = $statementData['opening_balance'];
+        $totalDebit = $statementData['period_debit'];
+        $totalCredit = $statementData['period_credit'];
+        $finalRunningBalance = $statementData['closing_balance'];
+
+        // Generate clean, secure short URL for WhatsApp sharing (valid for 90 days, no exposed customer ID)
+        $stmtToken = StatementToken::createOrGetForCustomer($customer, $startDate, $endDate);
+        $statementShortUrl = $stmtToken->getShortUrl();
+
+        // Fallback signed URL
+        $statementPdfSignedUrl = URL::temporarySignedRoute(
+            'customer.statement.public',
+            now()->addDays(60),
+            [
+                'customer' => $customer->id,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+            ]
+        );
+
+        return view('customers.show', compact(
+            'customer',
+            'ledgerEntries',
+            'paymentMethods',
+            'openingBalance',
+            'finalRunningBalance',
+            'totalDebit',
+            'totalCredit',
+            'startDate',
+            'endDate',
+            'statementShortUrl',
+            'statementPdfSignedUrl',
+            'statementData'
+        ));
+    }
+
+    public function getCustomerStatementData(Customer $customer, ?string $startDate = null, ?string $endDate = null)
+    {
         $arAcc = ChartOfAccount::where('name', 'Accounts Receivable')->first();
-        $advAcc = ChartOfAccount::where('name', 'Customer Advance')->first();
         $arId = $arAcc ? $arAcc->id : 0;
-        $advId = $advAcc ? $advAcc->id : 0;
         
         $journals = Journal::with(['entries.account', 'reference'])
             ->where(function($q) use ($customer) {
@@ -224,87 +278,91 @@ class CustomerController extends Controller
             })
             ->orderBy('date', 'asc')->orderBy('id', 'asc')
             ->get();
-            
-        $salePayments = \App\Models\SalePayment::whereIn('sale_id', $customer->sales()->pluck('id'))->get();
 
-        $ledgerEntries = collect();
-        $runningBalance = 0;
-        $totalDebit = 0;
-        $totalCredit = 0;
+        // Filter out any journals referencing deleted sale invoices
+        $journals = $journals->filter(function($j) {
+            if (preg_match('/INV-[0-9\-]+/', $j->notes, $matches)) {
+                $inv = $matches[0];
+                return Sale::where('invoice_no', $inv)->exists();
+            }
+            return true;
+        });
+
+        $rawEntries = collect();
 
         foreach ($journals as $journal) {
             $debit = 0;
             $credit = 0;
+            $journalDate = $journal->date ? \Carbon\Carbon::parse($journal->date)->format('Y-m-d') : date('Y-m-d');
 
             if ($journal->reference_type == Sale::class) {
                 $sale = $journal->reference;
-                
-                // Sale (Debit)
-                if ($sale->total >= 0) {
-                    $runningBalance += $sale->total;
-                    $totalDebit += $sale->total;
-                    $ledgerEntries->push((object)[
-                        'id' => $journal->id . '_sale',
-                        'journal' => $journal,
-                        'debit' => $sale->total,
-                        'credit' => 0,
-                        'running_balance' => $runningBalance,
-                        'payment_method' => null,
-                    ]);
+                if ($sale) {
+                    if ($sale->total >= 0) {
+                        $rawEntries->push((object)[
+                            'id' => $journal->id . '_sale',
+                            'journal' => $journal,
+                            'date' => $journalDate,
+                            'ref_no' => $sale->invoice_no ?: $journal->journal_no,
+                            'notes' => 'Sale: ' . ($sale->invoice_no ?: $journal->notes),
+                            'debit' => (float)$sale->total,
+                            'credit' => 0,
+                            'payment_method' => null,
+                            'sort_order' => 1,
+                        ]);
+                    }
+
+                    // Fallback for initial POS payment without separate journal
+                    $initialPayments = \App\Models\SalePayment::where('sale_id', $sale->id)
+                        ->where(function($q) {
+                            $q->whereNull('reference')
+                              ->orWhereIn('reference', ['POS Payment', 'Wallet Payment']);
+                        })
+                        ->get();
+                    $initialPaymentAmount = (float)$initialPayments->sum('amount');
+
+                    $hasJournal = $journals->contains(function($j) use ($sale) {
+                        return str_contains($j->notes, 'Payment for POS Sale ' . $sale->invoice_no);
+                    });
+
+                    if ($initialPaymentAmount > 0 && !$hasJournal) {
+                        $paymentJournal = clone $journal;
+                        $paymentJournal->notes = 'Payment for ' . $sale->invoice_no;
+                        
+                        $initialPaymentMethods = $initialPayments->map(function($p) {
+                            if (is_numeric($p->method)) {
+                                $coa = \App\Models\ChartOfAccount::find($p->method);
+                                return $coa ? $coa->name : $p->method;
+                            }
+                            return $p->method;
+                        })->filter()->unique()->implode(', ');
+
+                        $rawEntries->push((object)[
+                            'id' => $journal->id . '_pay',
+                            'journal' => $paymentJournal,
+                            'date' => $journalDate,
+                            'ref_no' => 'PAY-' . $sale->invoice_no,
+                            'notes' => 'Payment for ' . $sale->invoice_no,
+                            'debit' => 0,
+                            'credit' => $initialPaymentAmount,
+                            'payment_method' => $initialPaymentMethods ?: 'Cash',
+                            'sort_order' => 2,
+                        ]);
+                    }
                 }
-
-                // Initial POS Payment (Credit) - fallback for old sales without journals
-                $initialPayments = \App\Models\SalePayment::where('sale_id', $sale->id)
-                    ->where(function($q) {
-                        $q->whereNull('reference')
-                          ->orWhereIn('reference', ['POS Payment', 'Wallet Payment']);
-                    })
-                    ->get();
-                $initialPaymentAmount = $initialPayments->sum('amount');
-
-                $hasJournal = $journals->contains(function($j) use ($sale) {
-                    return str_contains($j->notes, 'Payment for POS Sale ' . $sale->invoice_no);
-                });
-
-                if ($initialPaymentAmount > 0 && !$hasJournal) {
-                    $runningBalance -= $initialPaymentAmount;
-                    $totalCredit += $initialPaymentAmount;
-                    $paymentJournal = clone $journal;
-                    $paymentJournal->notes = 'Payment for ' . $sale->invoice_no;
-                    
-                    $initialPaymentMethods = $initialPayments->map(function($p) {
-                        if (is_numeric($p->method)) {
-                            $coa = \App\Models\ChartOfAccount::find($p->method);
-                            return $coa ? $coa->name : $p->method;
-                        }
-                        return $p->method;
-                    })->filter()->unique()->implode(', ');
-                    
-                    $ledgerEntries->push((object)[
-                        'id' => $journal->id . '_pay',
-                        'journal' => $paymentJournal,
-                        'debit' => 0,
-                        'credit' => $initialPaymentAmount,
-                        'running_balance' => $runningBalance,
-                        'payment_method' => $initialPaymentMethods ?: 'Cash',
-                    ]);
-                }
-                
                 continue;
             } else {
                 if ($journal->notes == 'Opening Balance') {
-                    $debit = $customer->opening_balance;
+                    $debit = (float)$customer->opening_balance;
                 } else {
-                    $credit = $journal->entries->where('account_id', $arId)->where('type', 'credit')->sum('amount');
-                    $debit = $journal->entries->where('account_id', $arId)->where('type', 'debit')->sum('amount');
+                    $credit = (float)$journal->entries->where('account_id', $arId)->where('type', 'credit')->sum('amount');
+                    $debit = (float)$journal->entries->where('account_id', $arId)->where('type', 'debit')->sum('amount');
                 }
             }
 
             $internalTransferAmount = 0;
-            // Net out debit and credit so we only show the net change on the running balance
             if ($debit > 0 && $credit > 0) {
                 $internalTransferAmount = min($debit, $credit);
-                
                 if ($debit > $credit) {
                     $debit = $debit - $credit;
                     $credit = 0;
@@ -317,18 +375,15 @@ class CustomerController extends Controller
                 }
             }
 
-            // If it was a pure internal transfer (0 net change), we still want to show it in the ledger so it's not confusingly hidden!
             if ($debit == 0 && $credit == 0 && $internalTransferAmount == 0 && $journal->notes != 'Opening Balance') {
                 continue;
             }
 
-            // Append the wallet usage to the notes so the user knows exactly what happened!
+            $notes = $journal->notes;
             if ($internalTransferAmount > 0) {
-                $journal = clone $journal;
-                $journal->notes .= " (Wallet Used: ৳" . number_format($internalTransferAmount, 0) . ")";
+                $notes .= " (Wallet Used: ৳" . number_format($internalTransferAmount, 0) . ")";
             }
 
-            // Identify Payment Method if entry is a payment / credit
             $paymentMethod = null;
             if ($credit > 0 || $journal->reference_type == \App\Models\SalePayment::class || ($journal->reference_type == Customer::class && $journal->notes != 'Opening Balance')) {
                 $paymentAccNames = $journal->entries
@@ -339,10 +394,7 @@ class CustomerController extends Controller
                     ->map(function($entry) {
                         return $entry->account ? $entry->account->name : null;
                     })
-                    ->filter()
-                    ->unique()
-                    ->values()
-                    ->all();
+                    ->filter()->unique()->values()->all();
 
                 if (!empty($paymentAccNames)) {
                     $paymentMethod = implode(', ', $paymentAccNames);
@@ -359,43 +411,159 @@ class CustomerController extends Controller
                 }
             }
 
-            $runningBalance += $debit;
-            $runningBalance -= $credit;
-            
-            $totalDebit += $debit;
-            $totalCredit += $credit;
+            $refNo = $journal->journal_no;
+            if ($journal->reference_type == \App\Models\SalePayment::class && $journal->reference) {
+                $refNo = $journal->reference->reference ?: $journal->journal_no;
+            }
 
-            $ledgerEntries->push((object)[
-                'id' => $journal->id,
+            $rawEntries->push((object)[
+                'id' => (string)$journal->id,
                 'journal' => $journal,
+                'date' => $journalDate,
+                'ref_no' => $refNo,
+                'notes' => $notes,
                 'debit' => $debit,
                 'credit' => $credit,
-                'running_balance' => $runningBalance,
                 'payment_method' => $paymentMethod,
+                'sort_order' => 3,
             ]);
         }
 
-        // The final running balance might differ from DB if older journals were deleted.
-        // But we show the running balance of the actual remaining statements.
-        $finalRunningBalance = $runningBalance;
-
-        $ledgerEntries = $ledgerEntries->sortByDesc(function($entry) {
+        // Sort all entries strictly chronologically
+        $sortedEntries = $rawEntries->sortBy(function($entry) {
             $parts = explode('_', $entry->id);
             $journalId = str_pad($parts[0], 10, '0', STR_PAD_LEFT);
-            $subSeq = isset($parts[1]) ? $parts[1] : '0';
-            
-            $seqMap = [
-                'sale' => '1',
-                'pay' => '2',
-            ];
-            $seq = $seqMap[$subSeq] ?? '0';
-
-            return $entry->journal->date . '_' . $journalId . '_' . $seq;
+            return $entry->date . '_' . $journalId . '_' . ($entry->sort_order ?? 0);
         })->values();
 
-        $paymentMethods = ChartOfAccount::where('is_payment_method', true)->get();
+        $openingBalance = 0;
+        $periodEntries = collect();
+        $periodDebit = 0;
+        $periodCredit = 0;
+        $allTimeDebit = 0;
+        $allTimeCredit = 0;
+        $runningBalance = 0;
 
-        return view('customers.show', compact('customer', 'ledgerEntries', 'paymentMethods', 'finalRunningBalance', 'totalDebit', 'totalCredit'));
+        foreach ($sortedEntries as $entry) {
+            $allTimeDebit += $entry->debit;
+            $allTimeCredit += $entry->credit;
+
+            if (!empty($startDate) && $entry->date < $startDate) {
+                $openingBalance += ($entry->debit - $entry->credit);
+                $runningBalance = $openingBalance;
+            } else if ((empty($startDate) || $entry->date >= $startDate) && (empty($endDate) || $entry->date <= $endDate)) {
+                $runningBalance += ($entry->debit - $entry->credit);
+                $entryClone = clone $entry;
+                $entryClone->running_balance = $runningBalance;
+                $periodEntries->push($entryClone);
+                $periodDebit += $entry->debit;
+                $periodCredit += $entry->credit;
+            }
+        }
+
+        $closingBalance = $openingBalance + $periodDebit - $periodCredit;
+
+        return [
+            'customer' => $customer,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'opening_balance' => $openingBalance,
+            'entries' => $periodEntries,
+            'period_debit' => $periodDebit,
+            'period_credit' => $periodCredit,
+            'closing_balance' => $closingBalance,
+            'all_time_debit' => $allTimeDebit,
+            'all_time_credit' => $allTimeCredit,
+            'final_running_balance' => $allTimeDebit - $allTimeCredit,
+        ];
+    }
+
+    public function statementPdf(Customer $customer, Request $request)
+    {
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+
+        $data = $this->getCustomerStatementData($customer, $startDate, $endDate);
+
+        $logoPath = public_path('logo.webp');
+        $data['logoBase64'] = file_exists($logoPath) ? 'data:image/webp;base64,' . base64_encode(file_get_contents($logoPath)) : '';
+
+        $pdf = Pdf::loadView('customers.statement-pdf', $data);
+        $pdf->setPaper('a4', 'portrait');
+
+        $periodStr = '';
+        if ($startDate && $endDate) {
+            $periodStr = '_' . $startDate . '_to_' . $endDate;
+        } elseif ($startDate) {
+            $periodStr = '_from_' . $startDate;
+        } elseif ($endDate) {
+            $periodStr = '_to_' . $endDate;
+        }
+
+        $filename = 'Statement_' . Str::slug($customer->name) . $periodStr . '.pdf';
+        return $pdf->stream($filename);
+    }
+
+    public function publicStatementPdf(Customer $customer, Request $request)
+    {
+        if (!$request->hasValidSignature() && !auth()->check()) {
+            abort(403, 'Invalid or expired statement download link.');
+        }
+
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+
+        $data = $this->getCustomerStatementData($customer, $startDate, $endDate);
+
+        $logoPath = public_path('logo.webp');
+        $data['logoBase64'] = file_exists($logoPath) ? 'data:image/webp;base64,' . base64_encode(file_get_contents($logoPath)) : '';
+
+        $pdf = Pdf::loadView('customers.statement-pdf', $data);
+        $pdf->setPaper('a4', 'portrait');
+
+        $periodStr = '';
+        if ($startDate && $endDate) {
+            $periodStr = '_' . $startDate . '_to_' . $endDate;
+        } elseif ($startDate) {
+            $periodStr = '_from_' . $startDate;
+        } elseif ($endDate) {
+            $periodStr = '_to_' . $endDate;
+        }
+
+        $filename = 'Statement_' . Str::slug($customer->name) . $periodStr . '.pdf';
+        return $pdf->stream($filename);
+    }
+
+    public function statementShortUrl(string $token)
+    {
+        $stmtToken = StatementToken::with('customer')->where('token', $token)->first();
+
+        if (!$stmtToken || $stmtToken->isExpired() || !$stmtToken->customer) {
+            abort(404, 'This statement link has expired or is invalid. Please contact Radhikas Trade International accounts for an updated statement.');
+        }
+
+        $stmtToken->increment('access_count');
+        $stmtToken->update(['last_accessed_at' => now()]);
+
+        $data = $this->getCustomerStatementData($stmtToken->customer, $stmtToken->start_date, $stmtToken->end_date);
+
+        $logoPath = public_path('logo.webp');
+        $data['logoBase64'] = file_exists($logoPath) ? 'data:image/webp;base64,' . base64_encode(file_get_contents($logoPath)) : '';
+
+        $pdf = Pdf::loadView('customers.statement-pdf', $data);
+        $pdf->setPaper('a4', 'portrait');
+
+        $periodStr = '';
+        if ($stmtToken->start_date && $stmtToken->end_date) {
+            $periodStr = '_' . $stmtToken->start_date . '_to_' . $stmtToken->end_date;
+        } elseif ($stmtToken->start_date) {
+            $periodStr = '_from_' . $stmtToken->start_date;
+        } elseif ($stmtToken->end_date) {
+            $periodStr = '_to_' . $stmtToken->end_date;
+        }
+
+        $filename = 'Statement_' . Str::slug($stmtToken->customer->name) . $periodStr . '.pdf';
+        return $pdf->stream($filename);
     }
 
     public function edit(Customer $customer)
@@ -474,76 +642,7 @@ class CustomerController extends Controller
 
     public function recalculateBalances(Customer $customer)
     {
-        $customer->load(['sales']);
-
-        $arAcc = ChartOfAccount::where('name', 'Accounts Receivable')->first();
-        $advAcc = ChartOfAccount::where('name', 'Customer Advance')->first();
-        $arId = $arAcc ? $arAcc->id : 0;
-        $advId = $advAcc ? $advAcc->id : 0;
-        
-        $journals = Journal::with(['entries', 'reference'])
-            ->where(function($q) use ($customer) {
-                $q->where('reference_type', Customer::class)->where('reference_id', $customer->id);
-            })->orWhere(function($q) use ($customer) {
-                $q->where('reference_type', Sale::class)->whereIn('reference_id', $customer->sales()->pluck('id'));
-            })->orWhere(function($q) use ($customer) {
-                $q->where('reference_type', \App\Models\SalePayment::class)->whereIn('reference_id', \App\Models\SalePayment::whereIn('sale_id', $customer->sales()->pluck('id'))->pluck('id'));
-            })
-            ->get();
-
-        $calculatedDue = $customer->opening_balance + $customer->sales()->sum('total');
-        $advCredit = 0;
-        $advDebit = 0;
-
-        foreach ($journals as $journal) {
-            if ($journal->notes != 'Opening Balance') {
-                $advCredit += $journal->entries->where('account_id', $advId)->where('type', 'credit')->sum('amount');
-                $advDebit += $journal->entries->where('account_id', $advId)->where('type', 'debit')->sum('amount');
-            }
-            
-            // Subtract payments recorded via non-sale journals (like Customer or SalePayment)
-            if ($journal->reference_type != Sale::class && $journal->notes != 'Opening Balance') {
-                $credit = $journal->entries->where('account_id', $arId)->where('type', 'credit')->sum('amount');
-                $debit = $journal->entries->where('account_id', $arId)->where('type', 'debit')->sum('amount');
-                
-                if ($debit > 0 && $credit > 0) {
-                    if ($debit > $credit) { $debit = $debit - $credit; $credit = 0; }
-                    else if ($credit > $debit) { $credit = $credit - $debit; $debit = 0; }
-                    else { $debit = 0; $credit = 0; }
-                }
-
-                $calculatedDue -= $credit;
-                $calculatedDue += $debit;
-            }
-        }
-
-        // Subtract fallback POS payments for sales
-        $posPayments = 0;
-        foreach ($customer->sales as $sale) {
-            $initialPaymentAmount = \App\Models\SalePayment::where('sale_id', $sale->id)
-                ->where(function($q) {
-                    $q->whereNull('reference')
-                      ->orWhereIn('reference', ['POS Payment', 'Wallet Payment']);
-                })
-                ->sum('amount');
-                
-            $hasJournal = $journals->contains(function($j) use ($sale) {
-                return str_contains($j->notes, 'Payment for POS Sale ' . $sale->invoice_no);
-            });
-            
-            if ($initialPaymentAmount > 0 && !$hasJournal) {
-                $posPayments += $initialPaymentAmount;
-            }
-        }
-            
-        $calculatedDue -= $posPayments;
-
-        $calculatedWallet = $advCredit - $advDebit;
-
-        $customer->total_due = $calculatedDue;
-        $customer->wallet_balance = $calculatedWallet;
-        $customer->save();
-
+        $customer->recalculateBalances();
         return redirect()->back()->with('success', 'Customer balances recalculated successfully!');
     }
 

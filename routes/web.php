@@ -15,6 +15,14 @@ use App\Http\Controllers\ReportController;
 
 require __DIR__ . '/auth.php';
 
+// Public Signed Route for Customer Statement PDF (Accessible via WhatsApp link)
+Route::get('customer-statement/{customer}/pdf', [CustomerController::class, 'publicStatementPdf'])
+    ->name('customer.statement.public');
+
+// Short & Secure URL for Statement PDF (e.g. /s/XyZ12345)
+Route::get('s/{token}', [CustomerController::class, 'statementShortUrl'])
+    ->name('statement.short');
+
 Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
 
     // ─── Dashboard ──────────────────────────────────────────────────────────────
@@ -132,6 +140,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     Route::group(['middleware' => ['permission:view customers']], function () {
         Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
         Route::get('customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
+        Route::get('customers/{customer}/statement/pdf', [CustomerController::class, 'statementPdf'])->name('customers.statement.pdf');
     });
     Route::group(['middleware' => ['permission:edit customers']], function () {
         Route::get('customers/{customer}/edit', [CustomerController::class, 'edit'])->name('customers.edit');

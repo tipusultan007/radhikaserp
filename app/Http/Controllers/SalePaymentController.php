@@ -79,6 +79,8 @@ class SalePaymentController extends Controller
             JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $newAmount]);
             JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'credit', 'amount' => $newAmount]);
 
+            $payment->update(['journal_id' => $journal->id]);
+
             DB::commit();
             return back()->with('success', 'Payment added successfully.');
         } catch (\Exception $e) {

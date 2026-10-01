@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 
-#[Fillable(['sale_id', 'amount', 'method', 'date', 'reference'])]
+#[Fillable(['sale_id', 'amount', 'method', 'date', 'reference', 'journal_id'])]
 class SalePayment extends Model
 {
     use HasFactory;
@@ -19,5 +19,10 @@ class SalePayment extends Model
     public function sale()
     {
         return $this->belongsTo(Sale::class);
+    }
+
+    public function journal()
+    {
+        return $this->belongsTo(Journal::class);
     }
 }

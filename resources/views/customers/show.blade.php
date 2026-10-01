@@ -33,8 +33,32 @@
                     <p><strong>Opening Balance:</strong> ৳{{ number_format($customer->opening_balance, 0) }}</p>
                     <p><strong>Wallet Balance:</strong> <span class="text-success fw-bold">৳{{ number_format($customer->wallet_balance, 0) }}</span></p>
                     <p><strong>Total Due (Current):</strong> <span class="text-danger fw-bold fs-4">৳{{ number_format($customer->total_due, 0) }}</span></p>
-                    <div class="mt-3 d-flex gap-2">
-                        <a href="{{ route('customers.edit', $customer->id) }}" class="btn btn-warning btn-sm">Edit Customer</a>
+                    <div class="mt-3 d-flex flex-wrap gap-2">
+                        <a href="{{ route('customers.edit', $customer->id) }}" class="btn btn-warning btn-sm"><i class="ri-edit-box-line me-1"></i> Edit Customer</a>
+                        <button type="button" class="btn btn-success btn-sm btn-whatsapp-share" style="background-color: #25D366; border-color: #25D366;"
+                                data-customer="{{ json_encode([
+                                    'id' => $customer->id,
+                                    'name' => $customer->name,
+                                    'company' => $customer->company,
+                                    'phone' => $customer->phone,
+                                    'email' => $customer->email,
+                                    'district' => $customer->district,
+                                    'address' => $customer->address,
+                                    'customer_type' => $customer->customer_type,
+                                    'credit_limit' => (float)$customer->credit_limit,
+                                    'total_due' => (float)$finalRunningBalance,
+                                    'wallet_balance' => (float)$customer->wallet_balance,
+                                    'opening_balance' => (float)$openingBalance,
+                                    'period_debit' => (float)$totalDebit,
+                                    'period_credit' => (float)$totalCredit,
+                                    'closing_balance' => (float)$finalRunningBalance,
+                                    'start_date' => $startDate ?? '',
+                                    'end_date' => $endDate ?? '',
+                                    'statement_pdf_url' => $statementShortUrl ?? $statementPdfSignedUrl,
+                                    'show_url' => route('customers.show', $customer->id)
+                                ]) }}">
+                            <i class="ri-whatsapp-line me-1"></i> Share via WhatsApp
+                        </button>
                         <form action="{{ route('customers.recalculate', $customer->id) }}" method="POST" class="d-inline">
                             @csrf
                             <button type="submit" class="btn btn-info btn-sm" onclick="return confirm('Are you sure you want to recalculate balances? This will sync the wallet and due balances from the ledger.')">
@@ -118,20 +142,104 @@
                     <div class="tab-content">
                         <!-- Ledger Tab -->
                         <div class="tab-pane show active" id="ledger-tab">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h4 class="header-title mb-0">Account Ledger</h4>
-                                <div class="text-end">
-                                    <span class="badge bg-danger-light text-danger fs-14 me-2">Total Debit: ৳{{ number_format($totalDebit, 0) }}</span>
-                                    <span class="badge bg-success-light text-success fs-14 me-2">Total Credit: ৳{{ number_format($totalCredit, 0) }}</span>
-                                    <span class="badge bg-primary-light text-primary fs-14">Calculated Due: ৳{{ number_format($totalDebit - $totalCredit, 0) }}</span>
+                            {{-- ── Date Range Filter & Actions Bar ─────────────────────── --}}
+                            <div class="card border border-light-subtle shadow-none mb-3 bg-light-subtle">
+                                <div class="card-body p-3">
+                                    <form method="GET" action="{{ route('customers.show', $customer->id) }}">
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-md-3 col-sm-6">
+                                                <label class="form-label small fw-semibold text-muted mb-1">
+                                                    <i class="ri-calendar-event-line me-1"></i>Start Date
+                                                </label>
+                                                <input type="date" name="start_date" class="form-control form-control-sm" value="{{ $startDate ?? '' }}">
+                                            </div>
+                                            <div class="col-md-3 col-sm-6">
+                                                <label class="form-label small fw-semibold text-muted mb-1">
+                                                    <i class="ri-calendar-check-line me-1"></i>End Date
+                                                </label>
+                                                <input type="date" name="end_date" class="form-control form-control-sm" value="{{ $endDate ?? '' }}">
+                                            </div>
+                                            <div class="col-md-6 col-sm-12 d-flex flex-wrap gap-2 justify-content-md-end">
+                                                <button type="submit" class="btn btn-primary btn-sm">
+                                                    <i class="ri-filter-3-line me-1"></i> Filter
+                                                </button>
+                                                @if(!empty($startDate) || !empty($endDate))
+                                                    <a href="{{ route('customers.show', $customer->id) }}" class="btn btn-outline-secondary btn-sm" title="Reset date filter">
+                                                        <i class="ri-refresh-line"></i>
+                                                    </a>
+                                                @endif
+                                                <a href="{{ route('customers.statement.pdf', ['customer' => $customer->id, 'start_date' => $startDate, 'end_date' => $endDate]) }}" target="_blank" class="btn btn-danger btn-sm" title="View or Download PDF Statement">
+                                                    <i class="ri-file-pdf-line me-1"></i> Download PDF
+                                                </a>
+                                                <button type="button" class="btn btn-success btn-sm btn-whatsapp-statement" style="background-color: #25D366; border-color: #25D366;"
+                                                        data-customer="{{ json_encode([
+                                                            'id' => $customer->id,
+                                                            'name' => $customer->name,
+                                                            'company' => $customer->company,
+                                                            'phone' => $customer->phone,
+                                                            'email' => $customer->email,
+                                                            'district' => $customer->district,
+                                                            'address' => $customer->address,
+                                                            'customer_type' => $customer->customer_type,
+                                                            'credit_limit' => (float)$customer->credit_limit,
+                                                            'total_due' => (float)$finalRunningBalance,
+                                                            'wallet_balance' => (float)$customer->wallet_balance,
+                                                            'opening_balance' => (float)$openingBalance,
+                                                            'period_debit' => (float)$totalDebit,
+                                                            'period_credit' => (float)$totalCredit,
+                                                            'closing_balance' => (float)$finalRunningBalance,
+                                                            'start_date' => $startDate ? \Carbon\Carbon::parse($startDate)->format('d M, Y') : '',
+                                                            'end_date' => $endDate ? \Carbon\Carbon::parse($endDate)->format('d M, Y') : '',
+                                                            'statement_pdf_url' => $statementShortUrl ?? $statementPdfSignedUrl,
+                                                            'show_url' => route('customers.show', $customer->id)
+                                                        ]) }}"
+                                                        title="Share Statement via WhatsApp">
+                                                    <i class="ri-whatsapp-line me-1"></i> Share via WhatsApp
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </form>
                                 </div>
                             </div>
+
+                            {{-- ── Statement Snapshot ──────────────────────────────────── --}}
+                            <div class="row g-2 mb-3">
+                                <div class="col-sm-3 col-6">
+                                    <div class="p-2 border rounded bg-light text-center">
+                                        <div class="text-muted font-11 text-uppercase fw-semibold">Opening Balance</div>
+                                        <div class="fw-bold fs-5 text-dark">৳{{ number_format($openingBalance, 0) }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-sm-3 col-6">
+                                    <div class="p-2 border rounded bg-light text-center">
+                                        <div class="text-muted font-11 text-uppercase fw-semibold">Purchases (+)</div>
+                                        <div class="fw-bold fs-5 text-danger">৳{{ number_format($totalDebit, 0) }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-sm-3 col-6">
+                                    <div class="p-2 border rounded bg-light text-center">
+                                        <div class="text-muted font-11 text-uppercase fw-semibold">Payments (-)</div>
+                                        <div class="fw-bold fs-5 text-success">৳{{ number_format($totalCredit, 0) }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-sm-3 col-6">
+                                    <div class="p-2 border rounded {{ $finalRunningBalance > 0 ? 'bg-danger-subtle border-danger' : 'bg-success-subtle border-success' }} text-center">
+                                        <div class="font-11 text-uppercase fw-semibold {{ $finalRunningBalance > 0 ? 'text-danger' : 'text-success' }}">
+                                            Closing Due
+                                        </div>
+                                        <div class="fw-bold fs-5 {{ $finalRunningBalance > 0 ? 'text-danger' : 'text-success' }}">
+                                            ৳{{ number_format($finalRunningBalance, 0) }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="table-responsive">
                                 <table class="table table-bordered table-sm align-middle">
                                     <thead class="table-light">
                                         <tr>
                                             <th>Date</th>
-                                            <th>Journal Ref</th>
+                                            <th>Ref / Inv</th>
                                             <th>Notes</th>
                                             <th>Payment Method</th>
                                             <th class="text-end text-danger">Debit</th>
@@ -141,17 +249,30 @@
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        @if(!empty($startDate) || $openingBalance != 0)
+                                            <tr class="table-light">
+                                                <td><span class="text-muted">{{ !empty($startDate) ? \Carbon\Carbon::parse($startDate)->format('d M, Y') : '—' }}</span></td>
+                                                <td><span class="badge bg-secondary font-11">OPENING</span></td>
+                                                <td><em>Opening Balance as of {{ !empty($startDate) ? \Carbon\Carbon::parse($startDate)->format('d M, Y') : 'Start' }}</em></td>
+                                                <td class="text-muted">—</td>
+                                                <td class="text-end text-danger">{{ $openingBalance > 0 ? '৳' . number_format($openingBalance, 0) : '-' }}</td>
+                                                <td class="text-end text-success">{{ $openingBalance < 0 ? '৳' . number_format(abs($openingBalance), 0) : '-' }}</td>
+                                                <td class="text-end fw-bold">৳{{ number_format($openingBalance, 0) }}</td>
+                                                <td></td>
+                                            </tr>
+                                        @endif
+
                                         @forelse($ledgerEntries as $entry)
                                             <tr>
                                                 <td>{{ \Carbon\Carbon::parse($entry->journal->date)->format('d M, Y') }}</td>
                                                 <td>
                                                     @if($entry->journal->reference_type == 'App\Models\Sale')
-                                                        <a href="{{ route('sales.show', $entry->journal->reference_id) }}">{{ $entry->journal->journal_no }}</a>
+                                                        <a href="{{ route('sales.show', $entry->journal->reference_id) }}">{{ $entry->ref_no ?? $entry->journal->journal_no }}</a>
                                                     @else
-                                                        {{ $entry->journal->journal_no }}
+                                                        {{ $entry->ref_no ?? $entry->journal->journal_no }}
                                                     @endif
                                                 </td>
-                                                <td>{{ $entry->journal->notes }}</td>
+                                                <td>{{ $entry->notes ?? $entry->journal->notes }}</td>
                                                 <td>
                                                     @if(!empty($entry->payment_method))
                                                         <span class="badge bg-soft-info text-info font-12"><i class="ri-bank-card-line me-1"></i>{{ $entry->payment_method }}</span>
@@ -183,15 +304,15 @@
                                                 </td>
                                             </tr>
                                         @empty
-                                            <tr><td colspan="8" class="text-center">No ledger entries found.</td></tr>
+                                            <tr><td colspan="8" class="text-center py-3 text-muted">No ledger entries found for the selected period.</td></tr>
                                         @endforelse
                                     </tbody>
                                     <tfoot>
                                         <tr class="table-light">
-                                            <th colspan="4" class="text-end">Total:</th>
+                                            <th colspan="4" class="text-end">Period Totals:</th>
                                             <th class="text-end text-danger fs-5">৳ {{ number_format($totalDebit, 0) }}</th>
                                             <th class="text-end text-success fs-5">৳ {{ number_format($totalCredit, 0) }}</th>
-                                            <th class="text-end text-danger fs-4">৳ {{ number_format($finalRunningBalance, 0) }}</th>
+                                            <th class="text-end {{ $finalRunningBalance > 0 ? 'text-danger' : 'text-success' }} fs-4">৳ {{ number_format($finalRunningBalance, 0) }}</th>
                                             <th></th>
                                         </tr>
                                     </tfoot>
@@ -325,7 +446,8 @@
                 </div>
             </div>
         </div>
-    </div>
+    {{-- WhatsApp Share Modal Partial --}}
+    @include('customers.whatsapp-modal')
 </div>
 
 @endsection

@@ -1,0 +1,659 @@
+/**
+ * Radhikas Dealers Directory - Elementor Widget Stylesheet
+ * Ultra-Modern, Responsive, Premium Card Aesthetics
+ */
+
+:root {
+    --rdw-primary: #0284c7;
+    --rdw-primary-hover: #0369a1;
+    --rdw-special-gold: #d97706;
+    --rdw-special-bg: #fffbeb;
+    --rdw-special-border: #fcd34d;
+    --rdw-regular-green: #059669;
+    --rdw-regular-bg: #ecfdf5;
+    --rdw-regular-border: #a7f3d0;
+    --rdw-text-main: #0f172a;
+    --rdw-text-muted: #64748b;
+    --rdw-border-color: #e2e8f0;
+    --rdw-card-bg: #ffffff;
+    --rdw-radius: 16px;
+    --rdw-transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.rdw-container {
+    width: 100%;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    color: var(--rdw-text-main);
+    box-sizing: border-box;
+}
+
+.rdw-container *,
+.rdw-container *::before,
+.rdw-container *::after {
+    box-sizing: border-box;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   1. Filter & Search Controls Header
+   ══════════════════════════════════════════════════════════════════════════ */
+.rdw-controls-wrapper {
+    margin-bottom: 28px;
+}
+
+.rdw-filters-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: #f8fafc;
+    padding: 14px 18px;
+    border-radius: 14px;
+    border: 1px solid var(--rdw-border-color);
+}
+
+/* Tabs */
+.rdw-type-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #e2e8f0;
+    padding: 4px;
+    border-radius: 10px;
+}
+
+.rdw-tab-btn {
+    border: none;
+    background: transparent;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    transition: var(--rdw-transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1;
+}
+
+.rdw-tab-btn:hover {
+    color: var(--rdw-text-main);
+}
+
+.rdw-tab-btn.active {
+    background: #ffffff;
+    color: var(--rdw-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.rdw-tab-count {
+    background: rgba(0, 0, 0, 0.06);
+    padding: 2px 7px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.rdw-tab-btn.active .rdw-tab-count {
+    background: #e0f2fe;
+    color: var(--rdw-primary);
+}
+
+.rdw-star-icon {
+    color: #d97706;
+    font-size: 14px;
+}
+
+/* Search & District Dropdown */
+.rdw-search-and-select {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    flex-grow: 1;
+    justify-content: flex-end;
+}
+
+.rdw-district-select-wrap {
+    position: relative;
+    min-width: 170px;
+}
+
+.rdw-icon-map {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: #94a3b8;
+    pointer-events: none;
+}
+
+.rdw-district-select {
+    width: 100%;
+    padding: 9px 32px 9px 36px;
+    border: 1px solid var(--rdw-border-color);
+    background: #ffffff url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>') no-repeat right 12px center;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #334155;
+    cursor: pointer;
+    appearance: none;
+    transition: var(--rdw-transition);
+}
+
+.rdw-district-select:focus {
+    outline: none;
+    border-color: var(--rdw-primary);
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+}
+
+.rdw-search-box-wrap {
+    position: relative;
+    min-width: 250px;
+    flex-grow: 1;
+    max-width: 380px;
+}
+
+.rdw-icon-search {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: #94a3b8;
+    pointer-events: none;
+}
+
+.rdw-search-input {
+    width: 100%;
+    padding: 9px 34px 9px 36px;
+    border: 1px solid var(--rdw-border-color);
+    background: #ffffff;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #1e293b;
+    transition: var(--rdw-transition);
+}
+
+.rdw-search-input:focus {
+    outline: none;
+    border-color: var(--rdw-primary);
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+}
+
+.rdw-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px;
+    display: none;
+}
+
+.rdw-search-clear:hover {
+    color: #475569;
+}
+
+/* Meta Bar */
+.rdw-meta-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 4px 0 4px;
+    font-size: 13px;
+    color: var(--rdw-text-muted);
+}
+
+.rdw-results-info {
+    font-weight: 500;
+}
+
+.rdw-loading-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--rdw-primary);
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.rdw-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(2, 132, 199, 0.2);
+    border-top-color: var(--rdw-primary);
+    border-radius: 50%;
+    animation: rdw-spin 0.6s linear infinite;
+    display: inline-block;
+}
+
+@keyframes rdw-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   2. Dealers Grid Layout
+   ══════════════════════════════════════════════════════════════════════════ */
+.rdw-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+    transition: opacity 0.2s ease;
+}
+
+.rdw-grid.rdw-updating {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   3. Dealer Card
+   ══════════════════════════════════════════════════════════════════════════ */
+.rdw-card {
+    background: var(--rdw-card-bg);
+    border: 1px solid var(--rdw-border-color);
+    border-radius: var(--rdw-radius);
+    padding: 24px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+    transition: var(--rdw-transition);
+}
+
+.rdw-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.09), 0 4px 8px -3px rgba(0, 0, 0, 0.04);
+    border-color: #cbd5e1;
+}
+
+/* Special Dealer Card Accent */
+.rdw-card.rdw-is-special {
+    border-color: rgba(217, 119, 6, 0.35);
+}
+
+.rdw-card.rdw-is-special::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #f59e0b, #d97706, #b45309);
+}
+
+/* Top Row: Badges & Category */
+.rdw-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.rdw-district-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #f1f5f9;
+    color: #475569;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.rdw-district-badge svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* Dealer Badges */
+.rdw-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 11px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.rdw-badge-special {
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    color: #92400e;
+    border: 1px solid #fde68a;
+    box-shadow: 0 1px 2px rgba(217, 119, 6, 0.1);
+}
+
+.rdw-badge-special .rdw-badge-icon {
+    color: #d97706;
+}
+
+.rdw-badge-dealer {
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.rdw-badge-dealer .rdw-badge-icon {
+    color: #059669;
+}
+
+/* Card Body */
+.rdw-card-body {
+    flex-grow: 1;
+    margin-bottom: 18px;
+}
+
+.rdw-company {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 6px 0;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+}
+
+.rdw-dealer-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #334155;
+    margin: 0 0 12px 0;
+}
+
+.rdw-dealer-name svg {
+    width: 14px;
+    height: 14px;
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+
+.rdw-address {
+    font-size: 13px;
+    color: #64748b;
+    line-height: 1.5;
+    margin: 0 0 12px 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Card Actions / Footer */
+.rdw-card-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--rdw-border-color);
+}
+
+.rdw-btn-call {
+    flex-grow: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    background: #0284c7;
+    color: #ffffff;
+    padding: 10px 14px;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: var(--rdw-transition);
+}
+
+.rdw-btn-call:hover {
+    background: #0369a1;
+    color: #ffffff;
+    box-shadow: 0 4px 10px rgba(2, 132, 199, 0.25);
+}
+
+.rdw-btn-call svg {
+    width: 15px;
+    height: 15px;
+}
+
+.rdw-btn-email {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #f1f5f9;
+    color: #475569;
+    padding: 10px 12px;
+    border-radius: 9px;
+    font-size: 13px;
+    text-decoration: none;
+    transition: var(--rdw-transition);
+}
+
+.rdw-btn-email:hover {
+    background: #e2e8f0;
+    color: var(--rdw-text-main);
+}
+
+.rdw-btn-email svg {
+    width: 15px;
+    height: 15px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   4. Skeleton Loading Shimmer
+   ══════════════════════════════════════════════════════════════════════════ */
+.rdw-card-skeleton {
+    pointer-events: none;
+    min-height: 220px;
+}
+
+.rdw-skel-line {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: rdw-shimmer 1.5s infinite;
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+
+@keyframes rdw-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.rdw-skel-badge { width: 40%; height: 20px; }
+.rdw-skel-title { width: 80%; height: 24px; margin-top: 10px; }
+.rdw-skel-sub { width: 60%; height: 16px; }
+.rdw-skel-text { width: 90%; height: 32px; }
+.rdw-skel-btn { width: 100%; height: 38px; margin-top: auto; margin-bottom: 0; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   5. Empty & Error States
+   ══════════════════════════════════════════════════════════════════════════ */
+.rdw-empty-state,
+.rdw-error-state {
+    text-align: center;
+    padding: 48px 24px;
+    background: #f8fafc;
+    border: 1px dashed var(--rdw-border-color);
+    border-radius: var(--rdw-radius);
+    max-width: 520px;
+    margin: 20px auto;
+}
+
+.rdw-empty-icon,
+.rdw-error-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px auto;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rdw-empty-icon svg {
+    width: 48px;
+    height: 48px;
+}
+
+.rdw-empty-title,
+.rdw-error-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 8px 0;
+}
+
+.rdw-empty-desc,
+.rdw-error-desc {
+    font-size: 14px;
+    color: #64748b;
+    margin: 0 0 20px 0;
+    line-height: 1.5;
+}
+
+.rdw-btn-reset-filters,
+.rdw-btn-retry {
+    background: var(--rdw-primary);
+    color: #ffffff;
+    border: none;
+    padding: 10px 22px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--rdw-transition);
+}
+
+.rdw-btn-reset-filters:hover,
+.rdw-btn-retry:hover {
+    background: var(--rdw-primary-hover);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   6. Modern Pagination Controls
+   ══════════════════════════════════════════════════════════════════════════ */
+.rdw-pagination-wrapper {
+    margin-top: 36px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.rdw-pagination {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    padding: 6px;
+    border-radius: 12px;
+    border: 1px solid var(--rdw-border-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.rdw-page-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    min-width: 38px;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--rdw-transition);
+}
+
+.rdw-page-btn:hover:not(:disabled) {
+    background: #f1f5f9;
+    color: var(--rdw-text-main);
+}
+
+.rdw-page-btn.active {
+    background: var(--rdw-primary);
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(2, 132, 199, 0.3);
+}
+
+.rdw-page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.rdw-page-ellipsis {
+    min-width: 32px;
+    text-align: center;
+    color: #94a3b8;
+    font-weight: 700;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   7. Responsive Breakpoints
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 991px) {
+    .rdw-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+    }
+    .rdw-search-and-select {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .rdw-district-select-wrap,
+    .rdw-search-box-wrap {
+        max-width: 100%;
+        flex-grow: 1;
+    }
+}
+
+@media (max-width: 640px) {
+    .rdw-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    .rdw-filters-row {
+        padding: 12px;
+    }
+    .rdw-type-tabs {
+        width: 100%;
+        overflow-x: auto;
+    }
+    .rdw-district-select-wrap,
+    .rdw-search-box-wrap {
+        width: 100%;
+        min-width: 100%;
+    }
+    .rdw-card {
+        padding: 18px;
+    }
+    .rdw-company {
+        font-size: 16px;
+    }
+}

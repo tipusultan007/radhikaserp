@@ -403,10 +403,24 @@ class SaleController extends Controller
 
             $warehouseId = $validated['warehouse_id'];
 
+            // Consolidate duplicate variant items if any
+            $consolidatedItems = [];
+            foreach ($validated['items'] as $item) {
+                $vid = $item['product_variant_id'];
+                if (!isset($consolidatedItems[$vid])) {
+                    $consolidatedItems[$vid] = [
+                        'product_variant_id' => $vid,
+                        'qty' => 0,
+                        'unit_price' => $item['unit_price'],
+                    ];
+                }
+                $consolidatedItems[$vid]['qty'] += (float)$item['qty'];
+            }
+
             // Calculate Totals and Weight
             $subtotal = 0;
             $grandTotalWeight = 0;
-            foreach ($validated['items'] as $item) {
+            foreach ($consolidatedItems as $item) {
                 $subtotal += $item['qty'] * $item['unit_price'];
                 $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
                 $unitQty = $variant ? $variant->getBaseQuantity() : 1;
@@ -506,7 +520,7 @@ class SaleController extends Controller
             $totalCogs = 0;
             $grandTotalWeight = 0;
 
-            foreach ($validated['items'] as $item) {
+            foreach ($consolidatedItems as $item) {
                 $variantId = $item['product_variant_id'];
                 $itemQty = $item['qty'];
                 $unitPrice = $item['unit_price'];
@@ -514,17 +528,15 @@ class SaleController extends Controller
                 
                 $variant = ProductVariant::find($variantId);
                 $unitQty = $variant ? $variant->getBaseQuantity() : 1;
-                
-                $grandTotalWeight += ($itemQty * $unitQty);
 
-                // Just save the item without inventory deduction initially
+                // Just save the item as single unified line item without batch splitting
                 SaleItem::create([
                     'sale_id' => $sale->id,
                     'product_variant_id' => $variantId,
                     'batch_id' => null,
                     'qty' => $itemQty,
                     'unit_price' => $unitPrice,
-                    'total_price' => $itemQty * $unitPrice,
+                    'total_price' => $lineTotal,
                     'total_weight' => $itemQty * $unitQty,
                 ]);
             }
@@ -612,6 +624,8 @@ class SaleController extends Controller
                     'type' => 'credit',
                     'amount' => $paidAmount + $walletUsed,
                 ]);
+
+                SalePayment::where('sale_id', $sale->id)->update(['journal_id' => $paymentJournal->id]);
             }
 
             if (!$isPromotional && $newAdvance > 0) {
@@ -662,7 +676,15 @@ class SaleController extends Controller
 
     public function show(Sale $sale)
     {
-        $sale->load(['items.productVariant.product', 'customer', 'warehouse']);
+        $sale->load([
+            'items.productVariant.product',
+            'customer',
+            'warehouse',
+            'payments' => function ($q) {
+                $q->orderBy('date', 'desc')->orderBy('id', 'desc');
+            },
+            'activities.user'
+        ]);
         $paymentMethods = \App\Models\ChartOfAccount::where('is_payment_method', true)->get();
         return view('sales.show', compact('sale', 'paymentMethods'));
     }
@@ -726,10 +748,24 @@ class SaleController extends Controller
 
             $warehouseId = $validated['warehouse_id'];
 
+            // Consolidate duplicate variant items if any
+            $consolidatedItems = [];
+            foreach ($validated['items'] as $item) {
+                $vid = $item['product_variant_id'];
+                if (!isset($consolidatedItems[$vid])) {
+                    $consolidatedItems[$vid] = [
+                        'product_variant_id' => $vid,
+                        'qty' => 0,
+                        'unit_price' => $item['unit_price'],
+                    ];
+                }
+                $consolidatedItems[$vid]['qty'] += (float)$item['qty'];
+            }
+
             // Calculate Totals and Weight
             $subtotal = 0;
             $grandTotalWeight = 0;
-            foreach ($validated['items'] as $item) {
+            foreach ($consolidatedItems as $item) {
                 $subtotal += $item['qty'] * $item['unit_price'];
                 $variant = \App\Models\ProductVariant::find($item['product_variant_id']);
                 $unitQty = $variant ? $variant->getBaseQuantity() : 1;
@@ -827,24 +863,25 @@ class SaleController extends Controller
             $totalCogs = 0;
             $grandTotalWeight = 0;
 
-            foreach ($validated['items'] as $item) {
+            foreach ($consolidatedItems as $item) {
                 $variantId = $item['product_variant_id'];
                 $itemQty = $item['qty'];
                 $unitPrice = $item['unit_price'];
+                $lineTotal = $itemQty * $unitPrice;
                 
                 $variant = ProductVariant::find($variantId);
                 $unitQty = $variant ? $variant->getBaseQuantity() : 1;
                 
                 $grandTotalWeight += ($itemQty * $unitQty);
 
-                // Just save the item without inventory deduction initially
+                // Just save the item as single unified line item without batch splitting
                 SaleItem::create([
                     'sale_id' => $sale->id,
                     'product_variant_id' => $variantId,
                     'batch_id' => null,
                     'qty' => $itemQty,
                     'unit_price' => $unitPrice,
-                    'total_price' => $itemQty * $unitPrice,
+                    'total_price' => $lineTotal,
                     'total_weight' => $itemQty * $unitQty,
                 ]);
             }
@@ -930,6 +967,8 @@ class SaleController extends Controller
                     'type' => 'credit',
                     'amount' => $paidAmount + $walletUsed,
                 ]);
+
+                SalePayment::where('sale_id', $sale->id)->update(['journal_id' => $paymentJournal->id]);
             }
             
             if (!$isPromotional && $newAdvance > 0) {
@@ -1077,8 +1116,12 @@ class SaleController extends Controller
     {
         try {
             DB::beginTransaction();
+            $customer = Customer::find($sale->customer_id);
             $this->reverseSale($sale);
             $sale->delete();
+            if ($customer) {
+                $customer->recalculateBalances();
+            }
             DB::commit();
             if (request()->expectsJson()) {
                 return response()->json(['success' => true, 'message' => 'Sale deleted and reversed successfully.']);
@@ -1143,45 +1186,71 @@ class SaleController extends Controller
             $txn->delete();
         }
 
-        // 3 & 5. Revert Customer Due, Wallet Balance, and Accounting Entries
-        $journal = Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->first();
-        
-        $customer = Customer::find($sale->customer_id);
-        if ($customer) {
-            $walletUsed = 0;
-            $newAdvance = 0;
-            $advAcc = ChartOfAccount::where('name', 'Customer Advance')->first();
-            
-            if ($advAcc && $journal) {
-                $walletUsed = JournalEntry::where('journal_id', $journal->id)->where('account_id', $advAcc->id)->where('type', 'debit')->sum('amount');
-                $newAdvance = JournalEntry::where('journal_id', $journal->id)->where('account_id', $advAcc->id)->where('type', 'credit')->sum('amount');
-            }
+        // 3. Find all related journals to delete
+        $journalIdsToDelete = collect();
 
-            $customer->wallet_balance = $customer->wallet_balance + $walletUsed - $newAdvance;
-            
-            if ($sale->due_amount > 0) {
-                $customer->total_due = max(0, $customer->total_due - $sale->due_amount);
+        // 3a. Sale Journal (by reference)
+        $saleJournals = Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->get();
+        foreach ($saleJournals as $sj) {
+            $journalIdsToDelete->push($sj->id);
+        }
+
+        // 3b. Payments for this sale
+        $salePayments = SalePayment::where('sale_id', $sale->id)->get();
+        $salePaymentIds = $salePayments->pluck('id')->toArray();
+
+        // 3c. Journals referencing SalePayment
+        if (!empty($salePaymentIds)) {
+            $spJournals = Journal::where('reference_type', SalePayment::class)->whereIn('reference_id', $salePaymentIds)->get();
+            foreach ($spJournals as $spj) {
+                $journalIdsToDelete->push($spj->id);
             }
-            $customer->save();
+        }
+
+        // 3d. Direct journal_id on SalePayment records
+        foreach ($salePayments as $sp) {
+            if (!empty($sp->journal_id)) {
+                $isShared = SalePayment::where('journal_id', $sp->journal_id)->where('sale_id', '!=', $sale->id)->exists();
+                if (!$isShared) {
+                    $journalIdsToDelete->push($sp->journal_id);
+                } else {
+                    $sharedJournal = Journal::find($sp->journal_id);
+                    if ($sharedJournal) {
+                        foreach ($sharedJournal->entries as $entry) {
+                            $entry->amount = max(0, $entry->amount - (float) $sp->amount);
+                            $entry->save();
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3e. Any journals whose notes mention this sale's invoice_no
+        if (!empty($sale->invoice_no)) {
+            $invJournals = Journal::where('notes', 'LIKE', '%' . $sale->invoice_no . '%')->get();
+            foreach ($invJournals as $ij) {
+                $journalIdsToDelete->push($ij->id);
+            }
+        }
+
+        // Delete all collected journals and entries
+        $uniqueJournalIds = $journalIdsToDelete->unique()->filter()->values();
+        foreach ($uniqueJournalIds as $jId) {
+            JournalEntry::where('journal_id', $jId)->delete();
+            Journal::where('id', $jId)->delete();
         }
 
         // 4. Delete Payments
         SalePayment::where('sale_id', $sale->id)->delete();
 
-        // Also delete payment journals (PAY-XXXXXX) linked to this sale's invoice
-        $paymentJournals = Journal::where('notes', 'Payment for POS Sale ' . $sale->invoice_no)->get();
-        foreach ($paymentJournals as $payJournal) {
-            JournalEntry::where('journal_id', $payJournal->id)->delete();
-            $payJournal->delete();
-        }
-
-        if ($journal) {
-            JournalEntry::where('journal_id', $journal->id)->delete();
-            $journal->delete();
-        }
-
-        // 6. Delete Sale Items
+        // 5. Delete Sale Items
         SaleItem::where('sale_id', $sale->id)->delete();
+
+        // 6. Recalculate and sync Customer balances
+        $customer = Customer::find($sale->customer_id);
+        if ($customer) {
+            $customer->recalculateBalances($sale->id);
+        }
     }
 
     public static function consumeStockForSale(Sale $sale)
@@ -1194,24 +1263,37 @@ class SaleController extends Controller
         
         $groupedItems = [];
         foreach ($items as $item) {
-            if (!isset($groupedItems[$item->product_variant_id])) {
-                $groupedItems[$item->product_variant_id] = [
+            $vid = $item->product_variant_id;
+            if (!isset($groupedItems[$vid])) {
+                $groupedItems[$vid] = [
                     'qty' => 0,
                     'unit_price' => $item->unit_price,
-                    'total_weight' => 0
+                    'total_weight' => 0,
+                    'total_price' => 0,
                 ];
             }
-            $groupedItems[$item->product_variant_id]['qty'] += $item->qty;
-            $groupedItems[$item->product_variant_id]['total_weight'] += $item->total_weight;
+            $groupedItems[$vid]['qty'] += (float)$item->qty;
+            $groupedItems[$vid]['total_weight'] += (float)$item->total_weight;
+            $groupedItems[$vid]['total_price'] += (float)$item->total_price;
         }
 
+        // Keep sale items unified as a single row per variant (NEVER split into batch rows on invoice)
         SaleItem::where('sale_id', $sale->id)->delete();
+        foreach ($groupedItems as $variantId => $data) {
+            SaleItem::create([
+                'sale_id' => $sale->id,
+                'product_variant_id' => $variantId,
+                'batch_id' => null,
+                'qty' => $data['qty'],
+                'unit_price' => $data['unit_price'],
+                'total_price' => $data['total_price'],
+                'total_weight' => $data['total_weight'],
+            ]);
+        }
 
         foreach ($groupedItems as $variantId => $data) {
             $itemQty = $data['qty'];
-            $unitPrice = $data['unit_price'];
             $variant = ProductVariant::find($variantId);
-            $unitQty = $variant ? $variant->getBaseQuantity() : 1;
             
             $batches = Batch::where('product_variant_id', $variantId)
                 ->where('warehouse_id', $sale->warehouse_id)
@@ -1234,16 +1316,6 @@ class SaleController extends Controller
 
                 $totalCogs += $cogsForThisTake;
                 $remainingToConsume -= $takeQty;
-
-                SaleItem::create([
-                    'sale_id' => $sale->id,
-                    'product_variant_id' => $variantId,
-                    'batch_id' => $batch->id,
-                    'qty' => $takeQty,
-                    'unit_price' => $unitPrice,
-                    'total_price' => $takeQty * $unitPrice,
-                    'total_weight' => $takeQty * $unitQty,
-                ]);
 
                 InventoryTransaction::create([
                     'warehouse_id' => $sale->warehouse_id,
@@ -1282,16 +1354,6 @@ class SaleController extends Controller
                     $totalCogs += $cogsForThisTake;
                     $remainingToConsume -= $takeQty;
 
-                    SaleItem::create([
-                        'sale_id' => $sale->id,
-                        'product_variant_id' => $variantId,
-                        'batch_id' => $autoBatch->id,
-                        'qty' => $takeQty,
-                        'unit_price' => $unitPrice,
-                        'total_price' => $takeQty * $unitPrice,
-                        'total_weight' => $takeQty * $unitQty,
-                    ]);
-
                     InventoryTransaction::create([
                         'warehouse_id' => $sale->warehouse_id,
                         'product_id' => $autoBatch->product_id,
@@ -1310,7 +1372,6 @@ class SaleController extends Controller
             }
 
             if (round($remainingToConsume, 4) > 0) {
-                // Find latest batch or create default batch to record inventory transaction
                 $batch = Batch::where('product_variant_id', $variantId)
                     ->where('warehouse_id', $sale->warehouse_id)
                     ->latest()
@@ -1338,16 +1399,6 @@ class SaleController extends Controller
                 $batch->save();
 
                 $totalCogs += $cogsForThisTake;
-
-                SaleItem::create([
-                    'sale_id' => $sale->id,
-                    'product_variant_id' => $variantId,
-                    'batch_id' => $batch->id,
-                    'qty' => $takeQty,
-                    'unit_price' => $unitPrice,
-                    'total_price' => $takeQty * $unitPrice,
-                    'total_weight' => $takeQty * $unitQty,
-                ]);
 
                 InventoryTransaction::create([
                     'warehouse_id' => $sale->warehouse_id,
@@ -1390,17 +1441,16 @@ class SaleController extends Controller
 
     public static function revertStockForSale(Sale $sale)
     {
-        $items = SaleItem::where('sale_id', $sale->id)->get();
-        foreach ($items as $item) {
-            if ($item->batch) {
-                $item->batch->qty_out -= $item->qty;
-                $item->batch->remaining_qty += $item->qty;
-                $item->batch->save();
-            }
-        }
-
         $txns = InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->get();
         foreach ($txns as $txn) {
+            if ($txn->batch_id) {
+                $batch = Batch::find($txn->batch_id);
+                if ($batch) {
+                    $batch->qty_out -= $txn->qty_out;
+                    $batch->remaining_qty += $txn->qty_out;
+                    $batch->save();
+                }
+            }
             $txn->delete();
         }
 
@@ -1414,17 +1464,21 @@ class SaleController extends Controller
                 ->delete();
         }
 
+        $items = SaleItem::where('sale_id', $sale->id)->get();
         $groupedItems = [];
         foreach ($items as $item) {
-            if (!isset($groupedItems[$item->product_variant_id])) {
-                $groupedItems[$item->product_variant_id] = [
+            $vid = $item->product_variant_id;
+            if (!isset($groupedItems[$vid])) {
+                $groupedItems[$vid] = [
                     'qty' => 0,
                     'unit_price' => $item->unit_price,
-                    'total_weight' => 0
+                    'total_weight' => 0,
+                    'total_price' => 0,
                 ];
             }
-            $groupedItems[$item->product_variant_id]['qty'] += $item->qty;
-            $groupedItems[$item->product_variant_id]['total_weight'] += $item->total_weight;
+            $groupedItems[$vid]['qty'] += (float)$item->qty;
+            $groupedItems[$vid]['total_weight'] += (float)$item->total_weight;
+            $groupedItems[$vid]['total_price'] += (float)$item->total_price;
         }
 
         SaleItem::where('sale_id', $sale->id)->delete();
@@ -1436,10 +1490,9 @@ class SaleController extends Controller
                 'batch_id' => null,
                 'qty' => $data['qty'],
                 'unit_price' => $data['unit_price'],
-                'total_price' => $data['qty'] * $data['unit_price'],
+                'total_price' => $data['total_price'],
                 'total_weight' => $data['total_weight'],
             ]);
         }
     }
 }
-

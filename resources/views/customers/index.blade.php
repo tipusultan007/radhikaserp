@@ -82,7 +82,7 @@
                                          <th>Credit Limit (TK)</th>
                                          <th>Total Due (TK)</th>
                                          <th>Wallet (TK)</th>
-                                         <th style="width: 125px;">Action</th>
+                                         <th style="width: 155px;" class="text-end">Action</th>
                                      </tr>
                                  </thead>
                                  <tbody>
@@ -111,21 +111,65 @@
                                                  </span>
                                              </td>
                                              <td class="text-end">
-                                                 <div class="dropdown">
-                                                     <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                                         <i class="ri-settings-3-line"></i> Actions
+                                                 <div class="d-flex align-items-center justify-content-end gap-1">
+                                                     {{-- Quick WhatsApp Share Button --}}
+                                                     <button type="button" class="btn btn-soft-success btn-sm btn-whatsapp-share" 
+                                                             title="Share via WhatsApp"
+                                                             data-customer="{{ json_encode([
+                                                                 'id' => $customer->id,
+                                                                 'name' => $customer->name,
+                                                                 'company' => $customer->company,
+                                                                 'phone' => $customer->phone,
+                                                                 'email' => $customer->email,
+                                                                 'district' => $customer->district,
+                                                                 'address' => $customer->address,
+                                                                 'customer_type' => $customer->customer_type,
+                                                                 'credit_limit' => (float)$customer->credit_limit,
+                                                                 'total_due' => (float)$customer->total_due,
+                                                                 'wallet_balance' => (float)$customer->wallet_balance,
+                                                                 'statement_pdf_url' => \App\Models\StatementToken::createOrGetForCustomer($customer)->getShortUrl(),
+                                                                 'show_url' => route('customers.show', $customer->id)
+                                                             ]) }}">
+                                                         <i class="ri-whatsapp-line fs-5 align-middle"></i>
                                                      </button>
-                                                     <ul class="dropdown-menu dropdown-menu-end">
-                                                         <li><a class="dropdown-item text-info" href="{{ route('customers.show', $customer) }}"><i class="ri-eye-line me-2"></i> View</a></li>
-                                                         <li><a class="dropdown-item text-primary" href="{{ route('customers.edit', $customer) }}"><i class="ri-edit-box-line me-2"></i> Edit</a></li>
-                                                         <li>
-                                                             <form id="delete-form-{{ $customer->id }}" action="{{ route('customers.destroy', $customer) }}" method="POST" class="d-inline">
-                                                                 @csrf
-                                                                 @method('DELETE')
-                                                                 <button type="button" class="dropdown-item text-danger" onclick="confirmDelete('{{ $customer->id }}')"><i class="ri-delete-bin-line me-2"></i> Delete</button>
-                                                             </form>
-                                                         </li>
-                                                     </ul>
+
+                                                     <div class="dropdown">
+                                                         <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                             <i class="ri-settings-3-line"></i> Actions
+                                                         </button>
+                                                         <ul class="dropdown-menu dropdown-menu-end">
+                                                             <li><a class="dropdown-item text-info" href="{{ route('customers.show', $customer) }}"><i class="ri-eye-line me-2"></i> View</a></li>
+                                                             <li><a class="dropdown-item text-primary" href="{{ route('customers.edit', $customer) }}"><i class="ri-edit-box-line me-2"></i> Edit</a></li>
+                                                             <li>
+                                                                 <a class="dropdown-item text-success btn-whatsapp-share" href="javascript:void(0)"
+                                                                    data-customer="{{ json_encode([
+                                                                        'id' => $customer->id,
+                                                                        'name' => $customer->name,
+                                                                        'company' => $customer->company,
+                                                                        'phone' => $customer->phone,
+                                                                        'email' => $customer->email,
+                                                                        'district' => $customer->district,
+                                                                        'address' => $customer->address,
+                                                                        'customer_type' => $customer->customer_type,
+                                                                        'credit_limit' => (float)$customer->credit_limit,
+                                                                        'total_due' => (float)$customer->total_due,
+                                                                        'wallet_balance' => (float)$customer->wallet_balance,
+                                                                 'statement_pdf_url' => \App\Models\StatementToken::createOrGetForCustomer($customer)->getShortUrl(),
+                                                                        'show_url' => route('customers.show', $customer->id)
+                                                                    ]) }}">
+                                                                     <i class="ri-whatsapp-line me-2"></i> Share via WhatsApp
+                                                                 </a>
+                                                             </li>
+                                                             <li><hr class="dropdown-divider"></li>
+                                                             <li>
+                                                                 <form id="delete-form-{{ $customer->id }}" action="{{ route('customers.destroy', $customer) }}" method="POST" class="d-inline">
+                                                                     @csrf
+                                                                     @method('DELETE')
+                                                                     <button type="button" class="dropdown-item text-danger" onclick="confirmDelete('{{ $customer->id }}')"><i class="ri-delete-bin-line me-2"></i> Delete</button>
+                                                                 </form>
+                                                             </li>
+                                                         </ul>
+                                                     </div>
                                                  </div>
                                              </td>
                                          </tr>
@@ -146,6 +190,9 @@
              </div>
          </div>
     </div>
+
+    {{-- WhatsApp Share Modal Partial --}}
+    @include('customers.whatsapp-modal')
 @endsection
 
 @section('script')

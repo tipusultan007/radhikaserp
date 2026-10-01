@@ -26,6 +26,10 @@ Route::middleware('auth:sanctum')->post('/admin/logout', [AuthController::class,
 Route::post('/customer/login', [AuthController::class, 'customerLogin']);
 Route::middleware('auth:sanctum')->post('/customer/logout', [AuthController::class, 'customerLogout']);
 
+// ─── Public Dealer Directory (WordPress / Elementor Widget) ────────────────────
+Route::get('/dealers', [\App\Http\Controllers\Api\DealerApiController::class, 'index']);
+Route::get('/dealers/districts', [\App\Http\Controllers\Api\DealerApiController::class, 'districts']);
+
 // ─── Admin API Routes ─────────────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
 
@@ -94,6 +98,8 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         ->middleware('permission:view customers');
     Route::get('/customers/{id}/payments', [AdminApiController::class, 'customerPayments'])
         ->middleware('permission:view customers');
+    Route::get('/customers/{id}/statement', [AdminApiController::class, 'customerStatement'])
+        ->middleware('permission:view customers');
     Route::get('/customer-targets', [AdminApiController::class, 'customerTargets'])
         ->middleware('permission:view customers');
     Route::get('/customer-targets/{id}', [AdminApiController::class, 'customerTargetDetails'])
@@ -156,6 +162,14 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         ->middleware('permission:delete sales');
     Route::get('/sales/{id}/pdf', [AdminApiController::class, 'downloadInvoice'])
         ->middleware('permission:view sales');
+    Route::get('/sales/{id}/payments', [AdminApiController::class, 'salePayments'])
+        ->middleware('permission:view sales');
+    Route::post('/sales/{id}/payments', [AdminApiController::class, 'storeSalePayment'])
+        ->middleware('permission:edit sales');
+    Route::put('/sale-payments/{id}', [AdminApiController::class, 'updateSalePayment'])
+        ->middleware('permission:edit sales');
+    Route::delete('/sale-payments/{id}', [AdminApiController::class, 'destroySalePayment'])
+        ->middleware('permission:edit sales');
 
     // ── Expense Categories ────────────────────────────────────────────────────
     Route::get('/expense-categories/form-data', [AdminApiController::class, 'expenseCategoryFormData'])

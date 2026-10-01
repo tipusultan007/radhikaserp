@@ -148,6 +148,7 @@ class DueSettlementController extends Controller
                         'method' => 'cash',
                         'date' => $validated['date'],
                         'reference' => 'Due Settlement ' . ($validated['reference'] ?? ''),
+                        'journal_id' => $journal->id,
                     ]);
 
                     $remainingPayment -= $payThisSale;
@@ -306,6 +307,7 @@ class DueSettlementController extends Controller
                     'method' => 'cash',
                     'date' => $validated['date'],
                     'reference' => 'Due Settlement ' . ($validated['reference'] ?? ''),
+                    'journal_id' => $journal->id,
                 ]);
 
                 $remainingPayment -= $payThisSale;

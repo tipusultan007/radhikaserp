@@ -374,24 +374,37 @@ class StockReconciliationService
                 $items = SaleItem::where('sale_id', $sale->id)->get();
                 $groupedItems = [];
                 foreach ($items as $item) {
-                    if (!isset($groupedItems[$item->product_variant_id])) {
-                        $groupedItems[$item->product_variant_id] = [
+                    $vid = $item->product_variant_id;
+                    if (!isset($groupedItems[$vid])) {
+                        $groupedItems[$vid] = [
                             'qty' => 0,
                             'unit_price' => $item->unit_price,
-                            'total_weight' => $item->total_weight
+                            'total_weight' => 0,
+                            'total_price' => 0,
                         ];
                     }
-                    $groupedItems[$item->product_variant_id]['qty'] += $item->qty;
-                    $groupedItems[$item->product_variant_id]['total_weight'] += $item->total_weight;
+                    $groupedItems[$vid]['qty'] += (float)$item->qty;
+                    $groupedItems[$vid]['total_weight'] += (float)$item->total_weight;
+                    $groupedItems[$vid]['total_price'] += (float)$item->total_price;
                 }
 
+                // Consolidate sale items into single row per variant (never split into batch rows)
                 SaleItem::where('sale_id', $sale->id)->delete();
+                foreach ($groupedItems as $variantId => $data) {
+                    SaleItem::create([
+                        'sale_id' => $sale->id,
+                        'product_variant_id' => $variantId,
+                        'batch_id' => null,
+                        'qty' => $data['qty'],
+                        'unit_price' => $data['unit_price'],
+                        'total_price' => $data['total_price'],
+                        'total_weight' => $data['total_weight'],
+                    ]);
+                }
 
                 foreach ($groupedItems as $variantId => $data) {
                     $itemQty = $data['qty'];
-                    $unitPrice = $data['unit_price'];
                     $variant = ProductVariant::find($variantId);
-                    $unitQty = $variant ? $variant->getBaseQuantity() : 1;
 
                     $batches = Batch::where('product_variant_id', $variantId)
                         ->where('warehouse_id', $sale->warehouse_id)
@@ -412,16 +425,6 @@ class StockReconciliationService
                         $batch->save();
 
                         $remainingToConsume -= $takeQty;
-
-                        SaleItem::create([
-                            'sale_id' => $sale->id,
-                            'product_variant_id' => $variantId,
-                            'batch_id' => $batch->id,
-                            'qty' => $takeQty,
-                            'unit_price' => $unitPrice,
-                            'total_price' => $takeQty * $unitPrice,
-                            'total_weight' => $takeQty * $unitQty,
-                        ]);
 
                         InventoryTransaction::create([
                             'warehouse_id' => $sale->warehouse_id,
@@ -458,16 +461,6 @@ class StockReconciliationService
                             $autoBatch->save();
 
                             $remainingToConsume -= $takeQty;
-
-                            SaleItem::create([
-                                'sale_id' => $sale->id,
-                                'product_variant_id' => $variantId,
-                                'batch_id' => $autoBatch->id,
-                                'qty' => $takeQty,
-                                'unit_price' => $unitPrice,
-                                'total_price' => $takeQty * $unitPrice,
-                                'total_weight' => $takeQty * $unitQty,
-                            ]);
 
                             InventoryTransaction::create([
                                 'warehouse_id' => $sale->warehouse_id,
@@ -512,16 +505,6 @@ class StockReconciliationService
                         $batch->qty_out += $takeQty;
                         $batch->remaining_qty -= $takeQty;
                         $batch->save();
-
-                        SaleItem::create([
-                            'sale_id' => $sale->id,
-                            'product_variant_id' => $variantId,
-                            'batch_id' => $batch->id,
-                            'qty' => $takeQty,
-                            'unit_price' => $unitPrice,
-                            'total_price' => $takeQty * $unitPrice,
-                            'total_weight' => $takeQty * $unitQty,
-                        ]);
 
                         InventoryTransaction::create([
                             'warehouse_id' => $sale->warehouse_id,

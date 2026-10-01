@@ -327,7 +327,7 @@ class AdminApiController extends Controller
      */
     public function sales(Request $request)
     {
-        $query = Sale::with(['customer', 'items.productVariant.product.unit', 'items.productVariant.unit', 'warehouse', 'creator']);
+        $query = Sale::with(['customer', 'items.productVariant.product.unit', 'items.productVariant.unit', 'warehouse', 'creator', 'payments']);
 
         if ($request->filled('invoice_no')) {
             $query->where('invoice_no', 'LIKE', '%'.$request->invoice_no.'%');
@@ -472,13 +472,25 @@ class AdminApiController extends Controller
             }
 
             // Record Payment (only if not promotional)
+            $cashAcc = isset($validated['payment_method']) ? ChartOfAccount::find($validated['payment_method']) : ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
+            $methodName = $cashAcc ? $cashAcc->name : 'cash';
+
             if (! $isPromotional && $paidAmount > 0) {
                 SalePayment::create([
                     'sale_id' => $sale->id,
                     'amount' => $paidAmount,
-                    'method' => 'cash',
+                    'method' => $methodName,
                     'date' => $validated['date'],
-                    'reference' => 'POS Payment (Mobile)',
+                    'reference' => 'POS Payment',
+                ]);
+            }
+            if (! $isPromotional && $walletUsed > 0) {
+                SalePayment::create([
+                    'sale_id' => $sale->id,
+                    'amount' => $walletUsed,
+                    'method' => 'wallet',
+                    'date' => $validated['date'],
+                    'reference' => 'Wallet Payment',
                 ]);
             }
 
@@ -527,21 +539,38 @@ class AdminApiController extends Controller
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
-            // 1. Revenue & Payment
+            // 1. Revenue (Sale Journal)
             if ($isPromotional) {
                 JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $promoAcc->id, 'type' => 'debit', 'amount' => $total]);
             } else {
-                if ($paidAmount > 0) {
-                    JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $paidAmount]);
-                }
-                if ($walletUsed > 0) {
-                    JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'debit', 'amount' => $walletUsed]);
-                }
-                if ($dueAmount > 0) {
-                    JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => $dueAmount]);
-                }
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => $total]);
             }
             JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $salesRevAcc->id, 'type' => 'credit', 'amount' => $total]);
+
+            // 1.5 Payment Journal (if paid amount or wallet used)
+            if (! $isPromotional && ($paidAmount > 0 || $walletUsed > 0)) {
+                $paymentJournal = Journal::create([
+                    'journal_no' => 'PAY-'.strtoupper(Str::random(6)),
+                    'date' => $validated['date'],
+                    'reference_type' => Customer::class,
+                    'reference_id' => $customer->id ?? null,
+                    'notes' => 'Payment for POS Sale '.$sale->invoice_no,
+                    'created_by' => $request->user()->id ?? 1,
+                ]);
+
+                if ($paidAmount > 0) {
+                    JournalEntry::create(['journal_id' => $paymentJournal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $paidAmount]);
+                }
+                if ($walletUsed > 0) {
+                    JournalEntry::create(['journal_id' => $paymentJournal->id, 'account_id' => $advAcc->id, 'type' => 'debit', 'amount' => $walletUsed]);
+                }
+
+                // Credit AR for the total payment made
+                JournalEntry::create(['journal_id' => $paymentJournal->id, 'account_id' => $arAcc->id, 'type' => 'credit', 'amount' => $paidAmount + $walletUsed]);
+
+                SalePayment::where('sale_id', $sale->id)->update(['journal_id' => $paymentJournal->id]);
+            }
+
             if (! $isPromotional && $newAdvance > 0) {
                 JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'credit', 'amount' => $newAdvance]);
             }
@@ -708,13 +737,16 @@ class AdminApiController extends Controller
             }
 
             // Record Payment (only for non-promotional sales)
+            $cashAcc = $paymentMethod ? ChartOfAccount::find($paymentMethod) : ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
+            $methodName = $cashAcc ? $cashAcc->name : 'cash';
+
             if (! $isPromotional && $paidAmount > 0) {
                 SalePayment::create([
                     'sale_id' => $sale->id,
                     'amount' => $paidAmount,
-                    'method' => 'cash',
+                    'method' => $methodName,
                     'date' => $sale->date,
-                    'reference' => 'POS Payment (Mobile Updated)',
+                    'reference' => 'POS Payment',
                 ]);
 
                 if ($customer) {
@@ -726,6 +758,15 @@ class AdminApiController extends Controller
                         $customer->id
                     ));
                 }
+            }
+            if (! $isPromotional && $walletUsed > 0) {
+                SalePayment::create([
+                    'sale_id' => $sale->id,
+                    'amount' => $walletUsed,
+                    'method' => 'wallet',
+                    'date' => $sale->date,
+                    'reference' => 'Wallet Payment',
+                ]);
             }
 
             $totalCogs = 0;
@@ -740,6 +781,16 @@ class AdminApiController extends Controller
                 $variant = ProductVariant::find($variantId);
                 $unitQty = $variant ? $variant->getBaseQuantity() : 1;
                 $grandTotalWeight += ($itemQty * $unitQty);
+
+                SaleItem::create([
+                    'sale_id' => $sale->id,
+                    'product_variant_id' => $variantId,
+                    'batch_id' => null,
+                    'qty' => $itemQty,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $itemQty * $unitPrice,
+                    'total_weight' => $itemQty * $unitQty,
+                ]);
 
                 if ($shouldConsumeStock) {
                     $batches = Batch::where('product_variant_id', $variantId)
@@ -764,16 +815,6 @@ class AdminApiController extends Controller
 
                         $totalCogs += $cogsForThisTake;
                         $remainingToConsume -= $takeQty;
-
-                        SaleItem::create([
-                            'sale_id' => $sale->id,
-                            'product_variant_id' => $variantId,
-                            'batch_id' => $batch->id,
-                            'qty' => $takeQty,
-                            'unit_price' => $unitPrice,
-                            'total_price' => $takeQty * $unitPrice,
-                            'total_weight' => $takeQty * $unitQty,
-                        ]);
 
                         InventoryTransaction::create([
                             'warehouse_id' => $warehouseId,
@@ -810,16 +851,6 @@ class AdminApiController extends Controller
 
                             $totalCogs += $cogsForThisTake;
                             $remainingToConsume -= $takeQty;
-
-                            SaleItem::create([
-                                'sale_id' => $sale->id,
-                                'product_variant_id' => $variantId,
-                                'batch_id' => $autoBatch->id,
-                                'qty' => $takeQty,
-                                'unit_price' => $unitPrice,
-                                'total_price' => $takeQty * $unitPrice,
-                                'total_weight' => $takeQty * $unitQty,
-                            ]);
 
                             InventoryTransaction::create([
                                 'warehouse_id' => $warehouseId,
@@ -863,16 +894,6 @@ class AdminApiController extends Controller
                         } catch (\Exception $e) {
                         }
                     }
-                } else {
-                    SaleItem::create([
-                        'sale_id' => $sale->id,
-                        'product_variant_id' => $variantId,
-                        'batch_id' => null,
-                        'qty' => $itemQty,
-                        'unit_price' => $unitPrice,
-                        'total_price' => $itemQty * $unitPrice,
-                        'total_weight' => $itemQty * $unitQty,
-                    ]);
                 }
             }
 
@@ -897,20 +918,38 @@ class AdminApiController extends Controller
                 'created_by' => $request->user()->id ?? 1,
             ]);
 
+            // 1. Revenue (Sale Journal)
             if ($isPromotional) {
                 JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $promoAcc->id, 'type' => 'debit', 'amount' => $total]);
             } else {
-                if ($paidAmount > 0) {
-                    JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $paidAmount]);
-                }
-                if ($walletUsed > 0) {
-                    JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'debit', 'amount' => $walletUsed]);
-                }
-                if ($dueAmount > 0) {
-                    JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => $dueAmount]);
-                }
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => $total]);
             }
             JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $salesRevAcc->id, 'type' => 'credit', 'amount' => $total]);
+
+            // Payment Journal (if paid amount or wallet used)
+            if (! $isPromotional && ($paidAmount > 0 || $walletUsed > 0)) {
+                $paymentJournal = Journal::create([
+                    'journal_no' => 'PAY-'.strtoupper(Str::random(6)),
+                    'date' => $sale->date,
+                    'reference_type' => Customer::class,
+                    'reference_id' => $customer->id ?? null,
+                    'notes' => 'Payment for POS Sale '.$sale->invoice_no,
+                    'created_by' => $request->user()->id ?? 1,
+                ]);
+
+                if ($paidAmount > 0) {
+                    JournalEntry::create(['journal_id' => $paymentJournal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $paidAmount]);
+                }
+                if ($walletUsed > 0) {
+                    JournalEntry::create(['journal_id' => $paymentJournal->id, 'account_id' => $advAcc->id, 'type' => 'debit', 'amount' => $walletUsed]);
+                }
+
+                // Credit AR for the total payment made
+                JournalEntry::create(['journal_id' => $paymentJournal->id, 'account_id' => $arAcc->id, 'type' => 'credit', 'amount' => $paidAmount + $walletUsed]);
+
+                SalePayment::where('sale_id', $sale->id)->update(['journal_id' => $paymentJournal->id]);
+            }
+
             if (! $isPromotional && $newAdvance > 0) {
                 JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $advAcc->id, 'type' => 'credit', 'amount' => $newAdvance]);
             }
@@ -1020,38 +1059,71 @@ class AdminApiController extends Controller
         // 2. Delete Inventory Transactions
         InventoryTransaction::where('reference_type', Sale::class)->where('reference_id', $sale->id)->delete();
 
-        // 3 & 5. Revert Customer Due, Wallet Balance, and Accounting Entries
-        $journal = Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->first();
+        // 3. Find all related journals to delete
+        $journalIdsToDelete = collect();
 
-        $customer = Customer::find($sale->customer_id);
-        if ($customer) {
-            $walletUsed = 0;
-            $newAdvance = 0;
-            $advAcc = ChartOfAccount::where('name', 'Customer Advance')->first();
+        // 3a. Sale Journal (by reference)
+        $saleJournals = Journal::where('reference_type', Sale::class)->where('reference_id', $sale->id)->get();
+        foreach ($saleJournals as $sj) {
+            $journalIdsToDelete->push($sj->id);
+        }
 
-            if ($advAcc && $journal) {
-                $walletUsed = JournalEntry::where('journal_id', $journal->id)->where('account_id', $advAcc->id)->where('type', 'debit')->sum('amount');
-                $newAdvance = JournalEntry::where('journal_id', $journal->id)->where('account_id', $advAcc->id)->where('type', 'credit')->sum('amount');
+        // 3b. Payments for this sale
+        $salePayments = SalePayment::where('sale_id', $sale->id)->get();
+        $salePaymentIds = $salePayments->pluck('id')->toArray();
+
+        // 3c. Journals referencing SalePayment
+        if (!empty($salePaymentIds)) {
+            $spJournals = Journal::where('reference_type', SalePayment::class)->whereIn('reference_id', $salePaymentIds)->get();
+            foreach ($spJournals as $spj) {
+                $journalIdsToDelete->push($spj->id);
             }
+        }
 
-            $customer->wallet_balance = $customer->wallet_balance + $walletUsed - $newAdvance;
-
-            if ($sale->due_amount > 0) {
-                $customer->total_due = max(0, $customer->total_due - $sale->due_amount);
+        // 3d. Direct journal_id on SalePayment records
+        foreach ($salePayments as $sp) {
+            if (!empty($sp->journal_id)) {
+                $isShared = SalePayment::where('journal_id', $sp->journal_id)->where('sale_id', '!=', $sale->id)->exists();
+                if (!$isShared) {
+                    $journalIdsToDelete->push($sp->journal_id);
+                } else {
+                    $sharedJournal = Journal::find($sp->journal_id);
+                    if ($sharedJournal) {
+                        foreach ($sharedJournal->entries as $entry) {
+                            $entry->amount = max(0, $entry->amount - (float) $sp->amount);
+                            $entry->save();
+                        }
+                    }
+                }
             }
-            $customer->save();
+        }
+
+        // 3e. Any journals whose notes mention this sale's invoice_no
+        if (!empty($sale->invoice_no)) {
+            $invJournals = Journal::where('notes', 'LIKE', '%' . $sale->invoice_no . '%')->get();
+            foreach ($invJournals as $ij) {
+                $journalIdsToDelete->push($ij->id);
+            }
+        }
+
+        // Delete all collected journals and entries
+        $uniqueJournalIds = $journalIdsToDelete->unique()->filter()->values();
+        foreach ($uniqueJournalIds as $jId) {
+            JournalEntry::where('journal_id', $jId)->delete();
+            Journal::where('id', $jId)->delete();
         }
 
         // 4. Delete Payments
         SalePayment::where('sale_id', $sale->id)->delete();
 
-        if ($journal) {
-            JournalEntry::where('journal_id', $journal->id)->delete();
-            $journal->delete();
-        }
-
-        // 6. Delete Sale Items
+        // 5. Delete Sale Items
         SaleItem::where('sale_id', $sale->id)->delete();
+
+        // 6. Recalculate and sync Customer balances
+        $customer = Customer::find($sale->customer_id);
+        if ($customer) {
+            $customer->recalculateBalances($sale->id);
+        }
     }
 
     public function destroySale($id)
@@ -1059,8 +1131,12 @@ class AdminApiController extends Controller
         try {
             DB::beginTransaction();
             $sale = Sale::findOrFail($id);
+            $customer = Customer::find($sale->customer_id);
             $this->reverseSale($sale);
             $sale->delete();
+            if ($customer) {
+                $customer->recalculateBalances();
+            }
             DB::commit();
 
             return response()->json(['message' => 'Sale deleted and reversed successfully']);
@@ -1223,10 +1299,56 @@ class AdminApiController extends Controller
     public function showCustomer($id)
     {
         $customer = Customer::findOrFail($id);
+        $statementToken = \App\Models\StatementToken::generate($customer->id, null, null, 90);
+        $customerData = $customer->toArray();
+        $customerData['statement_url'] = $statementToken->getShortUrl();
+        $customerData['statement_token'] = $statementToken->token;
 
         return response()->json([
-            'customer' => $customer,
+            'customer' => $customerData,
         ]);
+    }
+
+    public function customerStatement(Request $request, $id)
+    {
+        $customer = Customer::findOrFail($id);
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+
+        $controller = new \App\Http\Controllers\CustomerController();
+        $statementData = $controller->getCustomerStatementData($customer, $startDate, $endDate);
+
+        $statementToken = \App\Models\StatementToken::generate($customer->id, $startDate, $endDate, 90);
+        $statementData['statement_url'] = $statementToken->getShortUrl();
+        $statementData['statement_token'] = $statementToken->token;
+
+        // Map entries to clean format for mobile
+        $statementData['entries'] = $statementData['entries']->map(function ($entry) {
+            $desc = '';
+            if ($entry->debit > 0 && $entry->credit == 0) {
+                $desc = 'Sale Invoice (' . $entry->ref_no . ')';
+            } elseif ($entry->credit > 0 && $entry->debit == 0) {
+                $desc = 'Payment Received (' . $entry->ref_no . ')';
+            } elseif (!empty($entry->notes)) {
+                $desc = $entry->notes;
+            } else {
+                $desc = $entry->ref_no ?: 'Transaction';
+            }
+
+            return [
+                'id' => $entry->id,
+                'date' => $entry->date,
+                'ref_no' => $entry->ref_no,
+                'description' => $desc,
+                'notes' => $entry->notes,
+                'payment_method' => $entry->payment_method,
+                'debit' => (float)$entry->debit,
+                'credit' => (float)$entry->credit,
+                'running_balance' => (float)$entry->running_balance,
+            ];
+        })->values();
+
+        return response()->json($statementData);
     }
 
     public function customerSales($id)
@@ -1996,6 +2118,8 @@ class AdminApiController extends Controller
             'amount' => 'required|numeric|min:1',
             'date' => 'required|date',
             'reference' => 'nullable|string',
+            'payment_method_id' => 'nullable|exists:chart_of_accounts,id',
+            'payment_method' => 'nullable',
         ]);
 
         $customer = Customer::findOrFail($validated['customer_id']);
@@ -2013,7 +2137,12 @@ class AdminApiController extends Controller
                 $customer->increment('wallet_balance', $newAdvance);
             }
 
-            $cashAcc = ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
+            $cashAcc = !empty($validated['payment_method_id'])
+                ? ChartOfAccount::find($validated['payment_method_id'])
+                : (!empty($validated['payment_method']) && is_numeric($validated['payment_method'])
+                    ? ChartOfAccount::find($validated['payment_method'])
+                    : ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']));
+            $methodName = $cashAcc ? $cashAcc->name : 'cash';
             $arAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Receivable', 'type' => 'asset']);
 
             $journal = Journal::create([
@@ -2054,9 +2183,10 @@ class AdminApiController extends Controller
                     SalePayment::create([
                         'sale_id' => $sale->id,
                         'amount' => $payThisSale,
-                        'method' => 'cash',
+                        'method' => $methodName,
                         'date' => $validated['date'],
                         'reference' => 'API Settlement '.($validated['reference'] ?? ''),
+                        'journal_id' => $journal->id,
                     ]);
                     $remainingPayment -= $payThisSale;
                 }
@@ -2231,6 +2361,21 @@ class AdminApiController extends Controller
                 if ($supplier && $oldAmount > 0) {
                     $supplier->increment('total_payable', $oldAmount);
                 }
+            } elseif ($journal->reference_type === Customer::class) {
+                $customer = Customer::find($journal->reference_id);
+                if ($customer) {
+                    $salePayments = SalePayment::where('journal_id', $journal->id)->get();
+                    foreach ($salePayments as $sp) {
+                        if ($sp->sale) {
+                            $sp->sale->paid_amount -= $sp->amount;
+                            $sp->sale->due_amount += $sp->amount;
+                            $sp->sale->payment_status = $sp->sale->due_amount > 0 ? ($sp->sale->paid_amount > 0 ? 'partial' : 'due') : 'paid';
+                            $sp->sale->save();
+                        }
+                        $sp->delete();
+                    }
+                    $customer->recalculateBalances();
+                }
             }
 
             JournalEntry::where('journal_id', $journal->id)->delete();
@@ -2242,6 +2387,240 @@ class AdminApiController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Get payments for a specific sale.
+     */
+    public function salePayments($id)
+    {
+        $sale = Sale::findOrFail($id);
+        $payments = SalePayment::where('sale_id', $sale->id)->orderBy('date', 'desc')->get();
+
+        return response()->json(['payments' => $payments, 'sale' => $sale]);
+    }
+
+    /**
+     * Add a direct payment to a specific sale invoice.
+     */
+    public function storeSalePayment(Request $request, $id)
+    {
+        $sale = Sale::with('customer')->findOrFail($id);
+
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'payment_method_id' => 'nullable|exists:chart_of_accounts,id',
+            'payment_method' => 'nullable',
+            'date' => 'nullable|date',
+            'reference' => 'nullable|string',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $newAmount = (float) $validated['amount'];
+            if ($newAmount > $sale->due_amount) {
+                return response()->json([
+                    'error' => 'Payment cannot exceed the total invoice due of BDT ' . number_format($sale->due_amount, 2),
+                ], 422);
+            }
+
+            $cashAcc = !empty($validated['payment_method_id'])
+                ? ChartOfAccount::find($validated['payment_method_id'])
+                : (!empty($validated['payment_method']) && is_numeric($validated['payment_method'])
+                    ? ChartOfAccount::find($validated['payment_method'])
+                    : ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']));
+            $methodName = $cashAcc ? $cashAcc->name : 'cash';
+            $paymentDate = $validated['date'] ?? now()->toDateString();
+            $reference = $validated['reference'] ?? 'Invoice Payment';
+
+            // Create Payment
+            $payment = SalePayment::create([
+                'sale_id' => $sale->id,
+                'amount' => $newAmount,
+                'method' => $methodName,
+                'date' => $paymentDate,
+                'reference' => $reference,
+            ]);
+
+            // Update Sale
+            $sale->paid_amount += $newAmount;
+            $sale->due_amount -= $newAmount;
+            $sale->payment_status = $sale->due_amount > 0 ? ($sale->paid_amount > 0 ? 'partial' : 'due') : 'paid';
+            $sale->save();
+
+            // Update Customer Total Due
+            if ($sale->customer) {
+                $sale->customer->decrement('total_due', $newAmount);
+            }
+
+            // Accounting
+            $arAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Receivable', 'type' => 'asset']);
+
+            $journal = Journal::create([
+                'journal_no' => 'PAY-' . strtoupper(Str::random(6)),
+                'date' => $paymentDate,
+                'reference_type' => Customer::class,
+                'reference_id' => $sale->customer_id ?? null,
+                'notes' => 'Payment for Sale ' . $sale->invoice_no . ($reference ? ' (' . $reference . ')' : ''),
+                'created_by' => $request->user()->id ?? 1,
+            ]);
+
+            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $newAmount]);
+            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'credit', 'amount' => $newAmount]);
+
+            $payment->update(['journal_id' => $journal->id]);
+
+            ActivityLog::create([
+                'user_id' => $request->user()->id ?? 1,
+                'action' => 'payment_added',
+                'reference_type' => Sale::class,
+                'reference_id' => $sale->id,
+                'description' => "Added payment of " . number_format($newAmount, 2) . " via {$methodName} for #{$sale->invoice_no}",
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Payment recorded successfully',
+                'payment' => $payment,
+                'sale' => $sale->fresh(['payments', 'customer']),
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Update an individual sale payment amount.
+     */
+    public function updateSalePayment(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $payment = SalePayment::findOrFail($id);
+            $sale = $payment->sale;
+            $customer = $sale ? $sale->customer : null;
+
+            $oldAmount = $payment->amount;
+            $newAmount = (float) $validated['amount'];
+            $difference = $newAmount - $oldAmount;
+
+            if ($difference == 0) {
+                return response()->json(['message' => 'Amount unchanged', 'payment' => $payment]);
+            }
+
+            if ($sale) {
+                $maxAllowed = $sale->due_amount + $oldAmount;
+                if ($newAmount > $maxAllowed) {
+                    return response()->json(['error' => 'Payment cannot exceed total invoice due of BDT ' . number_format($maxAllowed, 2)], 422);
+                }
+
+                $sale->paid_amount += $difference;
+                $sale->due_amount -= $difference;
+                $sale->payment_status = $sale->due_amount > 0 ? ($sale->paid_amount > 0 ? 'partial' : 'due') : 'paid';
+                $sale->save();
+            }
+
+            $payment->amount = $newAmount;
+            $payment->save();
+
+            if ($customer) {
+                if ($difference > 0) {
+                    $customer->decrement('total_due', $difference);
+                } else {
+                    $customer->increment('total_due', abs($difference));
+                }
+            }
+
+            $cashAcc = ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
+            $arAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Receivable', 'type' => 'asset']);
+
+            $journal = Journal::create([
+                'journal_no' => 'ADJ-' . strtoupper(Str::random(6)),
+                'date' => now()->toDateString(),
+                'reference_type' => Customer::class,
+                'reference_id' => $customer ? $customer->id : null,
+                'notes' => 'Payment adjustment for Sale ' . ($sale ? $sale->invoice_no : ''),
+                'created_by' => $request->user()->id ?? 1,
+            ]);
+
+            if ($difference > 0) {
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'debit', 'amount' => $difference]);
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'credit', 'amount' => $difference]);
+            } else {
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => abs($difference)]);
+                JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'credit', 'amount' => abs($difference)]);
+            }
+
+            DB::commit();
+
+            return response()->json(['message' => 'Payment updated successfully', 'payment' => $payment]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Delete an individual sale payment.
+     */
+    public function destroySalePayment($id)
+    {
+        try {
+            DB::beginTransaction();
+
+            $payment = SalePayment::findOrFail($id);
+            $sale = $payment->sale;
+            $customer = $sale ? $sale->customer : null;
+            $amount = $payment->amount;
+
+            if ($sale) {
+                $sale->paid_amount -= $amount;
+                $sale->due_amount += $amount;
+                $sale->payment_status = $sale->due_amount > 0 ? ($sale->paid_amount > 0 ? 'partial' : 'due') : 'paid';
+                $sale->save();
+            }
+
+            if ($customer) {
+                $customer->increment('total_due', $amount);
+            }
+
+            $cashAcc = ChartOfAccount::firstOrCreate(['name' => 'Cash', 'type' => 'asset']);
+            $arAcc = ChartOfAccount::firstOrCreate(['name' => 'Accounts Receivable', 'type' => 'asset']);
+
+            $journal = Journal::create([
+                'journal_no' => 'REV-' . strtoupper(Str::random(6)),
+                'date' => now()->toDateString(),
+                'reference_type' => Customer::class,
+                'reference_id' => $customer ? $customer->id : null,
+                'notes' => 'Payment reversed for Sale ' . ($sale ? $sale->invoice_no : ''),
+                'created_by' => auth()->id() ?? 1,
+            ]);
+
+            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $arAcc->id, 'type' => 'debit', 'amount' => $amount]);
+            JournalEntry::create(['journal_id' => $journal->id, 'account_id' => $cashAcc->id, 'type' => 'credit', 'amount' => $amount]);
+
+            if ($payment->journal_id) {
+                JournalEntry::where('journal_id', $payment->journal_id)->delete();
+                Journal::where('id', $payment->journal_id)->delete();
+            }
+
+            $payment->delete();
+
+            DB::commit();
+
+            return response()->json(['message' => 'Payment deleted successfully']);
+        } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }

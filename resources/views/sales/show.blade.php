@@ -12,6 +12,55 @@
         max-height: 60px;
     }
 </style>
+    <!-- Edit Payment Modals -->
+    @foreach($sale->payments as $payment)
+        <div class="modal fade" id="editPaymentModal{{ $payment->id }}" tabindex="-1" aria-labelledby="editPaymentModalLabel{{ $payment->id }}" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form action="{{ route('sale-payments.update', $payment->id) }}" method="POST">
+                        @csrf
+                        @method('PUT')
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editPaymentModalLabel{{ $payment->id }}">
+                                <i class="ri-edit-line me-1 text-primary"></i> Edit Payment #{{ $payment->id }}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label text-muted fs-12 mb-0">Payment Date</label>
+                                    <div class="fw-semibold">{{ $payment->date ? $payment->date->format('M d, Y') : '-' }}</div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label text-muted fs-12 mb-0">Payment Method</label>
+                                    <div class="fw-semibold text-capitalize">{{ $payment->method ?? 'Cash' }}</div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label text-muted fs-12 mb-0">Reference</label>
+                                    <div class="text-dark">{{ $payment->reference ?: 'Invoice Payment' }}</div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Payment Amount <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">৳</span>
+                                    <input type="number" step="0.01" min="1" max="{{ $sale->due_amount + $payment->amount }}" name="amount" class="form-control" value="{{ (float)$payment->amount }}" required>
+                                </div>
+                                <small class="text-muted d-block mt-1">
+                                    Current invoice due: ৳{{ number_format($sale->due_amount, 2) }} | Max allowed: ৳{{ number_format($sale->due_amount + $payment->amount, 2) }}
+                                </small>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endforeach
 @endsection
 
 @section('content')
@@ -40,6 +89,12 @@
                 @if(session('error'))
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
                         {{ session('error') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                @endif
+                @if(session('info'))
+                    <div class="alert alert-info alert-dismissible fade show" role="alert">
+                        {{ session('info') }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
                 @endif
@@ -201,7 +256,12 @@
                                              </tr>
                                              <tr>
                                                  <td class="text-end text-muted">Amount Paid:</td>
-                                                 <td class="text-end text-success">{{ number_format($sale->paid_amount, 0) }}</td>
+                                                 <td class="text-end text-success">
+                                                     <strong>{{ number_format($sale->paid_amount, 0) }}</strong>
+                                                     @if($sale->payments->count() > 0)
+                                                         <small class="d-block"><a href="#related-payments" class="text-primary text-decoration-underline fs-11">{{ $sale->payments->count() }} payment(s)</a></small>
+                                                     @endif
+                                                 </td>
                                              </tr>
                                              <tr>
                                                  <td class="text-end text-muted"><strong>Amount Due:</strong></td>
@@ -226,6 +286,133 @@
 
                      </div>
                  </div>
+
+                 <!-- Related Payments Section -->
+                 <div class="card mt-4" id="related-payments">
+                     <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                         <div class="d-flex align-items-center gap-2">
+                             <h4 class="card-title mb-0">
+                                 <i class="ri-money-dollar-circle-line me-1 text-primary"></i> Payment Transactions & History
+                             </h4>
+                             <span class="badge bg-primary-subtle text-primary rounded-pill">{{ $sale->payments->count() }}</span>
+                         </div>
+                         <div class="d-flex align-items-center gap-2">
+                             <span class="badge bg-success-subtle text-success fs-12 px-2 py-1">
+                                 <i class="ri-checkbox-circle-line me-1"></i>Total Paid: ৳{{ number_format($sale->paid_amount, 2) }}
+                             </span>
+                             @if($sale->due_amount > 0)
+                                 <span class="badge bg-danger-subtle text-danger fs-12 px-2 py-1">
+                                     <i class="ri-error-warning-line me-1"></i>Due: ৳{{ number_format($sale->due_amount, 2) }}
+                                 </span>
+                                 <a href="#add-payment-card" class="btn btn-xs btn-outline-success ms-1">
+                                     <i class="ri-add-line me-1"></i>Add
+                                 </a>
+                             @else
+                                 <span class="badge bg-success fs-12 px-2 py-1">
+                                     <i class="ri-check-double-line me-1"></i>Fully Settled
+                                 </span>
+                             @endif
+                         </div>
+                     </div>
+                     <div class="card-body p-0">
+                         @if($sale->payments->count() > 0)
+                             <div class="table-responsive">
+                                 <table class="table table-hover table-centered mb-0">
+                                     <thead class="table-light">
+                                         <tr>
+                                             <th style="width: 5%">#</th>
+                                             <th>Date</th>
+                                             <th>Reference / Transaction</th>
+                                             <th>Method</th>
+                                             <th class="text-end">Amount</th>
+                                             <th class="text-center" style="width: 120px;">Actions</th>
+                                         </tr>
+                                     </thead>
+                                     <tbody>
+                                         @foreach($sale->payments as $index => $payment)
+                                             @php
+                                                 $methodLower = strtolower($payment->method ?? 'cash');
+                                                 $badgeClass = 'bg-secondary-subtle text-secondary';
+                                                 $iconClass = 'ri-secure-payment-line';
+                                                 if (str_contains($methodLower, 'cash')) {
+                                                     $badgeClass = 'bg-success-subtle text-success';
+                                                     $iconClass = 'ri-money-dollar-circle-line';
+                                                 } elseif (str_contains($methodLower, 'bank') || str_contains($methodLower, 'card')) {
+                                                     $badgeClass = 'bg-primary-subtle text-primary';
+                                                     $iconClass = 'ri-bank-line';
+                                                 } elseif (str_contains($methodLower, 'bkash') || str_contains($methodLower, 'nagad') || str_contains($methodLower, 'rocket')) {
+                                                     $badgeClass = 'bg-warning-subtle text-warning';
+                                                     $iconClass = 'ri-smartphone-line';
+                                                 } elseif (str_contains($methodLower, 'wallet')) {
+                                                     $badgeClass = 'bg-info-subtle text-info';
+                                                     $iconClass = 'ri-wallet-3-line';
+                                                 }
+                                             @endphp
+                                             <tr>
+                                                 <td class="text-muted">{{ $index + 1 }}</td>
+                                                 <td>
+                                                     <span class="fw-semibold text-dark">{{ $payment->date ? $payment->date->format('d M, Y') : '-' }}</span>
+                                                     @if($payment->created_at)
+                                                         <small class="text-muted d-block fs-11">{{ $payment->created_at->format('h:i A') }}</small>
+                                                     @endif
+                                                 </td>
+                                                 <td>
+                                                     <span class="fw-medium text-dark">{{ $payment->reference ?: 'Invoice Payment' }}</span>
+                                                     <small class="text-muted d-block fs-11">TRX ID: #{{ $payment->id }}</small>
+                                                 </td>
+                                                 <td>
+                                                     <span class="badge {{ $badgeClass }} text-capitalize fs-12 px-2 py-1">
+                                                         <i class="{{ $iconClass }} me-1"></i>{{ $payment->method ?? 'Cash' }}
+                                                     </span>
+                                                 </td>
+                                                 <td class="text-end">
+                                                     <span class="fw-bold text-success fs-14">৳{{ number_format($payment->amount, 2) }}</span>
+                                                 </td>
+                                                 <td class="text-center">
+                                                     <div class="d-flex justify-content-center gap-1">
+                                                         @canany(['edit sale payments', 'edit sales'])
+                                                         <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" data-bs-toggle="modal" data-bs-target="#editPaymentModal{{ $payment->id }}" title="Edit Payment">
+                                                             <i class="ri-edit-line"></i>
+                                                         </button>
+                                                         @endcanany
+
+                                                         @canany(['delete sale payments', 'delete sales'])
+                                                         <form action="{{ route('sale-payments.destroy', $payment->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this payment of ৳{{ number_format($payment->amount, 2) }}? This will increase the invoice due amount and reverse accounting entries.')">
+                                                             @csrf
+                                                             @method('DELETE')
+                                                             <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Delete Payment">
+                                                                 <i class="ri-delete-bin-line"></i>
+                                                             </button>
+                                                         </form>
+                                                         @endcanany
+                                                     </div>
+                                                 </td>
+                                             </tr>
+                                         @endforeach
+                                     </tbody>
+                                     <tfoot class="table-light">
+                                         <tr>
+                                             <th colspan="4" class="text-end fw-bold">Total Recorded Payments:</th>
+                                             <th class="text-end fw-bold text-success fs-14">৳{{ number_format($sale->payments->sum('amount'), 2) }}</th>
+                                             <th></th>
+                                         </tr>
+                                     </tfoot>
+                                 </table>
+                             </div>
+                         @else
+                             <div class="p-4 text-center text-muted">
+                                 <i class="ri-money-dollar-circle-line fs-36 text-muted mb-2 d-block"></i>
+                                 <p class="mb-1">No payment records found for this invoice.</p>
+                                 @if($sale->due_amount > 0)
+                                     <a href="#add-payment-card" class="btn btn-sm btn-primary mt-2">
+                                         <i class="ri-add-line me-1"></i> Add First Payment
+                                     </a>
+                                 @endif
+                             </div>
+                         @endif
+                     </div>
+                 </div>
+
              </div>
              <!-- Sidebar -->
              <div class="col-lg-4">
@@ -315,10 +502,13 @@
                  </div>
 
                  <!-- Add Payment Form -->
-                 <div class="card">
+                 <div class="card" id="add-payment-card">
                      <div class="card-header bg-light d-flex justify-content-between align-items-center">
                          <h4 class="card-title mb-0">Add Payment</h4>
-                         <span class="badge bg-danger rounded-pill">Due: {{ number_format($sale->due_amount, 0) }}</span>
+                         <div class="d-flex align-items-center gap-1">
+                             <span class="badge bg-success-subtle text-success rounded-pill">Paid: {{ number_format($sale->paid_amount, 0) }}</span>
+                             <span class="badge bg-danger rounded-pill">Due: {{ number_format($sale->due_amount, 0) }}</span>
+                         </div>
                      </div>
                      <div class="card-body">
                          @if($sale->due_amount > 0)
@@ -346,6 +536,13 @@
                              </div>
                          @endif
                     </div>
+                     @if($sale->payments->count() > 0)
+                     <div class="card-footer bg-light-subtle py-2 text-center border-top">
+                         <a href="#related-payments" class="fs-12 text-primary fw-medium">
+                             <i class="ri-history-line me-1"></i> View all {{ $sale->payments->count() }} payment(s) history
+                         </a>
+                     </div>
+                     @endif
                  </div>
 
                  <!-- Tracking Timeline -->
@@ -398,5 +595,54 @@
              </div> <!-- end col-lg-4 -->
          </div>
     </div>
+    <!-- Edit Payment Modals -->
+    @foreach($sale->payments as $payment)
+        <div class="modal fade" id="editPaymentModal{{ $payment->id }}" tabindex="-1" aria-labelledby="editPaymentModalLabel{{ $payment->id }}" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form action="{{ route('sale-payments.update', $payment->id) }}" method="POST">
+                        @csrf
+                        @method('PUT')
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editPaymentModalLabel{{ $payment->id }}">
+                                <i class="ri-edit-line me-1 text-primary"></i> Edit Payment #{{ $payment->id }}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label text-muted fs-12 mb-0">Payment Date</label>
+                                    <div class="fw-semibold">{{ $payment->date ? $payment->date->format('M d, Y') : '-' }}</div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label text-muted fs-12 mb-0">Payment Method</label>
+                                    <div class="fw-semibold text-capitalize">{{ $payment->method ?? 'Cash' }}</div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label text-muted fs-12 mb-0">Reference</label>
+                                    <div class="text-dark">{{ $payment->reference ?: 'Invoice Payment' }}</div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Payment Amount <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">৳</span>
+                                    <input type="number" step="0.01" min="1" max="{{ $sale->due_amount + $payment->amount }}" name="amount" class="form-control" value="{{ (float)$payment->amount }}" required>
+                                </div>
+                                <small class="text-muted d-block mt-1">
+                                    Current invoice due: ৳{{ number_format($sale->due_amount, 2) }} | Max allowed: ৳{{ number_format($sale->due_amount + $payment->amount, 2) }}
+                                </small>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endforeach
 @endsection
 
