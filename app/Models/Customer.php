@@ -132,4 +132,42 @@ class Customer extends Authenticatable
 
         return $this;
     }
+
+    /**
+     * Check if the customer can accept an additional due amount under credit limit rules.
+     *
+     * @param float $additionalDue
+     * @return array [bool 'allowed', ?string 'reason', float 'limit', float 'current_due', float 'projected_due', float 'exceeded_by']
+     */
+    public function checkCreditLimit(float $additionalDue = 0): array
+    {
+        if (!Setting::isCreditLimitEnabled()) {
+            return ['allowed' => true, 'reason' => null];
+        }
+
+        $limit = (float) $this->credit_limit;
+        $strictZero = Setting::isCreditLimitStrictZero();
+
+        // If customer has no limit configured (> 0) and strict zero mode is disabled, allow unlimited credit
+        if ($limit <= 0 && !$strictZero) {
+            return ['allowed' => true, 'reason' => null];
+        }
+
+        $currentDue = (float) $this->total_due;
+        $projectedDue = $currentDue + $additionalDue;
+
+        if ($projectedDue > $limit) {
+            $exceededBy = $projectedDue - $limit;
+            return [
+                'allowed' => false,
+                'reason' => "Credit limit exceeded for customer '{$this->name}'. Credit Limit: ৳ " . number_format($limit, 2) . ", Current Due: ৳ " . number_format($currentDue, 2) . ", New Due: ৳ " . number_format($additionalDue, 2) . " (Exceeds limit by ৳ " . number_format($exceededBy, 2) . ").",
+                'limit' => $limit,
+                'current_due' => $currentDue,
+                'projected_due' => $projectedDue,
+                'exceeded_by' => $exceededBy,
+            ];
+        }
+
+        return ['allowed' => true, 'reason' => null];
+    }
 }

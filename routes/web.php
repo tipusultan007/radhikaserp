@@ -470,6 +470,12 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::delete('/roles/{role}', [App\Http\Controllers\RoleController::class, 'destroy'])->name('roles.destroy');
     });
 
+    // ─── System Settings (manage users) ─────────────────────────────────────────
+    Route::group(['middleware' => ['permission:manage users']], function () {
+        Route::get('/settings', [App\Http\Controllers\SettingController::class, 'index'])->name('settings.index');
+        Route::post('/settings', [App\Http\Controllers\SettingController::class, 'update'])->name('settings.update');
+    });
+
     // ─── Catch-all templates (MUST BE LAST) ─────────────────────────────────────
     Route::group(['middleware' => ['permission:view dashboard']], function () {
         Route::get('{first}/{second}/{third}', [RoutingController::class, 'thirdLevel'])->name('third');

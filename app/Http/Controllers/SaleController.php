@@ -466,6 +466,24 @@ class SaleController extends Controller
                 $paymentStatus = $dueAmount > 0 ? ($paidAmount > 0 || $walletUsed > 0 ? 'partial' : 'due') : 'paid';
             }
 
+            // Check Customer Credit Limit if there is an unpaid balance
+            if ($dueAmount > 0 && $customer) {
+                $creditCheck = $customer->checkCreditLimit($dueAmount);
+                if (!$creditCheck['allowed']) {
+                    DB::rollBack();
+                    if ($request->expectsJson() || $request->ajax()) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => $creditCheck['reason'],
+                            'credit_check' => $creditCheck,
+                        ], 422);
+                    }
+                    return redirect()->back()
+                        ->withInput()
+                        ->with('error', $creditCheck['reason']);
+                }
+            }
+
             // Create Sale
             $sale = Sale::create([
                 'invoice_no' => Sale::generateInvoiceNo($validated['date'] ?? null),

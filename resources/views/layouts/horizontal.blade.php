@@ -35,6 +35,7 @@
 
     </div>
 
+    @include('layouts.shared/quick-action-fab')
     @include('layouts.shared/right-sidebar')
     @include('layouts.shared/footer-script')
     @vite(['resources/js/app.js', 'resources/js/layout.js'])

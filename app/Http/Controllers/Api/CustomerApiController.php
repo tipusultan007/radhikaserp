@@ -95,6 +95,17 @@ class CustomerApiController extends Controller
 
             $total = $subtotal + $deliveryCharge;
 
+            // Check Customer Credit Limit for online orders placed with full due
+            $creditCheck = $customer->checkCreditLimit($total);
+            if (!$creditCheck['allowed']) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => $creditCheck['reason'],
+                    'credit_check' => $creditCheck,
+                ], 422);
+            }
+
             // Create pending sale (order)
             $sale = Sale::create([
                 'invoice_no' => 'ORD-' . strtoupper(uniqid()),

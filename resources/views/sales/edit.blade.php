@@ -44,7 +44,7 @@
                                          <select name="customer_id" id="customer_id" class="form-control select2" data-toggle="select2" required style="width: 100%;">
                                              <option value="">Walk-in / Select Customer</option>
                                              @foreach($customers as $customer)
-                                                 <option value="{{ $customer->id }}" {{ $sale->customer_id == $customer->id ? 'selected' : '' }}>{{ $customer->name }} (Credit: {{ $customer->credit_limit }})</option>
+                                                 <option value="{{ $customer->id }}" data-customer-type="{{ $customer->customer_type }}" {{ $sale->customer_id == $customer->id ? 'selected' : '' }}>{{ $customer->name }} (Credit: {{ $customer->credit_limit }})</option>
                                              @endforeach
                                          </select>
                                          <button type="button" class="btn btn-primary ms-1" data-bs-toggle="modal" data-bs-target="#addCustomerModal"><i class="ri-add-line"></i></button>
@@ -79,7 +79,7 @@
                                          <tr>
                                              <td>
                                                  <select name="items[{{ $index }}][product_variant_id]" class="form-select variant-select" required>
-                                                     <option value="{{ $item->product_variant_id }}" data-stock="999" data-unit_qty="{{ $item->productVariant->unit_qty ?? 1 }}">{{ $item->productVariant->product->name }} - {{ $item->productVariant->name }}</option>
+                                                     <option value="{{ $item->product_variant_id }}" data-stock="999" data-price="{{ $item->productVariant->price ?? 0 }}" data-dealer_price="{{ $item->productVariant->dealer_price ?? 0 }}" data-special_dealer_price="{{ $item->productVariant->special_dealer_price ?? 0 }}" data-unit_qty="{{ $item->productVariant->unit_qty ?? 1 }}">{{ $item->productVariant->product->name }} - {{ $item->productVariant->name }}</option>
                                                  </select>
                                              </td>
                                              <td>
@@ -367,44 +367,49 @@
 
         // Warehouse -> Variants Logic
         const warehouseSelect = document.getElementById('warehouse_id');
-        
-        function loadVariants() {
+        let cachedVariants = null;
+
+        function populateSelect(select, data, selectedVal) {
+            select.innerHTML = '<option value="">Select Variant</option>';
+            data.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                option.text = item.text;
+                option.dataset.stock = item.stock;
+                option.dataset.total_stock = item.total_stock;
+                option.dataset.price = item.price;
+                option.dataset.dealer_price = item.dealer_price;
+                option.dataset.special_dealer_price = item.special_dealer_price;
+                option.dataset.unit_qty = item.unit_qty;
+                select.appendChild(option);
+            });
+            if (selectedVal && data.some(d => d.id == selectedVal)) {
+                select.value = selectedVal;
+            }
+        }
+
+        function loadVariants(callback) {
             const warehouseId = warehouseSelect.value;
             if(!warehouseId) return;
             
             fetch(`{{ route('pos.variants') }}?warehouse_id=${warehouseId}&sale_id={{ $sale->id }}`)
                 .then(res => res.json())
                 .then(data => {
+                    cachedVariants = data;
                     const variantSelects = document.querySelectorAll('.variant-select');
                     variantSelects.forEach(select => {
-                        // Store previously selected value
                         const selectedVal = select.value;
-                        
-                        // Clear options
-                        select.innerHTML = '<option value="">Select Variant</option>';
-                        
-                        // Add new options
-                        data.forEach(item => {
-                            const option = document.createElement('option');
-                            option.value = item.id;
-                            option.text = item.text;
-                            // Add stock data attribute so we can use it later
-                            option.dataset.stock = item.stock;
-                            option.dataset.unit_qty = item.unit_qty;
-                            select.appendChild(option);
-                        });
-                        
-                        // Restore selection if it still exists in the new list
-                        if (selectedVal && data.some(d => d.id == selectedVal)) {
-                            select.value = selectedVal;
-                        }
+                        populateSelect(select, data, selectedVal);
                     });
+                    if (callback) callback();
                 })
                 .catch(err => console.error('Error fetching variants:', err));
         }
 
         if(warehouseSelect) {
-            warehouseSelect.addEventListener('change', loadVariants);
+            warehouseSelect.addEventListener('change', function() {
+                loadVariants();
+            });
             // Initial load
             loadVariants();
         }
@@ -441,15 +446,19 @@
                 
                 document.getElementById('cart-items').appendChild(tr);
                 
+                const newSelect = tr.querySelector('.variant-select');
+                if (cachedVariants) {
+                    populateSelect(newSelect, cachedVariants, '');
+                } else {
+                    loadVariants();
+                }
+                
                 // Handle remove
                 tr.querySelector('.remove-item-btn').addEventListener('click', function() {
                     tr.remove();
                     calculateTotal();
                     updateFullPayment();
                 });
-                
-                // Reload variants into this new select
-                loadVariants();
             });
         }
         
@@ -462,29 +471,60 @@
             });
         });
 
-        // Update price when variant changes
-        document.getElementById('cart-items').addEventListener('change', function(e) {
-            if (e.target.classList.contains('variant-select')) {
-                const select = e.target;
-                const selectedOption = select.options[select.selectedIndex];
-                const tr = select.closest('tr');
-                const priceInput = tr.querySelector('.price-input');
-                const qtyInput = tr.querySelector('.qty-input');
+        // Price lookup based on customer type
+        function updateRowPrice(select) {
+            if (!select) return;
+            const selectedOption = select.options[select.selectedIndex];
+            const tr = select.closest('tr');
+            if (!tr) return;
+            const priceInput = tr.querySelector('.price-input');
+            const qtyInput = tr.querySelector('.qty-input');
+            
+            if (selectedOption && priceInput && selectedOption.value) {
+                const customerOption = $('#customer_id option:selected');
+                const customerType = customerOption.length 
+                    ? (customerOption.data('customer-type') || customerOption.attr('data-customer-type') || 'customer') 
+                    : 'customer';
                 
-                if (selectedOption && priceInput) {
-                    let variantPrice = parseFloat(selectedOption.dataset.price || 0);
-                    // Price lookup based on customer type if you have it, else default price
-                    priceInput.value = variantPrice.toFixed(0);
-                    
-                    if (!qtyInput.value || parseFloat(qtyInput.value) === 0) {
-                        qtyInput.value = 1;
-                    }
-                    qtyInput.step = 1;
-                    
-                    calculateTotal();
-                    updateFullPayment();
+                let variantPrice = 0;
+                if (customerType === 'dealer' && selectedOption.dataset.dealer_price && parseFloat(selectedOption.dataset.dealer_price) > 0) {
+                    variantPrice = parseFloat(selectedOption.dataset.dealer_price);
+                } else if (customerType === 'special_dealer' && selectedOption.dataset.special_dealer_price && parseFloat(selectedOption.dataset.special_dealer_price) > 0) {
+                    variantPrice = parseFloat(selectedOption.dataset.special_dealer_price);
+                } else {
+                    variantPrice = parseFloat(selectedOption.dataset.price || 0);
                 }
+                
+                priceInput.value = variantPrice.toFixed(0);
+                
+                if (!qtyInput.value || parseFloat(qtyInput.value) === 0) {
+                    qtyInput.value = 1;
+                }
+                qtyInput.step = 1;
+                
+                calculateTotal();
+                updateFullPayment();
             }
+        }
+
+        // Update price when variant changes (supports both jQuery/Select2 and native DOM events)
+        $('#cart-items').on('change', '.variant-select', function() {
+            updateRowPrice(this);
+        });
+
+        document.getElementById('cart-items').addEventListener('change', function(e) {
+            if (e.target && e.target.classList.contains('variant-select')) {
+                updateRowPrice(e.target);
+            }
+        });
+
+        // Also update prices when customer changes
+        $('#customer_id').on('change', function() {
+            $('#cart-items .variant-select').each(function() {
+                if (this.value) {
+                    updateRowPrice(this);
+                }
+            });
         });
 
         // Add Customer AJAX
@@ -516,6 +556,8 @@
                     const customer = data.customer;
                     // Add to select2
                     const newOption = new Option(customer.name + ' (Credit: 0)', customer.id, true, true);
+                    newOption.dataset.customerType = customer.customer_type || 'customer';
+                    $(newOption).attr('data-customer-type', customer.customer_type || 'customer');
                     $('#customer_id').append(newOption).trigger('change');
                     
                     // Close modal

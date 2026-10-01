@@ -78,7 +78,7 @@
                                          <select name="customer_id" id="customer_id" class="form-control form-control-sm select2" data-toggle="select2" required style="width: 100%;">
                                              <option value="">--Select Customer--</option>
                                              @foreach($customers as $customer)
-                                                 <option value="{{ $customer->id }}" data-customer-type="{{ $customer->customer_type }}">{{ $customer->name }} (Wallet: {{ $customer->wallet_balance }}, Due: {{ $customer->total_due }})</option>
+                                                 <option value="{{ $customer->id }}" data-customer-type="{{ $customer->customer_type }}">{{ $customer->name }} (Wallet: {{ $customer->wallet_balance }}, Due: {{ $customer->total_due }}{{ $customer->credit_limit > 0 ? ', Limit: ' . number_format($customer->credit_limit, 0) : '' }})</option>
                                              @endforeach
                                          </select>
                                          <button type="button" class="btn btn-sm btn-primary ms-1" data-bs-toggle="modal" data-bs-target="#addCustomerModal"><i class="ri-add-line"></i></button>
@@ -251,7 +251,7 @@
 
          <!-- Modal for Product Variants Selection -->
          <div class="modal fade" id="variantModal" tabindex="-1" aria-labelledby="variantModalLabel" aria-hidden="true">
-             <div class="modal-dialog modal-dialog-centered">
+             <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
                  <div class="modal-content">
                      <div class="modal-header py-2">
                          <h5 class="modal-title" id="variantModalLabel">Select Variant</h5>
@@ -272,7 +272,7 @@
                                          <th>Variant</th>
                                          <th>Stock</th>
                                          <th>Price</th>
-                                         <th text-end>Action</th>
+                                         <th class="text-end">Action</th>
                                      </tr>
                                  </thead>
                                  <tbody id="modalVariantsList">
@@ -498,14 +498,14 @@
                 }
 
                 tr.innerHTML = `
-                    <td>
-                        <strong class="d-block text-dark fs-13">${variant.name}</strong>
-                        <small class="text-muted fs-11">${variant.unit_qty} ${variant.unit_name}</small>
+                    <td class="py-2">
+                        <strong class="d-block text-dark fs-14">${variant.name}</strong>
+                        <small class="text-muted fs-12">${variant.unit_qty} ${variant.unit_name}</small>
                     </td>
-                    <td>${stockBadge}</td>
-                    <td><strong class="text-primary fs-13">৳${price.toFixed(0)}</strong></td>
-                    <td class="text-end">
-                        <button type="button" class="btn btn-sm ${isAvailable ? 'btn-primary' : 'btn-outline-primary'} add-to-cart-btn">
+                    <td class="py-2">${stockBadge}</td>
+                    <td class="py-2"><strong class="text-primary fs-14">৳${price.toFixed(0)}</strong></td>
+                    <td class="text-end py-2">
+                        <button type="button" class="btn btn-sm ${isAvailable ? 'btn-primary' : 'btn-outline-primary'} px-3 add-to-cart-btn">
                             <i class="ri-shopping-cart-2-line me-1"></i> Add
                         </button>
                     </td>

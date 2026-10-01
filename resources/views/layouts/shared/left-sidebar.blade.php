@@ -387,6 +387,15 @@
             </li>
             @endcan
 
+            @can('manage users')
+            <li class="side-nav-item">
+                <a href="{{ route('settings.index') }}" class="side-nav-link">
+                    <i class="ri-settings-4-fill"></i>
+                    <span> System Settings </span>
+                </a>
+            </li>
+            @endcan
+
         </ul>
         <!--- End Sidemenu -->
 

@@ -47,7 +47,7 @@
                                          <select name="customer_id" id="customer_id" class="form-control select2" data-toggle="select2" required style="width: 100%;">
                                              <option value="">--Select Customer--</option>
                                              @foreach($customers as $customer)
-                                                 <option value="{{ $customer->id }}" data-customer-type="{{ $customer->customer_type }}">{{ $customer->name }} (Wallet: {{ $customer->wallet_balance }}, Due: {{ $customer->total_due }})</option>
+                                                 <option value="{{ $customer->id }}" data-customer-type="{{ $customer->customer_type }}">{{ $customer->name }} (Wallet: {{ $customer->wallet_balance }}, Due: {{ $customer->total_due }}{{ $customer->credit_limit > 0 ? ', Limit: ' . number_format($customer->credit_limit, 0) : '' }})</option>
                                              @endforeach
                                          </select>
                                          <button type="button" class="btn btn-primary ms-1" data-bs-toggle="modal" data-bs-target="#addCustomerModal"><i class="ri-add-line"></i></button>

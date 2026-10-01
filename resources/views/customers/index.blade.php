@@ -57,11 +57,14 @@
                                  </div>
 
                                  {{-- Buttons --}}
-                                 <div class="col-sm-4 d-flex gap-2">
+                                 <div class="col-sm-4 d-flex gap-2 align-items-center">
                                      <button type="submit" class="btn btn-secondary"><i class="ri-filter-3-line me-1"></i>Filter</button>
                                      @if(request('district') || request('search'))
                                          <a href="{{ route('customers.index') }}" class="btn btn-light"><i class="ri-refresh-line me-1"></i>Clear</a>
                                      @endif
+                                     <a href="{{ route('settings.index') }}" class="btn btn-outline-{{ \App\Models\Setting::isCreditLimitEnabled() ? 'success' : 'secondary' }}" title="Credit Limit Enforcement is {{ \App\Models\Setting::isCreditLimitEnabled() ? 'ENABLED' : 'DISABLED' }} - Click to Configure">
+                                         <i class="ri-shield-check-line me-1"></i> Limit: <strong>{{ \App\Models\Setting::isCreditLimitEnabled() ? 'ON' : 'OFF' }}</strong>
+                                     </a>
                                      <a href="{{ route('customers.create') }}" class="btn btn-danger ms-auto"><i class="ri-add-line me-1"></i> Add Customer</a>
                                      <a href="{{ route('customers.export', request()->all()) }}" class="btn btn-success"><i class="ri-file-excel-2-line me-1"></i> Export</a>
                                  </div>
@@ -74,42 +77,109 @@
                              <table class="table table-centered table-hover mb-0">
                                  <thead class="table-light">
                                      <tr>
-                                         <th>Name</th>
-                                         <th>Phone</th>
-                                         <th>District</th>
-                                         <th>Company</th>
-                                         <th>Address</th>
-                                         <th>Credit Limit (TK)</th>
-                                         <th>Total Due (TK)</th>
-                                         <th>Wallet (TK)</th>
-                                         <th style="width: 155px;" class="text-end">Action</th>
+                                         <th><i class="ri-user-line text-muted me-1"></i> Customer & Contact</th>
+                                         <th style="width: 150px;"><i class="ri-price-tag-3-line text-muted me-1"></i> Customer Type</th>
+                                         <th style="width: 220px;"><i class="ri-wallet-line text-muted me-1"></i> Financial Overview</th>
+                                         <th style="width: 140px;" class="text-end"><i class="ri-settings-3-line text-muted me-1"></i> Action</th>
                                      </tr>
                                  </thead>
                                  <tbody>
                                      @forelse($customers as $customer)
                                          <tr>
-                                             <td><a href="{{ route('customers.show', $customer->id) }}" class="text-body fw-semibold">{{ $customer->name }}</a></td>
-                                             <td>{{ $customer->phone }}</td>
+                                             {{-- Customer Name, Company, Phone, District, Address - Each on a separate line with icon. Missing items are hidden. --}}
                                              <td>
-                                                 @if($customer->district)
-                                                     <span class="badge bg-soft-primary text-primary">{{ $customer->district }}</span>
-                                                 @else
-                                                     <span class="text-muted">—</span>
-                                                 @endif
+                                                 <div class="d-flex flex-column gap-1 py-1">
+                                                     {{-- 1. Name --}}
+                                                     @if(!empty($customer->name))
+                                                         <div>
+                                                             <a href="{{ route('customers.show', $customer->id) }}" class="text-dark fw-bold font-14 text-decoration-none">
+                                                                 <i class="ri-user-3-line text-primary me-1"></i>{{ $customer->name }}
+                                                             </a>
+                                                         </div>
+                                                     @endif
+
+                                                     {{-- 2. Company (hidden if empty) --}}
+                                                     @if(!empty($customer->company))
+                                                         <div class="text-muted font-12">
+                                                             <i class="ri-building-line text-secondary me-1"></i>{{ $customer->company }}
+                                                         </div>
+                                                     @endif
+
+                                                     {{-- 3. Phone (hidden if empty) --}}
+                                                     @if(!empty($customer->phone))
+                                                         <div>
+                                                             <a href="tel:{{ $customer->phone }}" class="text-body font-12 text-decoration-none">
+                                                                 <i class="ri-phone-line text-success me-1"></i>{{ $customer->phone }}
+                                                             </a>
+                                                         </div>
+                                                     @endif
+
+                                                     {{-- 4. District (hidden if empty) --}}
+                                                     @if(!empty($customer->district))
+                                                         <div class="text-muted font-12">
+                                                             <i class="ri-map-pin-range-line text-info me-1"></i>{{ $customer->district }}
+                                                         </div>
+                                                     @endif
+
+                                                     {{-- 5. Address (hidden if empty) --}}
+                                                     @if(!empty($customer->address))
+                                                         <div class="text-muted font-12 text-truncate" style="max-width: 420px;" title="{{ $customer->address }}">
+                                                             <i class="ri-map-pin-2-line text-danger me-1"></i>{{ $customer->address }}
+                                                         </div>
+                                                     @endif
+                                                 </div>
                                              </td>
-                                             <td>{{ $customer->company ?: '—' }}</td>
-                                             <td>{{ Str::limit($customer->address, 25) }}</td>
-                                             <td>{{ number_format($customer->credit_limit, 0) }}</td>
+
+                                             {{-- Customer Type in its own dedicated column --}}
                                              <td>
-                                                 <span class="{{ $customer->total_due > 0 ? 'text-danger fw-bold' : 'text-success' }}">
-                                                     {{ number_format($customer->total_due, 0) }}
+                                                 @php
+                                                     $type = strtolower($customer->customer_type ?? 'customer');
+                                                     $badgeConfig = match($type) {
+                                                         'dealer' => ['class' => 'bg-soft-warning text-warning border border-warning border-opacity-50', 'icon' => 'ri-store-2-line', 'label' => 'Dealer'],
+                                                         'special_dealer' => ['class' => 'bg-soft-danger text-danger border border-danger border-opacity-50', 'icon' => 'ri-vip-crown-line', 'label' => 'Special Dealer'],
+                                                         'corporate' => ['class' => 'bg-soft-primary text-primary border border-primary border-opacity-50', 'icon' => 'ri-building-4-line', 'label' => 'Corporate'],
+                                                         'wholesaler' => ['class' => 'bg-soft-success text-success border border-success border-opacity-50', 'icon' => 'ri-truck-line', 'label' => 'Wholesaler'],
+                                                         default => ['class' => 'bg-soft-info text-info border border-info border-opacity-25', 'icon' => 'ri-user-follow-line', 'label' => ucwords(str_replace('_', ' ', $customer->customer_type ?: 'Customer'))],
+                                                     };
+                                                 @endphp
+                                                 <span class="badge {{ $badgeConfig['class'] }} font-12 px-2 py-1 d-inline-flex align-items-center gap-1">
+                                                     <i class="{{ $badgeConfig['icon'] }}"></i> {{ $badgeConfig['label'] }}
                                                  </span>
                                              </td>
+
+                                             {{-- Financials: Due, Limit, Wallet - Missing/Zero items hidden --}}
                                              <td>
-                                                 <span class="{{ $customer->wallet_balance > 0 ? 'text-success fw-bold' : '' }}">
-                                                     {{ number_format($customer->wallet_balance, 0) }}
-                                                 </span>
+                                                 <div class="d-flex flex-column gap-1 py-1 font-12">
+                                                     {{-- Due --}}
+                                                     <div>
+                                                         <span class="text-muted font-11 text-uppercase fw-semibold me-1">
+                                                             <i class="ri-money-dollar-circle-line text-secondary me-1"></i>Due:
+                                                         </span>
+                                                         <span class="fs-13 {{ $customer->total_due > 0 ? 'text-danger fw-bold' : 'text-success fw-semibold' }}">
+                                                             ৳ {{ number_format($customer->total_due, 0) }}
+                                                         </span>
+                                                     </div>
+
+                                                     {{-- Credit Limit (hidden if empty or 0) --}}
+                                                     @if(!empty($customer->credit_limit) && (float)$customer->credit_limit > 0)
+                                                         <div class="text-muted">
+                                                             <i class="ri-shield-check-line text-info me-1"></i><span class="text-secondary font-11">Limit:</span> ৳ {{ number_format($customer->credit_limit, 0) }}
+                                                         </div>
+                                                     @endif
+
+                                                     {{-- Wallet (hidden if empty or 0) --}}
+                                                     @if(!empty($customer->wallet_balance) && (float)$customer->wallet_balance > 0)
+                                                         <div class="text-muted">
+                                                             <i class="ri-wallet-3-line text-success me-1"></i><span class="text-secondary font-11">Wallet:</span> 
+                                                             <span class="text-success fw-bold">
+                                                                 ৳ {{ number_format($customer->wallet_balance, 0) }}
+                                                             </span>
+                                                         </div>
+                                                     @endif
+                                                 </div>
                                              </td>
+
+                                             {{-- Action Buttons --}}
                                              <td class="text-end">
                                                  <div class="d-flex align-items-center justify-content-end gap-1">
                                                      {{-- Quick WhatsApp Share Button --}}
@@ -154,7 +224,7 @@
                                                                         'credit_limit' => (float)$customer->credit_limit,
                                                                         'total_due' => (float)$customer->total_due,
                                                                         'wallet_balance' => (float)$customer->wallet_balance,
-                                                                 'statement_pdf_url' => \App\Models\StatementToken::createOrGetForCustomer($customer)->getShortUrl(),
+                                                                        'statement_pdf_url' => \App\Models\StatementToken::createOrGetForCustomer($customer)->getShortUrl(),
                                                                         'show_url' => route('customers.show', $customer->id)
                                                                     ]) }}">
                                                                      <i class="ri-whatsapp-line me-2"></i> Share via WhatsApp
@@ -175,7 +245,7 @@
                                          </tr>
                                      @empty
                                          <tr>
-                                             <td colspan="9" class="text-center">No customers found.</td>
+                                             <td colspan="4" class="text-center py-4 text-muted">No customers found.</td>
                                          </tr>
                                      @endforelse
                                  </tbody>
