@@ -28,3 +28,11 @@ Thumbs.db
 config/*.json
 *.zip
 /storage/framework/lsp-*.php
+# Added by WAMP sync
+/.env
+/.env.backup
+/.env.production
+/storage/logs/*
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
